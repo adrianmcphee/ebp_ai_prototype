@@ -32,11 +32,9 @@ class Settings(BaseSettings):
     langfuse_host: str = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
     environment: str = os.getenv("ENVIRONMENT", "development")
 
-    # Infrastructure
-    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
-    database_url: str = os.getenv(
-        "DATABASE_URL", "postgresql://user:pass@localhost/nlp_banking"
-    )
+    # Infrastructure (defaults to mock for prototype)
+    redis_url: str = os.getenv("REDIS_URL", "mock")  # Use "mock" for testing
+    database_url: str = os.getenv("DATABASE_URL", "mock")  # Use "mock" for testing
 
     # API Settings
     rate_limit_per_minute: int = 30
