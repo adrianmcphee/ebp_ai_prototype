@@ -1,0 +1,158 @@
+# EBP AI Banking Capabilities - Project Context
+
+## Overview
+Research prototype exploring AI enhancements for Backbase Enterprise Banking Platform (EBP) with focus on navigation assistance, transaction assistance, and MCP integration for AI agents.
+
+## Core Capabilities
+- **Intent Classification**: 360+ banking intents with risk assessment (LOW/MEDIUM/HIGH)
+- **Entity Extraction**: Smart parsing with validation (amounts, accounts, recipients, dates)
+- **Multi-turn Conversations**: Context persistence, reference resolution, missing info handling
+- **Risk & Authentication**: Automatic auth escalation based on transaction risk
+- **MCP Integration**: Expose banking operations to AI assistants via Model Context Protocol
+
+## Architecture
+
+### Key Modules (`backend/src/`)
+- `api.py` - FastAPI REST endpoints
+- `pipeline.py` - Intent processing orchestration
+- `intent_classifier.py` - Banking intent classification with confidence scoring
+- `entity_extractor.py` - Extract & validate entities from natural language
+- `context_aware_responses.py` - Generate intelligent contextual responses
+- `state_manager.py` - Manage conversation state across turns
+- `mock_banking.py` - Simulated banking service
+- `mcp_server.py` - MCP protocol server for AI agents
+- `llm_wrapper.py` - LLM abstraction supporting mock/OpenAI/Anthropic
+
+### Project Structure
+```
+ebpnlp/
+├── Makefile              # Workflow automation (make help for commands)
+├── backend/
+│   ├── src/              # Core modules
+│   ├── tests/            # 136+ test cases
+│   ├── scripts/          # Utility scripts
+│   └── demo.py           # Comprehensive demo
+├── frontend/             # React UI (minimal)
+└── e2e/                  # Playwright tests
+```
+
+## Quick Start
+```bash
+make setup          # Install dependencies
+make demo           # Run comprehensive demo
+make api            # Start API server (http://localhost:8000)
+make test           # Run test suite
+make help           # See all commands
+```
+
+## Banking Operations & Risk Levels
+| Operation Type | Examples | Risk | Auth Required |
+|---------------|----------|------|---------------|
+| Account Info | Balance check, statements | LOW | BASIC |
+| Internal Transfer | Between own accounts | MEDIUM | FULL |
+| External Transfer | Wire transfers | HIGH | CHALLENGE |
+| P2P Payments | Zelle, Venmo | MEDIUM | FULL |
+| Card Operations | Block/unblock | HIGH | FULL |
+| Disputes | Fraud reports | HIGH | FULL |
+
+## Development
+
+### Running Demos
+```bash
+make demo-basic         # Intent classification & entities
+make demo-conversation  # Multi-turn dialogs
+make demo-risk         # Risk assessment
+make demo-providers    # Test LLM providers
+```
+
+### Testing
+```bash
+make test              # All tests
+make test-unit         # Unit tests only
+make lint              # Code quality check
+make format            # Auto-fix formatting
+```
+
+### Environment Variables
+```bash
+# Required (defaults to mock if not set)
+LLM_PROVIDER=mock|openai|anthropic
+DATABASE_URL=postgresql://... or mock
+REDIS_URL=redis://... or mock
+
+# Optional API Keys
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+## Key Design Decisions
+
+1. **Mock-First Development**: All components have mock implementations for testing without dependencies
+2. **Provider Flexibility**: Supports multiple LLM providers with automatic fallback
+3. **Risk-Based Auth**: Authentication requirements scale with operation risk
+4. **Stateful Conversations**: Redis-backed session management for context persistence
+5. **MCP Protocol**: Enables AI assistants to directly execute banking operations
+
+## Testing Strategy
+- **Unit Tests**: Mock all external dependencies
+- **Integration Tests**: Test pipeline with mock services
+- **E2E Tests**: Playwright for full user flows
+- **Performance Tests**: Ensure <500ms response times
+
+## Security Considerations
+- No real banking operations (mock service only)
+- API keys via environment variables only
+- Rate limiting on all endpoints
+- Input validation and sanitization
+- Risk assessment before operation execution
+
+## MCP Integration
+Exposes 8 banking tools to AI assistants:
+- check_account_balance
+- transfer_between_accounts
+- send_p2p_payment
+- get_transaction_history
+- block_card
+- dispute_transaction
+- get_account_info
+- search_help
+
+Configure in Claude Desktop's config to enable banking operations via natural language.
+
+## Common Tasks
+
+### Add New Intent
+1. Update `banking_intents.py` with intent definition
+2. Add test cases in `test_intent_classifier.py`
+3. Update entity extraction rules if needed
+
+### Add New Banking Operation
+1. Implement in `mock_banking.py`
+2. Add MCP tool in `mcp_server.py`
+3. Update pipeline processing in `pipeline.py`
+4. Add tests
+
+### Debug Issues
+```bash
+# Check logs
+make api  # Verbose API logs
+
+# Run specific test
+cd backend && python -m pytest tests/test_mock_banking.py -v
+
+# Test specific demo scenario
+python backend/demo.py --scenario basic
+```
+
+## Performance Targets
+- Intent classification: <200ms
+- Entity extraction: <300ms  
+- Full pipeline: <500ms
+- API response: <1s including network
+
+## Future Enhancements
+- Real banking API integration (currently mock only)
+- Advanced fraud detection
+- Multilingual support
+- Voice interface
+- Biometric authentication simulation

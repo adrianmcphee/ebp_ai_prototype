@@ -1,0 +1,27 @@
+{
+  "name": "nlp-banking-e2e-tests",
+  "version": "1.0.0",
+  "description": "End-to-end tests for NLP Banking system",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:chrome": "playwright test --project=chromium",
+    "test:firefox": "playwright test --project=firefox",
+    "test:webkit": "playwright test --project=webkit",
+    "test:mobile": "playwright test --project='Mobile Chrome' --project='Mobile Safari'",
+    "test:performance": "playwright test -g 'Performance'",
+    "test:accessibility": "playwright test -g 'Accessibility'",
+    "test:visual": "playwright test -g 'Visual'",
+    "test:ci": "playwright test --reporter=junit",
+    "report": "playwright show-report",
+    "seed": "cd ../backend && python tests/fixtures/seed_database.py",
+    "setup": "npm install && npx playwright install",
+    "clean": "rm -rf test-results playwright-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

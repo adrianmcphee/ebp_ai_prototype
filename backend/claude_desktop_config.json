@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "ebp-banking": {
+      "command": "python",
+      "args": [
+        "/Users/adrianmcphee/mydev/backbase/ebpnlp/backend/run_mcp_server.py"
+      ],
+      "env": {
+        "LLM_PROVIDER": "mock",
+        "REDIS_URL": "mock",
+        "DATABASE_URL": "mock"
+      }
+    }
+  }
+}
