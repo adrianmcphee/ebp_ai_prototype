@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # API Settings
     rate_limit_per_minute: int = 30
     session_ttl_seconds: int = 3600
-    cors_allowed_origins: list = ["http://localhost:3000"]
+    cors_allowed_origins: list = ["http://localhost:3000", "http://localhost:3001"]
 
     # Security
     secret_key: str = os.getenv("SECRET_KEY", "your-secret-key-here")
