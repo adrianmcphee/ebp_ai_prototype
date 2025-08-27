@@ -80,26 +80,33 @@ class BankingIntent:
         ]
 
     def matches_utterance(self, utterance: str) -> float:
-        """Calculate confidence score for utterance matching this intent"""
+        """Calculate confidence score for utterance matching this intent
+        
+        Uses additive scoring to combine pattern and keyword matches:
+        - Exact example matches: Returns near-perfect score (0.99)
+        - Pattern matches: Contribute 0-40% based on match ratio
+        - Keyword matches: Contribute 0-60% based on specificity and coverage
+        - Final score is multiplied by confidence threshold
+        """
         utterance_lower = utterance.lower()
-        score = 0.0
-
+        
         # Check exact example matches first (highest priority)
         if self.example_utterances:
             for example in self.example_utterances:
                 if example.lower() == utterance_lower:
                     return 0.99 * self.confidence_threshold  # Near perfect match
-                # Partial match with high similarity
-                if utterance_lower in example.lower() or example.lower() in utterance_lower:
-                    score = max(score, 0.8)
-
+        
+        # Initialize component scores
+        pattern_contribution = 0.0
+        keyword_contribution = 0.0
+        
         # Check for pattern matches (40% weight)
         if self.compiled_patterns:
             pattern_matches = sum(1 for pattern in self.compiled_patterns if pattern.search(utterance_lower))
-            pattern_score = min(pattern_matches / len(self.compiled_patterns), 1.0)
-            score = max(score, 0.4 * pattern_score)
-
-        # Check for keyword matches (60% weight) - improved scoring
+            pattern_ratio = pattern_matches / len(self.compiled_patterns)
+            pattern_contribution = 0.4 * min(pattern_ratio, 1.0)
+        
+        # Check for keyword matches (60% weight)
         if self.keywords:
             keyword_scores = []
             for kw in self.keywords:
@@ -112,11 +119,14 @@ class BankingIntent:
                     keyword_scores.append(min(1.0, 0.5 + specificity_bonus + coverage))
             
             if keyword_scores:
-                # Use best keyword match, not average
-                keyword_score = max(keyword_scores)
-                score = max(score, 0.6 * keyword_score)
-
-        return score * self.confidence_threshold
+                # Use best keyword match
+                keyword_contribution = 0.6 * max(keyword_scores)
+        
+        # Combine contributions additively (patterns + keywords)
+        # This ensures intents with both pattern AND keyword matches score higher
+        combined_score = min(pattern_contribution + keyword_contribution, 1.0)
+        
+        return combined_score * self.confidence_threshold
 
 
 # Comprehensive Banking Intent Catalog
@@ -1090,7 +1100,7 @@ BANKING_INTENTS = {
             "Open account",
             "Create bank account",
         ],
-        keywords=["open account", "new account", "start account", "create account", "checking", "savings"],
+        keywords=["open account", "new account", "start account", "create account", "open", "checking", "savings"],
         patterns=[
             r"\b(open|start|create) .* (new )?account\b",
             r"\bnew .* (checking|savings) account\b",

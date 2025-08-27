@@ -72,7 +72,60 @@ The system uses a hybrid approach for intent classification:
 
 1. **LLM Classification**: Primary method using advanced language models for context-aware classification
 2. **Pattern Matching**: Fallback using regex patterns and keyword matching
-3. **Confidence Scoring**: Combines keyword matches (60%) and pattern matches (40%)
+3. **Confidence Scoring**: Additive scoring combining keywords and patterns
+
+## Intent Matching Algorithm
+
+The intent matching algorithm uses an **additive scoring approach** that combines multiple signals to determine the best matching intent. This ensures that intents matching both patterns AND keywords score higher than those matching only one component.
+
+### Scoring Components
+
+1. **Exact Example Matches** (Highest Priority)
+   - If the query exactly matches an example utterance, returns 0.99 confidence
+   - Immediately returns without checking other components
+
+2. **Pattern Matching** (40% weight)
+   - Regex patterns are compiled for each intent
+   - Score = 0.4 × (number of matching patterns / total patterns)
+   - Example: If 1 out of 3 patterns match, contributes 0.133 to the score
+
+3. **Keyword Matching** (60% weight)
+   - Keywords are scored based on:
+     - **Specificity**: Multi-word keywords score higher (0.2 bonus per word)
+     - **Coverage**: Keywords covering more of the query score higher
+   - Formula: `keyword_score = min(1.0, 0.5 + specificity_bonus + coverage)`
+   - Best keyword match is used (not average)
+   - Contributes 0.6 × best_keyword_score
+
+4. **Final Score Calculation**
+   ```python
+   combined_score = min(pattern_contribution + keyword_contribution, 1.0)
+   final_score = combined_score * confidence_threshold
+   ```
+
+### Why Additive Scoring?
+
+The additive approach was chosen over taking the maximum of components because:
+
+1. **Better Discrimination**: Intents with both pattern AND keyword matches should score higher than those with just one
+2. **Handles Ambiguity**: When multiple intents have similar keywords (e.g., "account"), patterns provide additional discrimination
+3. **Prevents False Positives**: Single-word matches alone are insufficient; patterns validate intent
+
+### Example: "Open a new account"
+
+This query demonstrates why additive scoring is important:
+
+- **accounts.close.request**:
+  - Keywords: Matches "account" → 0.6 contribution
+  - Patterns: No matches → 0.0 contribution
+  - Base score: 0.6, Final: 0.6 × 0.9 = 0.54
+
+- **onboarding.account.open**:
+  - Keywords: Matches "new account" (2 words, better coverage) → 0.6 contribution
+  - Patterns: Matches `\b(open|start|create) .* account\b` → 0.133 contribution
+  - Base score: 0.733, Final: 0.733 × 0.85 = 0.623
+
+The open intent wins because it matches both keywords AND patterns, demonstrating the value of additive scoring.
 
 ### Classification Pipeline
 
