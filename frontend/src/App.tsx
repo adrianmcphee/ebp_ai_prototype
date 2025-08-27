@@ -352,6 +352,7 @@ function App() {
                           key={message.id}
                           p="sm"
                           bg={message.type === 'user' ? 'blue.1' : message.type === 'system' ? 'gray.1' : 'green.1'}
+                          data-testid={`message-${message.type}`}
                         >
                           <Group justify="space-between" mb="xs">
                             <Badge
