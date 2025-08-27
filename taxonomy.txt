@@ -1,0 +1,231 @@
+  Core Principle: The Certainty Gradient
+
+  Natural Language → Probabilistic Understanding → Deterministic Action
+          ↓                    ↓                         ↓
+     (Ambiguous)         (Confidence %)            (Executed)
+
+  ---
+  1. INTENT TRINITY
+
+  1.1 Understanding Layer
+  - Classification: What does the user want? (36 intents)
+  - Confidence: How sure are we? (0.0 - 1.0)
+  - Risk: What could go wrong? (LOW → CRITICAL)
+
+  1.2 Decision Point
+  Confidence > 0.85 → Execute with confirmation
+  Confidence 0.6-0.85 → Disambiguate choices
+  Confidence < 0.6 → Request clarification
+
+  1.3 The Banking Intent Formula
+  Intent = Category + Action + Risk Level + Auth Requirement
+
+  ---
+  2. ENTITY INTELLIGENCE
+
+  2.1 The Extraction Hierarchy
+  Required Entities → Must have to proceed
+  Optional Entities → Enhance if present
+  Inferred Entities → Derive from context
+
+  2.2 Validation Cascade
+  1. Format Check (Is it valid?)
+  2. Business Rule (Is it allowed?)
+  3. Risk Assessment (Is it safe?)
+
+  ---
+  3. CONVERSATION MEMORY
+
+  3.1 Context Stack (What to Remember)
+  - Last 3: Intent, Amount, Recipient
+  - Pending: Action awaiting completion
+  - References: Pronouns and relations
+
+  3.2 Resolution Rules
+  - "him/her" → last_recipient
+  - "same amount" → last_amount
+  - "there" → last_account
+  - "again" → repeat last_action
+
+  ---
+  4. THE CERTAINTY BRIDGE
+
+  4.1 Probabilistic Inputs
+  - Natural language queries
+  - Partial information
+  - Ambiguous references
+  - Colloquial expressions
+
+  4.2 Transformation Mechanisms
+  - Confidence Scoring: Quantify uncertainty
+  - Disambiguation UI: Resolve ambiguity
+  - Progressive Disclosure: Gather missing info
+  - Explicit Confirmation: Lock in decision
+
+  4.3 Deterministic Outputs
+  - Executed transactions
+  - Audit logs
+  - Compliance records
+  - System state changes
+
+  ---
+  5. RISK-ADAPTIVE SECURITY
+
+  Operation Risk → Authentication Level → User Action Required
+       LOW      →      BASIC           →     View only
+      MEDIUM    →      FULL            →     Password
+       HIGH     →    CHALLENGE         →     MFA + Confirm
+     CRITICAL   →    MULTI-STEP        →     MFA + Wait + Confirm
+
+  ---
+  6. THE FEEDBACK LOOP
+
+  6.1 Learning Points
+  - Failed intents → Pattern updates
+  - Disambiguations → Confidence adjustments
+  - Confirmations → Threshold tuning
+
+  6.2 Quality Signals
+  - Time to resolution
+  - Number of turns
+  - Confidence progression
+  - Execution success rate
+
+  ---
+  7. REGULATORY COMPLIANCE LAYER
+
+  7.1 The Audit Triangle
+  User Input → System Decision → Action Taken
+       ↓             ↓                ↓
+    Recorded    Confidence Log    Transaction ID
+
+  7.2 Compliance Rules
+  - Minimum confidence for financial operations: 0.85
+  - Maximum automation for amounts > $10,000: NONE
+  - Required human confirmation for: Account closure, Large transfers, New payees
+
+  ---
+  8. THE SIMPLICITY PARADOX
+
+  Complex Inside, Simple Outside
+  - User sees: Natural conversation
+  - System does: 50+ validation checks
+  - Regulator sees: Complete audit trail
+  - Developer sees: Modular components
+
+  ---
+  The Essential Formula
+
+  Conversational Banking =
+      (Intent + Entities + Context) × Confidence
+      ÷ Risk
+      + Human Confirmation
+      = Deterministic Action
+
+  ---
+  Key Insights
+
+  1. The 3-Layer Architecture
+
+  Layer 1: Language Understanding (AI/ML)
+  Layer 2: Business Logic (Rules)
+  Layer 3: Execution (Deterministic)
+
+  2. The 4 States of Certainty
+
+  1. UNCERTAIN: "I think you want..."
+  2. PROBABLE: "Did you mean..."
+  3. CONFIDENT: "I'll do this..."
+  4. EXECUTED: "Done."
+
+  3. The 5 Conversation Patterns
+
+  1. Single-turn completion
+  2. Clarification request
+  3. Disambiguation choice
+  4. Progressive collection
+  5. Confirmation & execute
+
+  ---
+  Implementation Status
+
+  
+  ✅ Intent classification (36 intents)
+  ✅ Entity extraction (21 types)
+  ✅ Confidence scoring (hybrid approach)
+  ✅ Risk assessment (4 levels)
+  ✅ Context memory (session-based)
+  ✅ Multi-turn flows (state management)
+  ✅ Audit logging (database)
+  ⚠️ Basic disambiguation (recipient only)
+  ⚠️ Authentication levels (defined, not enforced)
+  ⚠️ Confirmation flows (partial UI)
+
+  MVP Completion (v1.0) - What's needed for production
+
+  🔨 Full disambiguation (all entity types)
+  🔨 Authentication enforcement
+  🔨 Complete confirmation UI
+  🔨 Error recovery flows
+  🔨 Rate limiting
+  🔨 Production database integration
+
+  Enhanced (v2.0)
+
+  📋 Predictive suggestions
+  📋 Voice interface
+  📋 Sentiment analysis
+  📋 Basic fraud detection
+  📋 Multi-language support
+
+  Advanced (v3.0+)
+
+  🔮 Cross-channel memory
+  🔮 Behavioral biometrics
+  🔮 Predictive banking
+  🔮 Proactive assistance
+
+  ---
+  Key Gaps to Address
+
+  1. Disambiguation UI
+
+  Currently limited to:
+  // Only handles recipient disambiguation
+  setDisambiguationOptions(data.disambiguations.recipient);
+  Needs expansion for accounts, dates, amounts.
+
+  2. Authentication Flow
+
+  Defined but not enforced:
+  auth_required=AuthLevel.FULL  # Defined in intent
+  # But no actual auth check in pipeline execution
+
+  3. Confirmation UX
+
+  Backend ready:
+  "requires_confirmation": true
+  But UI only shows text, needs actual confirm/cancel buttons.
+
+  4. Error Recovery
+
+  No handling for:
+  - Network failures
+  - LLM timeouts
+  - Invalid entity combinations
+  - Business rule violations
+
+
+
+  ---
+  The Ultimate Test
+
+  A conversational banking system succeeds when:
+
+  1. Grandma can use it (Simplicity)
+  2. Regulators approve it (Compliance)
+  3. Hackers can't exploit it (Security)
+  4. Banks can trust it (Reliability)
+  5. Developers can extend it (Modularity)
+
+  ---

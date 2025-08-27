@@ -285,17 +285,18 @@ function App() {
   return (
     <MantineProvider>
       <Notifications />
-      <AppShell
-        header={{ height: 70 }}
-        padding="md"
-      >
-        <AppShell.Header>
-          <Container size="xl" h="100%">
-            <Group justify="space-between" h="100%">
-              <Group>
-                <IconCurrencyDollar size={32} color="blue" />
-                <Title order={2} c="blue">EBP Banking Assistant</Title>
-              </Group>
+      <div data-testid="app">
+        <AppShell
+          header={{ height: 70 }}
+          padding="md"
+        >
+          <AppShell.Header data-testid="header">
+            <Container size="xl" h="100%">
+              <Group justify="space-between" h="100%">
+                <Group>
+                  <IconCurrencyDollar size={32} color="blue" />
+                  <Title order={2} c="blue">EBP Banking Assistant</Title>
+                </Group>
               
               <Group>
                 <Menu>
@@ -451,11 +452,13 @@ function App() {
                         placeholder="Ask me anything about your banking..."
                         style={{ flex: 1 }}
                         disabled={isLoading}
+                        data-testid="chat-input"
                       />
                       <Button
                         type="submit"
                         leftSection={<IconSend size={16} />}
                         disabled={isLoading || !form.values.message.trim()}
+                        data-testid="send-button"
                       >
                         Send
                       </Button>
@@ -466,7 +469,8 @@ function App() {
             </Grid>
           </Container>
         </AppShell.Main>
-      </AppShell>
+        </AppShell>
+      </div>
     </MantineProvider>
   );
 }

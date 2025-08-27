@@ -48,6 +48,11 @@ help: ## Show this help message
 	@echo "  mcp       - Start the MCP server"
 	@echo "  frontend  - Start the frontend development server"
 	@echo "  start     - Start both frontend and backend"
+	@echo ""
+	@echo "Testing:"
+	@echo "  test         - Run all tests"
+	@echo "  test-mcp     - Test MCP server functionality"
+	@echo "  test-mcp-comprehensive - Run comprehensive MCP and intent testing"
 
 setup: install ## Complete project setup
 	@echo "$(GREEN)✅ Project setup complete!$(NC)"
@@ -148,6 +153,22 @@ frontend: ## Start the frontend development server
 start: ## Start both frontend and backend services
 	@echo "$(BLUE)🚀 Starting EBP Banking Application...$(NC)"
 	@./start-app.sh
+
+test-mcp: ## Test MCP server functionality
+	@echo "$(BLUE)🤖 Testing MCP Server...$(NC)"
+	@cd $(BACKEND_DIR) && \
+	export LLM_PROVIDER=mock && \
+	export DATABASE_URL=mock && \
+	export REDIS_URL=mock && \
+	$(PYTHON) -m pytest tests/test_mcp_server.py -v
+
+test-mcp-comprehensive: ## Run comprehensive MCP and intent testing
+	@echo "$(BLUE)🧪 Running Comprehensive MCP Tests...$(NC)"
+	@cd $(BACKEND_DIR) && \
+	export LLM_PROVIDER=mock && \
+	export DATABASE_URL=mock && \
+	export REDIS_URL=mock && \
+	$(PYTHON) -m pytest tests/test_mcp_comprehensive.py -v
 
 # Docker targets removed - using direct startup for simplicity
 

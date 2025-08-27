@@ -11,4 +11,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
+  css: {
+    postcss: {} // Empty PostCSS config to avoid config file lookup
+  }
 })

@@ -312,8 +312,12 @@ Modern React application with:
 - Comprehensive banking intent catalog
 
 #### 3. Claude Desktop Integration (MCP Server)
-1. Copy `backend/claude_desktop_config.json` to your Claude Desktop configuration
-2. Restart Claude Desktop  
+1. **Setup**: Copy `backend/claude_desktop_config.json` to your Claude Desktop configuration
+2. **Start MCP Server**: `./run-mcp-server.sh` or `make mcp`
+3. **Test MCP Server**: `make test-mcp` (tests MCP server startup)
+4. **Test Banking Intents**: `make test-intents` (tests all banking operations)
+5. **Available Tools**: balance checks, transfers, payments, card management, transaction history, dispute handling
+6. Restart Claude Desktop and start banking operations directly through the interface  
 3. Use natural language banking commands directly in Claude
 
 ### Example Interactions
@@ -359,6 +363,10 @@ make start            # Start both frontend and backend
 make api              # Start FastAPI server (http://localhost:8000)
 make frontend         # Start frontend development server
 make mcp              # Start MCP server for Claude Desktop
+
+# Testing
+make test-intents     # Test all banking intents and operations
+make test-mcp         # Test MCP server functionality
 ```
 
 ## 🎯 Demo Scenarios

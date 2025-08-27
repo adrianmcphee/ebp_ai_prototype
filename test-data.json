@@ -1,0 +1,297 @@
+{
+  "scenarios": {
+    "accounts_balance_check": {
+      "id": "accounts_balance_check",
+      "name": "Check Account Balance",
+      "intent_id": "accounts.balance.check",
+      "queries": ["What's my balance?", "How much money do I have?", "Check my checking account", "Show me my savings balance"],
+      "expected_confidence_min": 0.85
+    },
+    "accounts_balance_history": {
+      "id": "accounts_balance_history", 
+      "name": "Balance History",
+      "intent_id": "accounts.balance.history",
+      "queries": ["Show my balance history", "How has my balance changed?", "Balance trends over time"],
+      "expected_confidence_min": 0.80
+    },
+    "accounts_statement_download": {
+      "id": "accounts_statement_download",
+      "name": "Download Statement", 
+      "intent_id": "accounts.statement.download",
+      "queries": ["Download my statement", "Get my monthly statement", "I need my account statement"],
+      "expected_confidence_min": 0.85
+    },
+    "accounts_statement_view": {
+      "id": "accounts_statement_view",
+      "name": "View Statement",
+      "intent_id": "accounts.statement.view", 
+      "queries": ["Show my statement", "View my monthly statement", "Display account statement"],
+      "expected_confidence_min": 0.85
+    },
+    "accounts_alerts_setup": {
+      "id": "accounts_alerts_setup",
+      "name": "Setup Account Alerts",
+      "intent_id": "accounts.alerts.setup",
+      "queries": ["Set up account alerts", "Enable balance notifications", "Configure account warnings"],
+      "expected_confidence_min": 0.80
+    },
+    "accounts_close_request": {
+      "id": "accounts_close_request", 
+      "name": "Close Account Request",
+      "intent_id": "accounts.close.request",
+      "queries": ["Close my account", "I want to close my checking account", "Cancel my account"],
+      "expected_confidence_min": 0.90
+    },
+    "payments_transfer_internal": {
+      "id": "payments_transfer_internal",
+      "name": "Internal Transfer",
+      "intent_id": "payments.transfer.internal",
+      "queries": ["Transfer $500 from checking to savings", "Move money between my accounts", "Transfer funds internally"],
+      "expected_confidence_min": 0.90
+    },
+    "payments_transfer_external": {
+      "id": "payments_transfer_external",
+      "name": "External Transfer", 
+      "intent_id": "payments.transfer.external",
+      "queries": ["Send money to another bank", "Wire transfer to external account", "Transfer to Bank of America"],
+      "expected_confidence_min": 0.85
+    },
+    "payments_bill_pay": {
+      "id": "payments_bill_pay",
+      "name": "Pay Bill",
+      "intent_id": "payments.bill.pay",
+      "queries": ["Pay my electric bill", "Pay rent", "Make a bill payment", "Pay utility bill"],
+      "expected_confidence_min": 0.90
+    },
+    "cards_block_temporary": {
+      "id": "cards_block_temporary",
+      "name": "Block Card Temporarily", 
+      "intent_id": "cards.block.temporary",
+      "queries": ["Block my card", "Freeze my debit card", "Temporarily disable my card", "Lock my credit card"],
+      "expected_confidence_min": 0.90
+    },
+    "cards_replace_lost": {
+      "id": "cards_replace_lost",
+      "name": "Replace Lost Card",
+      "intent_id": "cards.replace.lost", 
+      "queries": ["I lost my card", "Replace my stolen card", "Get a new card", "My card was stolen"],
+      "expected_confidence_min": 0.85
+    },
+    "cards_activate": {
+      "id": "cards_activate",
+      "name": "Activate Card",
+      "intent_id": "cards.activate",
+      "queries": ["Activate my new card", "Enable my debit card", "Turn on my credit card"],
+      "expected_confidence_min": 0.90
+    },
+    "disputes_transaction_initiate": {
+      "id": "disputes_transaction_initiate",
+      "name": "Dispute Transaction",
+      "intent_id": "disputes.transaction.initiate",
+      "queries": ["Dispute this charge", "This transaction is wrong", "I didn't make this purchase", "Challenge this payment"],
+      "expected_confidence_min": 0.85
+    },
+    "support_agent_request": {
+      "id": "support_agent_request",
+      "name": "Request Human Agent",
+      "intent_id": "support.agent.request", 
+      "queries": ["Talk to a human", "Connect me to an agent", "I need help from support", "Speak to customer service"],
+      "expected_confidence_min": 0.90
+    },
+    "inquiries_transaction_search": {
+      "id": "inquiries_transaction_search",
+      "name": "Search Transactions",
+      "intent_id": "inquiries.transaction.search",
+      "queries": ["Find transactions to Starbucks", "Search for payments last month", "Show transactions with Amazon"],
+      "expected_confidence_min": 0.80
+    },
+    "lending_apply_personal": {
+      "id": "lending_apply_personal", 
+      "name": "Apply for Personal Loan",
+      "intent_id": "lending.apply.personal",
+      "queries": ["Apply for a personal loan", "I need a loan", "Get a personal loan", "Loan application"],
+      "expected_confidence_min": 0.85
+    },
+    "investments_portfolio_view": {
+      "id": "investments_portfolio_view",
+      "name": "View Investment Portfolio",
+      "intent_id": "investments.portfolio.view",
+      "queries": ["Show my portfolio", "View my investments", "How are my stocks doing?", "Investment performance"],
+      "expected_confidence_min": 0.85
+    },
+    "authentication_login": {
+      "id": "authentication_login",
+      "name": "Login", 
+      "intent_id": "authentication.login",
+      "queries": ["Log me in", "Sign in to my account", "I want to login", "Access my account"],
+      "expected_confidence_min": 0.90
+    },
+    "authentication_logout": {
+      "id": "authentication_logout",
+      "name": "Logout",
+      "intent_id": "authentication.logout", 
+      "queries": ["Log me out", "Sign out", "End my session", "Logout of my account"],
+      "expected_confidence_min": 0.90
+    },
+    "profile_update_contact": {
+      "id": "profile_update_contact",
+      "name": "Update Contact Info",
+      "intent_id": "profile.update.contact",
+      "queries": ["Update my phone number", "Change my address", "Edit contact information", "Update my email"],
+      "expected_confidence_min": 0.80
+    },
+    "cards_pin_change": {
+      "id": "cards_pin_change",
+      "name": "Change Card PIN",
+      "intent_id": "cards.pin.change",
+      "queries": ["Change my PIN", "Update card PIN", "Reset my PIN number", "Modify PIN"],
+      "expected_confidence_min": 0.90
+    },
+    "cards_limit_increase": {
+      "id": "cards_limit_increase",
+      "name": "Increase Card Limit", 
+      "intent_id": "cards.limit.increase",
+      "queries": ["Increase my credit limit", "Raise my card limit", "Request higher credit limit", "Boost spending limit"],
+      "expected_confidence_min": 0.85
+    },
+    "payments_bill_schedule": {
+      "id": "payments_bill_schedule",
+      "name": "Schedule Bill Payment",
+      "intent_id": "payments.bill.schedule",
+      "queries": ["Schedule my rent payment", "Set up recurring bill pay", "Automate utility payments", "Schedule payment for next month"],
+      "expected_confidence_min": 0.80
+    },
+    "payments_recurring_setup": {
+      "id": "payments_recurring_setup", 
+      "name": "Setup Recurring Payment",
+      "intent_id": "payments.recurring.setup",
+      "queries": ["Set up automatic payments", "Create recurring transfer", "Automate monthly payment", "Schedule regular payments"],
+      "expected_confidence_min": 0.80
+    },
+    "payments_status_check": {
+      "id": "payments_status_check",
+      "name": "Check Payment Status",
+      "intent_id": "payments.status.check",
+      "queries": ["Check payment status", "Did my payment go through?", "Status of my transfer", "Payment confirmation"],
+      "expected_confidence_min": 0.85
+    },
+    "lending_apply_mortgage": {
+      "id": "lending_apply_mortgage",
+      "name": "Apply for Mortgage",
+      "intent_id": "lending.apply.mortgage", 
+      "queries": ["Apply for a mortgage", "Home loan application", "Get a house loan", "Mortgage pre-approval"],
+      "expected_confidence_min": 0.85
+    },
+    "lending_payment_make": {
+      "id": "lending_payment_make",
+      "name": "Make Loan Payment",
+      "intent_id": "lending.payment.make",
+      "queries": ["Make loan payment", "Pay my mortgage", "Submit loan payment", "Pay off loan"],
+      "expected_confidence_min": 0.85
+    },
+    "investments_buy_stock": {
+      "id": "investments_buy_stock",
+      "name": "Buy Stock",
+      "intent_id": "investments.buy.stock",
+      "queries": ["Buy Apple stock", "Purchase shares", "Invest in Tesla", "Buy 100 shares of Microsoft"],
+      "expected_confidence_min": 0.85
+    },
+    "investments_sell_stock": {
+      "id": "investments_sell_stock", 
+      "name": "Sell Stock",
+      "intent_id": "investments.sell.stock",
+      "queries": ["Sell my Apple shares", "Liquidate portfolio", "Sell 50 shares of Google", "Cash out investments"],
+      "expected_confidence_min": 0.85
+    },
+    "security_password_reset": {
+      "id": "security_password_reset",
+      "name": "Reset Password",
+      "intent_id": "security.password.reset",
+      "queries": ["Reset my password", "Forgot my password", "Change password", "Password recovery"],
+      "expected_confidence_min": 0.90
+    },
+    "onboarding_account_open": {
+      "id": "onboarding_account_open",
+      "name": "Open New Account", 
+      "intent_id": "onboarding.account.open",
+      "queries": ["Open a new account", "Create checking account", "Apply for savings account", "New account setup"],
+      "expected_confidence_min": 0.85
+    },
+    "business_account_open": {
+      "id": "business_account_open",
+      "name": "Open Business Account",
+      "intent_id": "business.account.open",
+      "queries": ["Open business account", "Create company account", "Business banking setup", "Corporate account"],
+      "expected_confidence_min": 0.85
+    },
+    "cash_deposit_schedule": {
+      "id": "cash_deposit_schedule",
+      "name": "Schedule Cash Deposit",
+      "intent_id": "cash.deposit.schedule", 
+      "queries": ["Schedule cash deposit", "Arrange money deposit", "Set up cash drop-off", "Deposit appointment"],
+      "expected_confidence_min": 0.80
+    },
+    "international_wire_send": {
+      "id": "international_wire_send",
+      "name": "International Wire Transfer",
+      "intent_id": "international.wire.send",
+      "queries": ["Send money overseas", "International wire transfer", "Send money to London", "Wire funds to Europe"],
+      "expected_confidence_min": 0.85
+    }
+  },
+  "performance": {
+    "page_load_ms": 3000,
+    "api_response_ms": 2000,
+    "ui_interaction_ms": 1000,
+    "intent_classification_ms": 1500,
+    "entity_extraction_ms": 1000,
+    "websocket_connection_ms": 100
+  },
+  "test_accounts": {
+    "CHK001": {
+      "id": "CHK001",
+      "name": "Primary Checking",
+      "type": "checking",
+      "balance": 5000.00
+    },
+    "SAV001": {
+      "id": "SAV001", 
+      "name": "Savings Account",
+      "type": "savings",
+      "balance": 15000.00
+    },
+    "CHK002": {
+      "id": "CHK002",
+      "name": "Business Checking", 
+      "type": "checking",
+      "balance": 25000.00
+    }
+  },
+  "test_recipients": [
+    {
+      "id": "RCP001",
+      "name": "John Smith",
+      "account_number": "1234567890"
+    },
+    {
+      "id": "RCP002", 
+      "name": "Sarah Johnson",
+      "account_number": "0987654321"
+    },
+    {
+      "id": "RCP003",
+      "name": "Alice Brown",
+      "account_number": "5555555555"
+    }
+  ],
+  "mcp_tools": [
+    "check_account_balance",
+    "transfer_funds_internal", 
+    "send_p2p_payment",
+    "pay_bill",
+    "freeze_card",
+    "get_transaction_history",
+    "dispute_transaction",
+    "request_human_agent"
+  ]
+} 

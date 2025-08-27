@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { TestDataFixtures } from '../../backend/tests/fixtures/test_data';
+import testData from '../../test-data.json';
 
 // Helper functions
 async function initializeSession(page: Page) {
@@ -8,7 +8,7 @@ async function initializeSession(page: Page) {
   await expect(page.locator('[data-testid="header"]')).toBeVisible();
   
   // Wait for WebSocket connection
-  await page.waitForSelector('text=Connected to banking assistant', { timeout: 5000 });
+  await page.waitForSelector('text=Connected to EBP Banking Assistant', { timeout: 5000 });
 }
 
 async function sendQuery(page: Page, query: string) {
@@ -40,8 +40,8 @@ test.describe('NLP Banking E2E Tests', () => {
   });
 
   test('Simple Balance Check Flow', async ({ page }) => {
-    // Test data from fixtures
-    const scenario = TestDataFixtures.TEST_SCENARIOS[0];
+    // Test data from centralized test-data.json
+    const scenario = testData.scenarios.accounts_balance_check;
     
     // Send balance query
     await sendQuery(page, "What's my checking account balance?");
@@ -253,7 +253,7 @@ test.describe('Performance Tests', () => {
     await page.waitForSelector('[data-testid="app"]');
     const loadTime = Date.now() - startTime;
     
-    expect(loadTime).toBeLessThan(TestDataFixtures.PERFORMANCE_TARGETS.page_load);
+    expect(loadTime).toBeLessThan(testData.performance.page_load_ms);
   });
 
   test('API Response Time', async ({ page }) => {
@@ -263,7 +263,7 @@ test.describe('Performance Tests', () => {
     await sendQuery(page, "Check balance");
     const responseTime = Date.now() - startTime;
     
-    expect(responseTime).toBeLessThan(TestDataFixtures.PERFORMANCE_TARGETS.api_response_p95);
+    expect(responseTime).toBeLessThan(testData.performance.api_response_ms);
   });
 
   test('UI Interaction Responsiveness', async ({ page }) => {
@@ -275,7 +275,7 @@ test.describe('Performance Tests', () => {
     await input.fill("Test query");
     const fillTime = Date.now() - startTime;
     
-    expect(fillTime).toBeLessThan(TestDataFixtures.PERFORMANCE_TARGETS.ui_interaction);
+    expect(fillTime).toBeLessThan(1000); // 1 second UI interaction target
   });
 });
 

@@ -7,15 +7,14 @@ import json
 import logging
 from typing import Optional
 
-from mcp.server.models import InitializeResult
-from mcp.server.server import NotificationOptions, Server
-from mcp.server.stdio import stdio_server
-from mcp.types import (
-    EmbeddedResource,
-    ImageContent,
-    TextContent,
+from mcp import (
+    InitializeResult,
+    ServerCapabilities,
     Tool,
+    ServerSession,
+    stdio_server
 )
+from mcp.types import TextContent, ImageContent, EmbeddedResource
 
 from .config import settings
 from .context_aware_responses import ContextAwareResponseGenerator
