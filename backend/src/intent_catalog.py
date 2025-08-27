@@ -84,17 +84,37 @@ class BankingIntent:
         utterance_lower = utterance.lower()
         score = 0.0
 
-        # Check for keyword matches (60% weight)
-        if self.keywords:
-            keyword_matches = sum(1 for kw in self.keywords if kw.lower() in utterance_lower)
-            keyword_score = min(keyword_matches / len(self.keywords), 1.0)
-            score += 0.6 * keyword_score
+        # Check exact example matches first (highest priority)
+        if self.example_utterances:
+            for example in self.example_utterances:
+                if example.lower() == utterance_lower:
+                    return 0.99 * self.confidence_threshold  # Near perfect match
+                # Partial match with high similarity
+                if utterance_lower in example.lower() or example.lower() in utterance_lower:
+                    score = max(score, 0.8)
 
         # Check for pattern matches (40% weight)
         if self.compiled_patterns:
             pattern_matches = sum(1 for pattern in self.compiled_patterns if pattern.search(utterance_lower))
             pattern_score = min(pattern_matches / len(self.compiled_patterns), 1.0)
-            score += 0.4 * pattern_score
+            score = max(score, 0.4 * pattern_score)
+
+        # Check for keyword matches (60% weight) - improved scoring
+        if self.keywords:
+            keyword_scores = []
+            for kw in self.keywords:
+                kw_lower = kw.lower()
+                if kw_lower in utterance_lower:
+                    # Higher score for longer, more specific keywords
+                    specificity_bonus = len(kw_lower.split()) * 0.2
+                    # Higher score if keyword is a larger portion of the utterance
+                    coverage = len(kw_lower) / len(utterance_lower)
+                    keyword_scores.append(min(1.0, 0.5 + specificity_bonus + coverage))
+            
+            if keyword_scores:
+                # Use best keyword match, not average
+                keyword_score = max(keyword_scores)
+                score = max(score, 0.6 * keyword_score)
 
         return score * self.confidence_threshold
 
@@ -120,7 +140,7 @@ BANKING_INTENTS = {
             "Show me my balance",
             "What's in my checking account?",
         ],
-        keywords=["balance", "how much", "available", "funds", "money", "account"],
+        keywords=["balance", "how much money", "available funds", "account balance", "checking balance", "savings balance", "what's my balance"],
         patterns=[
             r"\b(what('s| is) my|check|show) .* balance\b",
             r"\bhow much .* (have|available|left)\b",
@@ -295,7 +315,7 @@ BANKING_INTENTS = {
             "Move money to my other account",
             "Internal transfer",
         ],
-        keywords=["transfer", "move", "between", "accounts", "savings", "checking", "internal"],
+        keywords=["transfer", "move money", "between accounts", "move to savings", "move to checking", "internal transfer"],
         patterns=[
             r"\btransfer .* (to|from|between) .* account\b",
             r"\bmove .* (to|from) (savings|checking)\b",
@@ -497,12 +517,13 @@ BANKING_INTENTS = {
         optional_entities=["reason", "amount", "merchant"],
         example_utterances=[
             "I want to dispute a charge",
+            "Dispute this transaction",
             "This transaction is wrong",
             "Fraudulent charge on my account",
             "I didn't make this purchase",
             "Report unauthorized transaction",
         ],
-        keywords=["dispute", "wrong", "fraud", "unauthorized", "didn't make", "charge"],
+        keywords=["dispute", "dispute transaction", "dispute charge", "wrong", "fraud", "unauthorized", "didn't make", "charge"],
         patterns=[
             r"\b(dispute|report) .* (transaction|charge|payment)\b",
             r"\b(fraudulent|unauthorized|wrong) .* charge\b",

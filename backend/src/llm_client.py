@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
@@ -160,41 +161,38 @@ class AnthropicClient(LLMClient):
         function_call: Optional[dict[str, str]] = None,
     ) -> dict[str, Any]:
         try:
-            # Build system prompt for JSON responses or function calls
+            # Build messages
+            messages = [{"role": "user", "content": prompt}]
+
+            # Build prompt with JSON instructions if needed
             system_prompt = "You are a banking assistant that classifies intents and extracts entities."
+            if response_format and response_format.get("type") == "json_object":
+                system_prompt += "\nRespond with valid JSON only."
 
+            # For function calling, append instructions
             if functions and function_call:
-                # Convert to tool-like prompt for Anthropic
                 func_name = function_call.get("name")
-                if func_name and functions:
-                    func_def = next(
-                        (f for f in functions if f["name"] == func_name), None
-                    )
-                    if func_def:
-                        system_prompt += f'\n\nCall the {func_name} function with the appropriate parameters based on the user query. Return the function call as JSON in this format: {{"function_call": {{"name": "{func_name}", "arguments": "{{...}}"}}}}'
-            elif response_format and response_format.get("type") == "json_object":
-                system_prompt += "\nYou must respond with valid JSON only. No additional text or explanation."
+                system_prompt += f"\nCall the {func_name} function with the extracted entities."
+                messages[0][
+                    "content"
+                ] += '\n\nReturn a JSON object with a "function_call" key containing the function name and arguments.'
 
-            # Create the message
             response = await asyncio.wait_for(
                 self.client.messages.create(
                     model=self.model,
                     system=system_prompt,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
                 ),
                 timeout=timeout,
             )
 
-            # Extract content
             content = response.content[0].text
 
             # Track usage
             if hasattr(response, "usage"):
-                self.total_tokens += (
-                    response.usage.input_tokens + response.usage.output_tokens
-                )
+                self.total_tokens += response.usage.input_tokens + response.usage.output_tokens
                 # Approximate costs (update with current pricing)
                 if "haiku" in self.model:
                     cost = (
@@ -260,72 +258,13 @@ class AnthropicClient(LLMClient):
 
 
 class MockLLMClient(LLMClient):
+    """Mock LLM client that uses the actual intent catalog for accurate testing"""
+
     def __init__(self, delay: float = 0.1):
         self.delay = delay
-        self.responses = {
-            "balance": {"intent_id": "accounts.balance.check", "confidence": 0.95, "alternatives": []},
-            "transfer": {
-                "intent_id": "payments.transfer.internal",
-                "confidence": 0.92,
-                "alternatives": [],
-            },
-            "history": {
-                "intent_id": "inquiries.transaction.search",
-                "confidence": 0.88,
-                "alternatives": [],
-            },
-            "navigation": {
-                "intent_id": "support.agent.request",
-                "confidence": 0.90,
-                "alternatives": [],
-            },
-            "card_management": {
-                "intent_id": "card_management",
-                "confidence": 0.91,
-                "alternatives": [],
-            },
-            "loan": {"intent_id": "loan", "confidence": 0.89, "alternatives": []},
-            "investment": {
-                "intent_id": "investment",
-                "confidence": 0.87,
-                "alternatives": [],
-            },
-            "dispute": {"intent_id": "dispute", "confidence": 0.93, "alternatives": []},
-            "security": {"intent_id": "security", "confidence": 0.94, "alternatives": []},
-            "notification": {
-                "intent_id": "notification",
-                "confidence": 0.86,
-                "alternatives": [],
-            },
-            "budget": {"intent_id": "budget", "confidence": 0.88, "alternatives": []},
-            "recurring": {
-                "intent_id": "recurring",
-                "confidence": 0.90,
-                "alternatives": [],
-            },
-            "atm_location": {
-                "intent_id": "atm_location",
-                "confidence": 0.92,
-                "alternatives": [],
-            },
-            "exchange_rate": {
-                "intent_id": "exchange_rate",
-                "confidence": 0.91,
-                "alternatives": [],
-            },
-            "appointment": {
-                "intent_id": "appointment",
-                "confidence": 0.89,
-                "alternatives": [],
-            },
-            "document": {"intent_id": "document", "confidence": 0.87, "alternatives": []},
-            "payment": {
-                "intent_id": "payment",
-                "confidence": 0.90,
-                "alternatives": ["transfer"],
-            },
-            "help": {"intent_id": "support.agent.request", "confidence": 0.85, "alternatives": []},
-        }
+        # Lazy import to avoid circular dependency
+        from .intent_catalog import IntentCatalog
+        self.catalog = IntentCatalog()
 
     async def complete(
         self,
@@ -342,287 +281,249 @@ class MockLLMClient(LLMClient):
         if self.delay > timeout:
             raise TimeoutError(f"Mock timeout after {timeout} seconds")
 
-        prompt_lower = prompt.lower()
-
-        # Handle function calling
+        # Handle function calling for entity extraction
         if functions and function_call:
             func_name = function_call.get("name")
             if func_name == "extract_banking_entities":
-                # Extract entities based on prompt content
-                entities = {}
+                return self._extract_entities(prompt)
 
-                # Look for amounts
-                import re
-
-                amount_match = re.search(r"\$?(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)", prompt)
-                if amount_match:
-                    entities["amount"] = float(amount_match.group(1).replace(",", ""))
-
-                # Look for recipients
-                names = [
-                    "john",
-                    "sarah",
-                    "alice",
-                    "bob",
-                    "david",
-                    "emily",
-                    "michael",
-                    "mom",
-                    "dad",
-                ]
-                for name in names:
-                    if name in prompt_lower:
-                        entities["recipient"] = name.title()
-                        break
-
-                # Look for account types
-                if "checking" in prompt_lower:
-                    entities["account_type"] = "checking"
-                elif "savings" in prompt_lower:
-                    entities["account_type"] = "savings"
-                elif "credit" in prompt_lower:
-                    entities["account_type"] = "credit"
-
-                return {
-                    "function_call": {
-                        "name": "extract_banking_entities",
-                        "arguments": json.dumps(entities),
-                    }
-                }
-
+        # Handle intent classification
         if response_format and response_format.get("type") == "json_object":
             # Extract the actual query from the classification prompt
-            import re
-
             query_match = re.search(r'Query:\s*"([^"]+)"', prompt)
             if query_match:
-                query_text = query_match.group(1).lower()
+                query_text = query_match.group(1)
             else:
-                query_text = prompt_lower
+                query_text = prompt
 
-            # For classification prompts, check for intents in order of specificity
-            # First check for most specific/unique patterns, then more general ones
-            if (
-                "send" in query_text
-                or "transfer" in query_text
-                or "wire" in query_text
-                or "move money" in query_text
-                or "zelle" in query_text
-                or "venmo" in query_text
-            ):
-                response = self.responses["transfer"].copy()
+            # Use the actual intent catalog to match
+            result = self.catalog.match_intent(query_text)
 
-                if "extract" in prompt_lower:
-                    amounts = [word for word in prompt.split() if word.startswith("$")]
-                    if amounts:
-                        amount = float(amounts[0].replace("$", "").replace(",", ""))
-                    else:
-                        amount = 500.00
+            # Ensure proper format for mock responses
+            if result["intent_id"] == "unknown":
+                # Try harder with keyword matching for common intents
+                result = self._fallback_classification(query_text)
 
-                    names = [
-                        "john",
-                        "sarah",
-                        "alice",
-                        "bob",
-                        "david",
-                        "emily",
-                        "michael",
-                    ]
-                    recipient = None
-                    for name in names:
-                        if name in prompt_lower:
-                            recipient = name.title()
-                            break
+            # Add required fields if missing
+            if "alternatives" not in result:
+                result["alternatives"] = []
+            if "confidence" not in result:
+                result["confidence"] = 0.85
+            if "risk_level" not in result:
+                intent = self.catalog.get_intent(result.get("intent_id"))
+                if intent:
+                    result["risk_level"] = intent.risk_level.value
+                    result["auth_required"] = intent.auth_required.value
+                    result["category"] = intent.category.value
 
-                    return {
-                        "entities": {
-                            "amount": amount,
-                            "recipient": recipient or "Unknown",
-                            "from_account": "checking",
-                        }
-                    }
+            return result
 
-                return response
-            elif (
-                "card" in query_text
-                or "freeze" in query_text
-                or "block" in query_text
-                or "lost card" in query_text
-                or "stolen" in query_text
-                or "pin" in query_text
-            ):
-                return self.responses["card_management"]
-            elif (
-                "loan" in query_text
-                or "borrow" in query_text
-                or "mortgage" in query_text
-                or "interest rate" in query_text
-                or "refinance" in query_text
-                or "credit line" in query_text
-            ):
-                return self.responses["loan"]
-            elif (
-                "invest" in query_text
-                or "stock" in query_text
-                or "portfolio" in query_text
-                or "crypto" in query_text
-                or "bitcoin" in query_text
-                or "trading" in query_text
-                or "buy" in query_text
-                and "shares" in query_text
-            ):
-                return self.responses["investment"]
-            elif (
-                "dispute" in query_text
-                or "fraud" in query_text
-                or "unauthorized" in query_text
-                or "wrong" in query_text
-                or "chargeback" in query_text
-                or "incorrect" in query_text
-                or "didn't make" in query_text
-            ):
-                return self.responses["dispute"]
-            elif (
-                "security" in query_text
-                or "2fa" in query_text
-                or "two factor" in query_text
-                or "suspicious" in query_text
-                or "verify" in query_text
-                or "secure" in query_text
-            ):
-                return self.responses["security"]
-            elif (
-                "alert" in query_text
-                or "notify" in query_text
-                or "notification" in query_text
-                or "reminder" in query_text
-                or "subscribe" in query_text
-            ):
-                return self.responses["notification"]
-            elif (
-                "budget" in query_text
-                or "spending" in query_text
-                or "savings goal" in query_text
-                or "expense" in query_text
-                or "track" in query_text
-                and "spending" in query_text
-            ):
-                return self.responses["budget"]
-            elif (
-                "recurring" in query_text
-                or "subscription" in query_text
-                or "automatic" in query_text
-                or "autopay" in query_text
-                or "scheduled" in query_text
-                or "standing order" in query_text
-            ):
-                return self.responses["recurring"]
-            elif (
-                "atm" in query_text
-                or "branch" in query_text
-                or "nearest" in query_text
-                or "cash machine" in query_text
-                or ("find" in query_text and "location" in query_text)
-            ):
-                return self.responses["atm_location"]
-            elif (
-                "exchange rate" in query_text
-                or "currency" in query_text
-                or "convert" in query_text
-                or "forex" in query_text
-                or ("yen" in query_text and "usd" in query_text)
-            ):
-                return self.responses["exchange_rate"]
-            elif (
-                "appointment" in query_text
-                or "schedule" in query_text
-                or "book" in query_text
-                or "meeting" in query_text
-                or "advisor" in query_text
-                or "banker" in query_text
-                or "consultation" in query_text
-            ):
-                return self.responses["appointment"]
-            elif (
-                "document" in query_text
-                or "download" in query_text
-                or "tax" in query_text
-                or "form" in query_text
-                or "1099" in query_text
-                or "w2" in query_text
-                or "pdf" in query_text
-                or "statement pdf" in query_text
-            ):
-                return self.responses["document"]
-            elif (
-                "pay bill" in query_text
-                or "payment" in query_text
-                or "bill" in query_text
-                or "utility" in query_text
-                or "rent" in query_text
-                or "mortgage payment" in query_text
-            ):
-                return self.responses["payment"]
-            elif (
-                "history" in query_text
-                or "transaction" in query_text
-                or "recent" in query_text
-                or "activity" in query_text
-                or "spent" in query_text
-                or "purchase" in query_text
-            ):
-                return self.responses["history"]
-            elif (
-                "balance" in query_text
-                or "how much money" in query_text
-                or "funds" in query_text
-                or "available" in query_text
-                or "account total" in query_text
-                or (
-                    "how much" in query_text
-                    and ("have" in query_text or "money" in query_text)
-                )
-                or (
-                    "show" in query_text
-                    and ("balance" in query_text or "account" in query_text)
-                )
-                or (
-                    "check" in query_text
-                    and ("balance" in query_text or "funds" in query_text)
-                )
-                or ("account" in query_text and "balance" in query_text)
-                or "credit available" in query_text
-                or ("what" in query_text and "balance" in query_text)
-                or ("display" in query_text and "total" in query_text)
-            ):
-                return self.responses["balance"]
-            elif (
-                "help" in query_text
-                or "assist" in query_text
-                or "guide" in query_text
-                or "tutorial" in query_text
-                or "explain" in query_text
-                or ("how to" in query_text)
-                or ("how do" in query_text)
-                or ("i need help" in query_text)
-            ):
-                return self.responses["help"]
-            elif (
-                "navigate" in query_text
-                or "take me" in query_text
-                or "go to" in query_text
-                or "open" in query_text
-                or ("show me" in query_text and "balance" not in query_text)
-            ):
-                return self.responses["navigation"]
-            else:
+        # Default text response
+        return {"content": f"Processed: {prompt[:100]}"}
+
+    def _extract_entities(self, prompt: str) -> dict[str, Any]:
+        """Extract entities from prompt"""
+        entities = {}
+        prompt_lower = prompt.lower()
+
+        # Extract amounts
+        amount_patterns = [
+            r"\$(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)",
+            r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(?:dollars?|USD)",
+        ]
+        for pattern in amount_patterns:
+            match = re.search(pattern, prompt, re.IGNORECASE)
+            if match:
+                amount_str = match.group(1).replace(",", "")
+                entities["amount"] = float(amount_str)
+                break
+
+        # Extract recipients/names
+        names = ["john", "sarah", "alice", "bob", "david", "emily", "michael", "mom", "dad", "mike"]
+        for name in names:
+            if name in prompt_lower:
+                entities["recipient"] = name.title()
+                break
+
+        # Extract account types
+        account_types = {
+            "checking": ["checking", "check"],
+            "savings": ["savings", "save"],
+            "credit": ["credit card", "credit"],
+            "debit": ["debit card", "debit"],
+        }
+        for acc_type, keywords in account_types.items():
+            if any(kw in prompt_lower for kw in keywords):
+                entities["account_type"] = acc_type
+                break
+
+        # Extract dates
+        date_patterns = [
+            r"(?:on |for |by )?(?:the )?(\d{1,2}(?:st|nd|rd|th)?(?:\s+(?:of\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December))?)",
+            r"(?:next|this|last)\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|week|month|year)",
+            r"(?:tomorrow|today|yesterday)",
+        ]
+        for pattern in date_patterns:
+            match = re.search(pattern, prompt, re.IGNORECASE)
+            if match:
+                entities["date"] = match.group(0)
+                break
+
+        # Extract card identifiers
+        if "card" in prompt_lower:
+            if "ending in" in prompt_lower:
+                card_match = re.search(r"ending in (\d{4})", prompt_lower)
+                if card_match:
+                    entities["card_identifier"] = f"****{card_match.group(1)}"
+            elif "debit" in prompt_lower:
+                entities["card_identifier"] = "debit_card"
+            elif "credit" in prompt_lower:
+                entities["card_identifier"] = "credit_card"
+
+        # Extract transaction IDs
+        trans_match = re.search(r"transaction\s*(?:id|#|number)?\s*[:\s]?\s*([A-Z0-9]+)", prompt, re.IGNORECASE)
+        if trans_match:
+            entities["transaction_id"] = trans_match.group(1)
+
+        return {
+            "function_call": {
+                "name": "extract_banking_entities",
+                "arguments": json.dumps(entities),
+            }
+        }
+
+    def _fallback_classification(self, query_text: str) -> dict[str, Any]:
+        """Fallback classification using improved keyword matching"""
+        query_lower = query_text.lower()
+
+        # Check for specific intent patterns - ordered by priority and specificity
+        intent_patterns = {
+            # Account Management - balance check should have priority over close
+            "accounts.balance.check": ["what's my balance", "check my balance", "check balance", "check my account", "check account", "my balance", "balance", "how much money", "how much do i have", "available funds", "account balance", "checking balance", "savings balance", "what's in my"],
+            "accounts.balance.history": ["balance history", "balance trends", "historical balance", "balance over time"],
+            "accounts.statement.download": ["download statement", "statement pdf", "export statement", "get statement"],
+            "accounts.statement.view": ["show statement", "view statement", "view transactions", "online statement", "see statement"],
+            "accounts.alerts.setup": ["setup alerts", "configure notifications", "balance alerts", "alert me"],
+            "accounts.close.request": ["close my account", "close account", "cancel account", "terminate account", "shutdown account"],
+
+            # Payments & Transfers - Enhanced patterns
+            "payments.transfer.internal": ["transfer between", "move to savings", "move to checking", "internal transfer", "transfer from checking", "transfer from savings"],
+            "payments.transfer.external": ["wire transfer", "send to another bank", "external transfer", "wire money"],
+            "payments.p2p.send": ["send money", "pay friend", "zelle", "venmo", "pay person", "send to john", "send to sarah", "transfer to alice", "pay bob", "send $", "send", "pay"],
+            "payments.bill.pay": ["pay bill", "bill payment", "pay electric", "pay utility", "electricity bill", "gas bill", "water bill"],
+            "payments.bill.schedule": ["schedule payment", "schedule a payment", "pay later", "future payment", "schedule bill", "scheduled payment"],
+            "payments.recurring.setup": ["setup autopay", "set up autopay", "recurring payment", "monthly payment", "automatic payment", "setup recurring"],
+            "payments.status.check": ["payment status", "did payment go through", "check if paid", "payment confirmation"],
+
+            # Cards
+            "cards.block.temporary": ["block card", "freeze card", "lock card", "disable card", "stop card", "suspend card"],
+            "cards.replace.lost": ["lost card", "missing card", "replacement card", "can't find card", "stolen card", "new card"],
+            "cards.activate": ["activate card", "turn on card", "enable card", "start using card"],
+            "cards.pin.change": ["change pin", "update pin", "reset pin", "new pin", "modify pin"],
+            "cards.limit.increase": ["increase limit", "raise limit", "higher limit", "credit limit", "spending limit"],
+
+            # Disputes
+            "disputes.transaction.initiate": ["dispute transaction", "dispute charge", "dispute", "fraudulent charge", "fraudulent", "unauthorized charge", "unauthorized", "didn't make", "wrong charge", "incorrect charge", "challenge transaction", "report fraud"],
+
+            # Support
+            "support.agent.request": ["talk to agent", "human help", "customer service", "speak to representative", "real person", "operator"],
+
+            # Inquiries
+            "inquiries.transaction.search": ["show my transactions", "show transactions", "transaction history", "recent purchases", "spending history", "recent transactions", "what did i spend", "transactions from", "transaction search"],
+            "payments.status.check": ["payment status", "check payment status", "did payment go through", "check if paid", "payment confirmation"],
+
+            # Lending
+            "lending.apply.personal": ["personal loan", "borrow money", "apply for loan", "need loan"],
+            "lending.apply.mortgage": ["apply for mortgage", "mortgage application", "mortgage", "home loan", "house loan", "buy house"],
+            "lending.payment.make": ["pay loan", "loan payment", "pay mortgage", "mortgage payment"],
+
+            # Investments
+            "investments.portfolio.view": ["show portfolio", "my investments", "check stocks", "investment balance"],
+            "investments.buy.stock": ["buy stock", "buy stocks", "purchase stock", "purchase shares", "invest in stock", "invest in", "buy apple stock", "buy tesla stock"],
+            "investments.sell.stock": ["sell stock", "sell shares", "liquidate", "cash out"],
+
+            # Authentication
+            "authentication.login": ["log in", "sign in", "login", "access account"],
+            "authentication.logout": ["log out", "sign out", "logout", "end session"],
+
+            # Security
+            "security.password.reset": ["reset password", "forgot password", "change password", "new password"],
+            "security.2fa.setup": ["setup 2fa", "set up 2fa", "enable two factor", "two factor authentication", "two factor", "enable 2fa", "two-factor", "2fa setup"],
+
+            # Profile
+            "profile.update.contact": ["update email", "change phone", "update address", "change address"],
+
+            # Onboarding
+            "onboarding.account.open": ["open new account", "open an account", "open account", "new account", "start account", "create account", "open bank account"],
+
+            # Business
+            "business.account.open": ["open business account", "business account", "corporate account", "company banking", "business banking"],
+
+            # Cash Management
+            "cash.deposit.schedule": ["deposit cash", "cash deposit", "bring cash", "atm deposit"],
+
+            # International
+            "international.wire.send": ["international wire", "send abroad", "swift transfer", "overseas transfer"],
+        }
+
+        best_match = None
+        best_score = 0
+
+        # Score each intent based on keyword matches
+        for intent_id, keywords in intent_patterns.items():
+            score = 0
+            matched_keywords = []
+            
+            for kw in keywords:
+                # Give higher score for exact phrase matches
+                if kw in query_lower:
+                    # Longer keywords get exponentially higher scores for better specificity
+                    keyword_score = len(kw.split()) ** 2
+                    
+                    # Bonus for exact match at beginning
+                    if query_lower.startswith(kw):
+                        keyword_score *= 1.5
+                    
+                    # Bonus for very close match (keyword is most of the query)
+                    if len(kw) > len(query_lower) * 0.7:
+                        keyword_score *= 1.3
+                        
+                    score += keyword_score
+                    matched_keywords.append(kw)
+            
+            # Only update if this is a better match
+            if score > best_score:
+                best_score = score
+                best_match = intent_id
+
+        # If we have a match with reasonable confidence
+        if best_match and best_score > 0:
+            intent = self.catalog.get_intent(best_match)
+            if intent:
+                # Calculate confidence based on match strength
+                # Higher scores = higher confidence
+                confidence = min(0.95, 0.5 + (best_score * 0.15))
+                
                 return {
-                    "intent_id": "unknown",
-                    "confidence": 0.0,
-                    "alternatives": ["balance", "transfer", "history"],
+                    "intent_id": best_match,
+                    "name": intent.name,
+                    "confidence": confidence,
+                    "category": intent.category.value,
+                    "subcategory": intent.subcategory,
+                    "risk_level": intent.risk_level.value,
+                    "auth_required": intent.auth_required.value,
+                    "alternatives": [],
+                    "reasoning": f"Matched based on keyword patterns (score: {best_score})",
                 }
 
-        return {"content": "Processed: " + prompt[:100]}
+        # Default to unknown
+        return {
+            "intent_id": "unknown",
+            "confidence": 0.0,
+            "category": "Unknown",
+            "alternatives": [],
+            "reasoning": "No matching intent found",
+        }
 
 
 def create_llm_client(provider: str, api_key: str, model: str) -> LLMClient:

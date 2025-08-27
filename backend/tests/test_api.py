@@ -16,7 +16,7 @@ settings.database_url = "mock"
 @pytest_asyncio.fixture
 async def client():
     """Create test client"""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(app=app, base_url="http://test", timeout=10.0) as ac:
         yield ac
 
 

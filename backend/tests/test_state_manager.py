@@ -1,13 +1,14 @@
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+import pytest_asyncio
 
 from src.cache import MockCache
 from src.database import Database
 from src.state_manager import ConversationStateManager
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture
 async def mock_cache():
     """Create a mock cache instance"""
     cache = MockCache()
@@ -15,7 +16,7 @@ async def mock_cache():
     return cache
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture
 async def mock_db():
     """Create a mock database"""
     db = Mock(spec=Database)
@@ -25,7 +26,7 @@ async def mock_db():
     return db
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture
 async def state_manager(mock_cache, mock_db):
     """Create a state manager instance"""
     return ConversationStateManager(mock_cache, mock_db)
@@ -300,8 +301,13 @@ class TestConversationStateManager:
                 processing_result
             )
 
-        # Add pending action
-        processing_result["missing_fields"] = ["amount"]
+        # Add pending action with new result dict
+        processing_result = {
+            "intent": "transfer",
+            "entities": {},
+            "confidence": 0.9,
+            "missing_fields": ["amount"]
+        }
         await state_manager.update(
             session_id,
             "Transfer query",

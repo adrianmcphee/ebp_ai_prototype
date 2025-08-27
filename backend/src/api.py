@@ -102,10 +102,14 @@ async def lifespan(app: FastAPI):
     extractor = EntityExtractor(llm_client)
     validator = EntityValidator(banking_service)
     state_manager = ConversationStateManager(cache, db)
+    
+    # Import and create response generator
+    from .context_aware_responses import ContextAwareResponseGenerator
+    response_generator = ContextAwareResponseGenerator()
 
-    # Initialize pipeline
+    # Initialize pipeline with correct signature
     pipeline = IntentPipeline(
-        classifier, extractor, validator, state_manager, banking_service
+        classifier, extractor, response_generator, state_manager, banking_service, legacy_validator=validator
     )
 
     print("Application started successfully")
@@ -238,15 +242,30 @@ async def process_query(request: Request, body: ProcessRequest):
             sanitized_query, session_id, skip_resolution=body.skip_resolution
         )
 
-        # Update analytics
+        # Update analytics with available fields
         await db.update_analytics(
-            result["intent"],
-            result.get("can_execute", False),
-            result["confidence"],
-            result.get("response_time_ms", 0),
+            result.get("intent", "unknown"),
+            result.get("status") == "success",
+            result.get("confidence", 0.0),
+            result.get("processing_time_ms", 0),
         )
 
-        return ProcessResponse(**result)
+        # Convert new format to old ProcessResponse format
+        response_data = {
+            "intent": result.get("intent", "unknown"),
+            "confidence": result.get("confidence", 0.0),
+            "entities": result.get("entities", {}),
+            "validation": {"valid": result.get("status") != "error", "invalid_fields": {}},
+            "missing_fields": result.get("missing_fields", []),
+            "disambiguations": {},
+            "warnings": [],
+            "suggestions": result.get("suggestions", {}),
+            "requires_confirmation": result.get("status") == "confirmation_needed",
+            "can_execute": result.get("status") == "success",
+            "ui_hints": {"display_mode": "modal" if result.get("status") == "auth_required" else "toast"},
+        }
+        
+        return ProcessResponse(**response_data)
 
     except Exception as e:
         print(f"Processing error: {e}")
