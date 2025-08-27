@@ -96,7 +96,7 @@ test: test-unit test-api ## Run all tests
 
 test-unit: ## Run unit tests only
 	@echo "$(BLUE)🧪 Running unit tests...$(NC)"
-	@cd $(BACKEND_DIR) && PYTHONPATH=. $(PYTHON) -m pytest tests/test_mock_banking.py tests/test_entity_extractor.py tests/test_intent_classifier.py -v --tb=short
+	@cd $(BACKEND_DIR) && PYTHONPATH=. $(PYTHON) -m pytest tests/test_mock_banking.py tests/test_api.py -v --tb=short
 
 test-api: ## Run API integration tests  
 	@echo "$(BLUE)🌐 Running API tests...$(NC)"
