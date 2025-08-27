@@ -7,7 +7,7 @@ from datetime import datetime, time
 from enum import Enum
 from typing import Any, Optional
 
-from .intent_classifier import AuthLevel, RiskLevel
+from .intent_catalog import AuthLevel, RiskLevel
 
 
 class ResponseType(Enum):

@@ -25,7 +25,8 @@ from typing import Dict, Any
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.llm_wrapper import create_enhanced_llm_client, LLMProvider
-from src.intent_classifier import IntentClassifier, RiskLevel, AuthLevel
+from src.intent_classifier import IntentClassifier
+from src.intent_catalog import RiskLevel, AuthLevel
 from src.entity_extractor import EntityExtractor
 from src.context_aware_responses import ContextAwareResponseGenerator
 from src.state_manager import ConversationStateManager
