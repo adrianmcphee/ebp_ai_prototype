@@ -3,14 +3,15 @@ Unified intent system combining the best of both IntentConfig and BankingIntent 
 inspired by comprehensive banking domain knowledge.
 """
 
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
-import re
 
 
 class RiskLevel(Enum):
     """Risk levels for banking operations"""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -19,6 +20,7 @@ class RiskLevel(Enum):
 
 class AuthLevel(Enum):
     """Authentication requirements"""
+
     NONE = "none"
     BASIC = "basic"
     FULL = "full"
@@ -27,6 +29,7 @@ class AuthLevel(Enum):
 
 class IntentCategory(Enum):
     """High-level intent categories"""
+
     ACCOUNT_MANAGEMENT = "Account Management"
     PAYMENTS = "Payments"
     TRANSFERS = "Transfers"
@@ -51,7 +54,7 @@ class IntentCategory(Enum):
 @dataclass
 class BankingIntent:
     """Unified banking intent with comprehensive metadata"""
-    
+
     intent_id: str
     name: str
     category: IntentCategory
@@ -1186,7 +1189,7 @@ class IntentCatalog:
     def get_intents_by_category(self, category: IntentCategory) -> list[BankingIntent]:
         """Get all intents in a category"""
         return [
-            intent for intent in self.intents.values() 
+            intent for intent in self.intents.values()
             if intent.category == category
         ]
 
@@ -1200,12 +1203,12 @@ class IntentCatalog:
     def search_intents(self, query: str, top_k: int = 5) -> list[tuple[str, float]]:
         """Search intents by query and return top matches with confidence scores"""
         scores = []
-        
+
         for intent_id, intent in self.intents.items():
             score = intent.matches_utterance(query)
             if score > 0:
                 scores.append((intent_id, score))
-        
+
         # Sort by score descending and return top k
         scores.sort(key=lambda x: x[1], reverse=True)
         return scores[:top_k]
@@ -1213,7 +1216,7 @@ class IntentCatalog:
     def match_intent(self, utterance: str) -> dict[str, Any]:
         """Match an utterance to the best intent"""
         matches = self.search_intents(utterance, top_k=3)
-        
+
         if not matches:
             return {
                 "intent_id": "unknown",
@@ -1225,7 +1228,7 @@ class IntentCatalog:
 
         best_match = matches[0]
         intent = self.intents[best_match[0]]
-        
+
         alternatives = [
             {"intent_id": match[0], "confidence": match[1]}
             for match in matches[1:]
@@ -1262,4 +1265,4 @@ class IntentCatalog:
 
 
 # Global intent catalog instance
-intent_catalog = IntentCatalog() 
+intent_catalog = IntentCatalog()

@@ -115,7 +115,7 @@ class TestIntentClassifier:
             ("transaction history", "inquiries.transaction.search", 0.7),
             ("random gibberish xyz", "unknown", 0.0),
         ]
-        
+
         for query, expected_intent, min_confidence in test_cases:
             result = await classifier.classify(query)
             assert result["intent_id"] == expected_intent or result["intent_id"] == "unknown"

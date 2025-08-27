@@ -8,8 +8,8 @@ from typing import Any, Optional
 
 from .context_aware_responses import ContextAwareResponseGenerator, ResponseType
 from .entity_extractor import EntityExtractor
-from .intent_classifier import IntentClassifier
 from .intent_catalog import AuthLevel, RiskLevel
+from .intent_classifier import IntentClassifier
 from .mock_banking import MockBankingService
 from .state_manager import ConversationStateManager
 from .validator import EntityValidator

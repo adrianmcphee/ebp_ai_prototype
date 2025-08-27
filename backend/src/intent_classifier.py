@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from .cache import RedisCache
-from .intent_catalog import intent_catalog, IntentCategory, RiskLevel, AuthLevel
+from .intent_catalog import IntentCategory, intent_catalog
 from .llm_client import LLMClient
 
 
@@ -78,11 +78,11 @@ class IntentClassifier:
             fallback_result = self.catalog.match_intent(query)
             fallback_result["fallback"] = True
             fallback_result["error"] = str(e)
-            
+
             response_time = (datetime.now() - start_time).total_seconds() * 1000
             fallback_result["response_time_ms"] = int(response_time)
             fallback_result["from_cache"] = False
-            
+
             return fallback_result
 
     async def _classify_with_llm(
@@ -139,7 +139,7 @@ Be very specific - prefer subcategory intents over general ones."""
         """Validate and enhance LLM response using the catalog"""
         # Ensure we have a valid intent_id
         intent_id = response.get("intent_id", "unknown")
-        
+
         if not self.catalog.validate_intent_id(intent_id):
             # Try to find closest match or fall back to catalog matching
             fallback_result = self.catalog.match_intent(response.get("reasoning", ""))
