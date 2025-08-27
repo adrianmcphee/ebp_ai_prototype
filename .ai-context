@@ -4,11 +4,13 @@
 Research prototype exploring AI enhancements for Backbase Enterprise Banking Platform (EBP) with focus on navigation assistance, transaction assistance, and MCP integration for AI agents.
 
 ## Core Capabilities
-- **Intent Classification**: 360+ banking intents with risk assessment (LOW/MEDIUM/HIGH)
+- **Intent Classification**: 36 comprehensive banking intents across 16 categories with risk assessment (LOW/MEDIUM/HIGH/CRITICAL)
 - **Entity Extraction**: Smart parsing with validation (amounts, accounts, recipients, dates)
 - **Multi-turn Conversations**: Context persistence, reference resolution, missing info handling
 - **Risk & Authentication**: Automatic auth escalation based on transaction risk
 - **MCP Integration**: Expose banking operations to AI assistants via Model Context Protocol
+
+> **Detailed Intent Documentation**: See [INTENT_SYSTEM.md](INTENT_SYSTEM.md) for comprehensive intent catalog and classification system details.
 
 ## Architecture
 
@@ -122,9 +124,10 @@ Configure in Claude Desktop's config to enable banking operations via natural la
 ## Common Tasks
 
 ### Add New Intent
-1. Update `banking_intents.py` with intent definition
+1. Update `intent_catalog.py` with intent definition in BANKING_INTENTS dict
 2. Add test cases in `test_intent_classifier.py`
 3. Update entity extraction rules if needed
+4. See [INTENT_SYSTEM.md](INTENT_SYSTEM.md) for detailed instructions
 
 ### Add New Banking Operation
 1. Implement in `mock_banking.py`

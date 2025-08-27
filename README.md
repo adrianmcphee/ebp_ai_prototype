@@ -11,7 +11,7 @@ A research prototype exploring how AI capabilities could enhance the Backbase En
 - **Workflow Guidance**: Step-by-step assistance through complex banking processes
 
 ### 2. Transaction Assistance  
-- **Intent Recognition**: 360+ banking intents covering accounts, payments, cards, lending, investments
+- **Intent Recognition**: 36 comprehensive banking intents across 16 categories covering all standard banking operations
 - **Risk Assessment**: LOW, MEDIUM, HIGH, CRITICAL risk levels with appropriate authentication
 - **Entity Extraction**: Smart parsing of amounts, accounts, recipients, dates from natural language
 - **Multi-Turn Conversations**: Handle missing information, confirmations, and complex workflows
@@ -26,7 +26,9 @@ A research prototype exploring how AI capabilities could enhance the Backbase En
 ## 🏗️ Technical Capabilities
 
 ### Enhanced Intent Classification
+- **Comprehensive Coverage**: 36 banking intents across 16 categories (Account Management, Payments, Cards, Lending, etc.)
 - **Hierarchical Structure**: Banking-specific intents (e.g., `accounts.balance.check`, `payments.transfer.internal`)
+- **Hybrid Classification**: LLM-based primary classification with pattern-based fallback
 - **Confidence Scoring**: Precision confidence levels (0.0-1.0) with configurable thresholds
 - **Alternative Suggestions**: Returns top alternatives when confidence is low
 
@@ -50,18 +52,18 @@ A research prototype exploring how AI capabilities could enhance the Backbase En
 
 ## 📋 Supported Banking Operations
 
-### Categories & Risk Levels
-| Category | Example Operations | Risk Level | Auth Required |
-|----------|-------------------|------------|---------------|
-| **Accounts** | Balance check, Statement download | LOW | BASIC |
-| **Internal Transfers** | Between own accounts | MEDIUM | FULL |
-| **External Transfers** | Wire transfers, ACH | HIGH | CHALLENGE |
-| **P2P Payments** | Zelle, Venmo integration | MEDIUM | FULL |
-| **Cards** | Block/unblock, Replace | HIGH | FULL |
-| **Disputes** | Transaction disputes, Fraud reports | HIGH | FULL |
-| **Lending** | Loan applications | MEDIUM | FULL |
-| **Investments** | Portfolio viewing | LOW | FULL |
-| **Support** | Agent requests | LOW | BASIC |
+### Intent Categories
+The system includes **36 comprehensive banking intents** across **16 categories**, covering all standard banking operations from account management to international transfers. Each intent includes risk assessment, authentication requirements, and entity specifications.
+
+**Key Categories:**
+- **Account Management** (6 intents) - Balance, statements, alerts, lifecycle
+- **Payments & Transfers** (7 intents) - Bill pay, P2P, internal/external transfers  
+- **Cards** (5 intents) - Activation, blocking, replacement, PIN, limits
+- **Lending & Investments** (6 intents) - Loans, mortgages, trading, portfolios
+- **Security & Auth** (4 intents) - Login, password, 2FA
+- **Other** (8 intents) - Business banking, international, support, disputes
+
+> **📋 Complete Intent Documentation**: See **[INTENT_SYSTEM.md](INTENT_SYSTEM.md)** for detailed intent specifications, risk levels, entity requirements, and usage examples.
 
 ## 🏗️ Architecture
 
@@ -75,7 +77,7 @@ A research prototype exploring how AI capabilities could enhance the Backbase En
 │   │   ├── context_aware_responses.py # Intelligent response generation
 │   │   ├── state_manager.py          # Multi-turn conversation state
 │   │   ├── mock_banking.py           # Mock banking service implementation
-│   │   ├── banking_intents.py        # Comprehensive intent catalog (360+ intents)
+│   │   ├── intent_catalog.py         # Unified banking intent catalog (36 intents)
 │   │   ├── llm_wrapper.py            # Enhanced LLM client with provider flexibility
 │   │   ├── mcp_server.py             # MCP protocol server for AI agents
 │   │   ├── cache.py                  # Redis cache interface
@@ -94,8 +96,21 @@ A research prototype exploring how AI capabilities could enhance the Backbase En
 ├── frontend/                         # React frontend (demo)
 ├── e2e/                             # Playwright E2E tests
 ├── Makefile                         # Development workflow automation
-└── docker-compose.yml              # Docker services configuration
+├── docker-compose.yml              # Docker services configuration
+└── INTENT_SYSTEM.md                # Comprehensive intent system documentation
 ```
+
+## 📚 Documentation
+
+### Core Documentation
+- **[INTENT_SYSTEM.md](INTENT_SYSTEM.md)** - Comprehensive intent catalog, classification system, and usage guide
+- **[.ai-context](.ai-context)** - Complete project context for AI assistants  
+- **[CLAUDE.md](CLAUDE.md)** - Claude AI assistant setup guide
+
+### API Documentation
+- **OpenAPI Spec**: Available at `http://localhost:8000/docs` when running the API
+- **WebSocket Events**: Real-time banking assistant communication
+- **MCP Tools**: Banking operations exposed via Model Context Protocol
 
 ## 🤖 MCP Integration Exploration
 
