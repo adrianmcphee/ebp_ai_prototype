@@ -1,5 +1,40 @@
-import React, { useState, useEffect, useRef } from 'react';
-import './App.css';
+import { useState, useEffect, useRef } from 'react';
+import {
+  MantineProvider,
+  AppShell,
+  Container,
+  Title,
+  Paper,
+  TextInput,
+  Button,
+  Stack,
+  Group,
+  Text,
+  Badge,
+  Card,
+  Grid,
+  Loader,
+  Alert,
+  ActionIcon,
+  Avatar,
+  Menu,
+  Divider,
+  ScrollArea,
+} from '@mantine/core';
+import { useForm } from '@mantine/form';
+import { notifications } from '@mantine/notifications';
+import { Notifications } from '@mantine/notifications';
+import {
+  IconSend,
+  IconCreditCard,
+  IconHistory,
+  IconHelpCircle,
+  IconCurrencyDollar,
+  IconUser,
+  IconLogout,
+  IconSettings,
+} from '@tabler/icons-react';
+import axios from 'axios';
 
 interface Message {
   id: string;
@@ -26,24 +61,32 @@ interface ProcessResponse {
   execution?: any;
 }
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+interface Account {
+  id: string;
+  name: string;
+  balance: number;
+  type: string;
+}
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [currentBalance, setCurrentBalance] = useState<number | null>(null);
-  const [pendingAction, setPendingAction] = useState<any>(null);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [disambiguationOptions, setDisambiguationOptions] = useState<any>(null);
-  const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
+  const form = useForm({
+    initialValues: {
+      message: '',
+    },
+  });
+
   useEffect(() => {
-    // Initialize session
     initializeSession();
-    // Load accounts
     loadAccounts();
     
     return () => {
@@ -63,17 +106,15 @@ function App() {
 
   const initializeSession = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/session`, {
-        method: 'POST'
-      });
-      const data = await response.json();
+      const response = await axios.post(`${API_BASE}/api/session`);
+      const data = response.data;
       setSessionId(data.session_id);
       
       // Initialize WebSocket
       const ws = new WebSocket(`ws://localhost:8000/ws/${data.session_id}`);
       
       ws.onopen = () => {
-        addSystemMessage('Connected to banking assistant');
+        addSystemMessage('Connected to EBP Banking Assistant 🏦');
       };
       
       ws.onmessage = (event) => {
@@ -82,23 +123,35 @@ function App() {
       };
       
       ws.onerror = (error) => {
-        addSystemMessage('Connection error. Please refresh.');
+        notifications.show({
+          title: 'Connection Error',
+          message: 'Failed to connect to banking assistant',
+          color: 'red',
+        });
       };
       
       wsRef.current = ws;
     } catch (error) {
       console.error('Failed to initialize session:', error);
-      addSystemMessage('Failed to connect. Please refresh.');
+      notifications.show({
+        title: 'Session Error',
+        message: 'Failed to initialize banking session',
+        color: 'red',
+      });
     }
   };
 
   const loadAccounts = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/accounts`);
-      const data = await response.json();
-      setAccounts(data.accounts);
+      const response = await axios.get(`${API_BASE}/api/accounts`);
+      setAccounts(response.data.accounts);
     } catch (error) {
       console.error('Failed to load accounts:', error);
+      notifications.show({
+        title: 'Account Error',
+        message: 'Failed to load account information',
+        color: 'orange',
+      });
     }
   };
 
@@ -144,46 +197,40 @@ function App() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || !sessionId) return;
+  const handleSubmit = async (values: { message: string }) => {
+    if (!values.message.trim() || !sessionId) return;
 
-    const query = input;
-    setInput('');
+    const query = values.message;
+    form.reset();
     addUserMessage(query);
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE}/api/process`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query,
-          session_id: sessionId
-        })
+      const response = await axios.post(`${API_BASE}/api/process`, {
+        query,
+        session_id: sessionId
       });
 
-      const data: ProcessResponse = await response.json();
-      handleProcessResponse(data);
+      handleProcessResponse(response.data);
     } catch (error) {
       console.error('Failed to process query:', error);
-      addSystemMessage('Sorry, there was an error processing your request.');
+      notifications.show({
+        title: 'Processing Error',
+        message: 'Sorry, there was an error processing your request',
+        color: 'red',
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleProcessResponse = (data: ProcessResponse) => {
-    // Generate response message
     let responseMessage = '';
     
     switch (data.intent) {
       case 'balance':
         if (data.execution?.success) {
           responseMessage = `Your ${data.entities.account || 'account'} balance is $${data.execution.data.balance.toFixed(2)}`;
-          setCurrentBalance(data.execution.data.balance);
         } else {
           responseMessage = 'I can help you check your balance. Which account would you like to check?';
         }
@@ -192,7 +239,6 @@ function App() {
       case 'transfer':
         if (data.missing_fields?.length > 0) {
           responseMessage = `I need more information to complete the transfer. Please provide: ${data.missing_fields.join(', ')}`;
-          setPendingAction(data);
         } else if (data.disambiguations?.recipient) {
           responseMessage = 'Multiple recipients found. Please select:';
           setDisambiguationOptions(data.disambiguations.recipient);
@@ -219,128 +265,209 @@ function App() {
         responseMessage = "I'm not sure how to help with that. Could you please rephrase?";
     }
     
-    // Add warnings if any
     if (data.warnings?.length > 0) {
       responseMessage += `\n⚠️ ${data.warnings.join(', ')}`;
     }
     
     addAssistantMessage(responseMessage, data);
-    
-    // Update UI based on hints
-    if (data.ui_hints?.show_disambiguation) {
-      // Show disambiguation options
-    }
-    if (data.ui_hints?.prompt_for_missing) {
-      // Highlight missing fields
-    }
-  };
-
-  const handleDisambiguationSelect = (option: any) => {
-    if (wsRef.current) {
-      wsRef.current.send(JSON.stringify({
-        type: 'disambiguation',
-        field: 'recipient',
-        selection: option
-      }));
-    }
-    setDisambiguationOptions(null);
   };
 
   const handleQuickAction = (action: string) => {
-    setInput(action);
+    form.setFieldValue('message', action);
+  };
+
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence >= 0.8) return 'green';
+    if (confidence >= 0.6) return 'yellow';
+    return 'red';
   };
 
   return (
-    <div className="App" data-testid="app">
-      <header className="App-header" data-testid="header">
-        <h1>NLP Banking Assistant</h1>
-        <div className="account-summary">
-          {accounts.map(account => (
-            <div key={account.id} className="account-card" data-testid={`account-${account.id}`}>
-              <span>{account.name}</span>
-              <strong>${account.balance.toFixed(2)}</strong>
-            </div>
-          ))}
-        </div>
-      </header>
-      
-      <main className="chat-container" data-testid="chat-container">
-        <div className="messages" data-testid="messages">
-          {messages.map(message => (
-            <div
-              key={message.id}
-              className={`message ${message.type}`}
-              data-testid={`message-${message.type}`}
-            >
-              <div className="message-content">
-                {message.content}
-              </div>
-              {message.confidence && (
-                <div className="message-meta" data-testid="confidence">
-                  Intent: {message.intent} ({(message.confidence * 100).toFixed(0)}%)
-                </div>
-              )}
-            </div>
-          ))}
-          
-          {disambiguationOptions && (
-            <div className="disambiguation" data-testid="disambiguation">
-              <p>Please select:</p>
-              {disambiguationOptions.map((option: any) => (
-                <button
-                  key={option.id}
-                  onClick={() => handleDisambiguationSelect(option)}
-                  data-testid={`disambig-${option.id}`}
-                >
-                  {option.name}
-                </button>
-              ))}
-            </div>
-          )}
-          
-          {isLoading && (
-            <div className="message assistant loading" data-testid="loading">
-              <div className="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-            </div>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </div>
-        
-        <div className="quick-actions" data-testid="quick-actions">
-          <button onClick={() => handleQuickAction("Check my balance")} data-testid="quick-balance">
-            Check Balance
-          </button>
-          <button onClick={() => handleQuickAction("Send money")} data-testid="quick-transfer">
-            Transfer
-          </button>
-          <button onClick={() => handleQuickAction("Show my recent transactions")} data-testid="quick-history">
-            History
-          </button>
-          <button onClick={() => handleQuickAction("Help")} data-testid="quick-help">
-            Help
-          </button>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="input-form" data-testid="input-form">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask me anything about your banking..."
-            disabled={isLoading}
-            data-testid="chat-input"
-          />
-          <button type="submit" disabled={isLoading || !input.trim()} data-testid="send-button">
-            Send
-          </button>
-        </form>
-      </main>
-    </div>
+    <MantineProvider>
+      <Notifications />
+      <AppShell
+        header={{ height: 70 }}
+        padding="md"
+      >
+        <AppShell.Header>
+          <Container size="xl" h="100%">
+            <Group justify="space-between" h="100%">
+              <Group>
+                <IconCurrencyDollar size={32} color="blue" />
+                <Title order={2} c="blue">EBP Banking Assistant</Title>
+              </Group>
+              
+              <Group>
+                <Menu>
+                  <Menu.Target>
+                    <ActionIcon variant="subtle" size="lg">
+                      <IconUser size={20} />
+                    </ActionIcon>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    <Menu.Item leftSection={<IconSettings size={16} />}>
+                      Settings
+                    </Menu.Item>
+                    <Menu.Item leftSection={<IconLogout size={16} />}>
+                      Logout
+                    </Menu.Item>
+                  </Menu.Dropdown>
+                </Menu>
+              </Group>
+            </Group>
+          </Container>
+        </AppShell.Header>
+
+        <AppShell.Main>
+          <Container size="xl">
+            <Grid>
+              {/* Account Summary */}
+              <Grid.Col span={12}>
+                <Paper p="md" shadow="sm">
+                  <Title order={3} mb="md">Account Overview</Title>
+                  <Grid>
+                    {accounts.map(account => (
+                      <Grid.Col key={account.id} span={{ base: 12, sm: 6, md: 4 }}>
+                        <Card withBorder>
+                          <Text size="sm" c="dimmed">{account.name}</Text>
+                          <Text size="xl" fw={700}>${account.balance.toFixed(2)}</Text>
+                          <Badge variant="light" size="sm">{account.type}</Badge>
+                        </Card>
+                      </Grid.Col>
+                    ))}
+                  </Grid>
+                </Paper>
+              </Grid.Col>
+
+              {/* Chat Interface */}
+              <Grid.Col span={12}>
+                <Paper p="md" shadow="sm" style={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
+                  <Title order={3} mb="md">Chat with Assistant</Title>
+                  
+                  <ScrollArea style={{ flex: 1 }} mb="md">
+                    <Stack gap="sm">
+                      {messages.map(message => (
+                        <Paper
+                          key={message.id}
+                          p="sm"
+                          bg={message.type === 'user' ? 'blue.1' : message.type === 'system' ? 'gray.1' : 'green.1'}
+                        >
+                          <Group justify="space-between" mb="xs">
+                            <Badge
+                              variant="light"
+                              color={message.type === 'user' ? 'blue' : message.type === 'system' ? 'gray' : 'green'}
+                            >
+                              {message.type}
+                            </Badge>
+                            {message.confidence && (
+                              <Badge
+                                variant="light"
+                                color={getConfidenceColor(message.confidence)}
+                              >
+                                {message.intent} ({(message.confidence * 100).toFixed(0)}%)
+                              </Badge>
+                            )}
+                          </Group>
+                          <Text size="sm">{message.content}</Text>
+                        </Paper>
+                      ))}
+                      
+                      {disambiguationOptions && (
+                        <Alert title="Please select an option:" color="blue">
+                          <Stack gap="xs">
+                            {disambiguationOptions.map((option: any) => (
+                              <Button
+                                key={option.id}
+                                variant="light"
+                                size="xs"
+                                onClick={() => {
+                                  if (wsRef.current) {
+                                    wsRef.current.send(JSON.stringify({
+                                      type: 'disambiguation',
+                                      field: 'recipient',
+                                      selection: option
+                                    }));
+                                  }
+                                  setDisambiguationOptions(null);
+                                }}
+                              >
+                                {option.name}
+                              </Button>
+                            ))}
+                          </Stack>
+                        </Alert>
+                      )}
+                      
+                      {isLoading && (
+                        <Paper p="sm" bg="gray.1">
+                          <Group>
+                            <Loader size="sm" />
+                            <Text size="sm" c="dimmed">Assistant is thinking...</Text>
+                          </Group>
+                        </Paper>
+                      )}
+                      
+                      <div ref={messagesEndRef} />
+                    </Stack>
+                  </ScrollArea>
+
+                  {/* Quick Actions */}
+                  <Group mb="md">
+                    <Button
+                      variant="light"
+                      leftSection={<IconCurrencyDollar size={16} />}
+                      onClick={() => handleQuickAction("Check my balance")}
+                    >
+                      Check Balance
+                    </Button>
+                    <Button
+                      variant="light"
+                      leftSection={<IconCreditCard size={16} />}
+                      onClick={() => handleQuickAction("Send money")}
+                    >
+                      Transfer
+                    </Button>
+                    <Button
+                      variant="light"
+                      leftSection={<IconHistory size={16} />}
+                      onClick={() => handleQuickAction("Show my recent transactions")}
+                    >
+                      History
+                    </Button>
+                    <Button
+                      variant="light"
+                      leftSection={<IconHelpCircle size={16} />}
+                      onClick={() => handleQuickAction("Help")}
+                    >
+                      Help
+                    </Button>
+                  </Group>
+
+                  {/* Message Input */}
+                  <form onSubmit={form.onSubmit(handleSubmit)}>
+                    <Group>
+                      <TextInput
+                        {...form.getInputProps('message')}
+                        placeholder="Ask me anything about your banking..."
+                        style={{ flex: 1 }}
+                        disabled={isLoading}
+                      />
+                      <Button
+                        type="submit"
+                        leftSection={<IconSend size={16} />}
+                        disabled={isLoading || !form.values.message.trim()}
+                      >
+                        Send
+                      </Button>
+                    </Group>
+                  </form>
+                </Paper>
+              </Grid.Col>
+            </Grid>
+          </Container>
+        </AppShell.Main>
+      </AppShell>
+    </MantineProvider>
   );
 }
 

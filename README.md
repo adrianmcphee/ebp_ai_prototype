@@ -105,7 +105,6 @@ The system includes **36 comprehensive banking intents** across **16 categories*
 ### Core Documentation
 - **[INTENT_SYSTEM.md](INTENT_SYSTEM.md)** - Comprehensive intent catalog, classification system, and usage guide
 - **[.ai-context](.ai-context)** - Complete project context for AI assistants  
-- **[CLAUDE.md](CLAUDE.md)** - Claude AI assistant setup guide
 
 ### API Documentation
 - **OpenAPI Spec**: Available at `http://localhost:8000/docs` when running the API
