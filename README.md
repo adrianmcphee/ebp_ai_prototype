@@ -260,10 +260,10 @@ See [MCP_INTEGRATION.md](MCP_INTEGRATION.md) for complete technical documentatio
 
 ### Prerequisites
 - Python 3.11+
-- Docker & Docker Compose
+- Node.js 18+
 - Optional: Anthropic or OpenAI API key for real LLM features
 
-### Installation
+### Installation & Setup
 
 1. Clone the repository:
 ```bash
@@ -271,22 +271,62 @@ git clone <repository-url>
 cd ebpnlp
 ```
 
-2. Complete setup (installs dependencies, sets up environment):
+2. Install dependencies:
 ```bash
 make setup
+cd frontend && npm install
 ```
 
-3. Run the comprehensive demo:
+3. Start the application:
 ```bash
-make demo
+# Option 1: Use the convenient startup script
+./start-app.sh
+
+# Option 2: Start services individually
+make api        # Backend API on http://localhost:8000
+make frontend   # Frontend on http://localhost:3001
+make mcp        # MCP server for Claude Desktop
 ```
 
-4. Or start the API server:
-```bash
-make api
-```
+### Access the Application
 
-The API will be available at `http://localhost:8000` with interactive docs at `/docs`
+- **🏦 Banking Interface**: http://localhost:3001 (React + Mantine UI)
+- **📡 API Documentation**: http://localhost:8000/docs
+- **🔍 API Health Check**: http://localhost:8000/health
+
+### Demo Features
+
+#### 1. Banking Interface (Frontend)
+Modern React application with:
+- Account overview with balance display
+- Real-time chat interface with banking assistant  
+- Natural language processing for banking queries
+- Quick action buttons for common tasks
+- WebSocket real-time communication
+
+#### 2. Navigation & Transaction Assistance (API)
+- Intent classification for 36+ banking operations
+- Entity extraction (amounts, recipients, accounts)
+- Multi-turn conversation support with context
+- Risk assessment and authentication flows
+- Comprehensive banking intent catalog
+
+#### 3. Claude Desktop Integration (MCP Server)
+1. Copy `backend/claude_desktop_config.json` to your Claude Desktop configuration
+2. Restart Claude Desktop  
+3. Use natural language banking commands directly in Claude
+
+### Example Interactions
+
+Try these in the banking interface:
+```
+"What's my balance?"
+"Transfer $100 to John" 
+"Show my recent transactions"
+"Block my credit card"
+"Help me dispute a charge"
+"Navigate to payment settings"
+```
 
 ### Quick Commands
 
@@ -315,13 +355,10 @@ make lint             # Check code quality with ruff
 make format           # Auto-fix code formatting issues
 
 # Services
+make start            # Start both frontend and backend
 make api              # Start FastAPI server (http://localhost:8000)
+make frontend         # Start frontend development server
 make mcp              # Start MCP server for Claude Desktop
-
-# Docker
-make docker-build     # Build Docker image
-make docker-run       # Run in Docker container
-make docker-test      # Run tests in Docker
 ```
 
 ## 🎯 Demo Scenarios
@@ -452,7 +489,7 @@ RATE_LIMIT_PER_MINUTE=30
 - Cost tracking for LLM usage
 
 ### Deployment
-- Docker containerization
+- Simple development setup
 - Health check endpoints
 - Graceful shutdown handling
 - Environment-based configuration

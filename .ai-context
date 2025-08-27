@@ -30,21 +30,22 @@ Research prototype exploring AI enhancements for Backbase Enterprise Banking Pla
 ebpnlp/
 ├── Makefile              # Workflow automation (make help for commands)
 ├── backend/
-│   ├── src/              # Core modules
+│   ├── src/              # Core modules (FastAPI + Python)
 │   ├── tests/            # 136+ test cases
 │   ├── scripts/          # Utility scripts
 │   └── demo.py           # Comprehensive demo
-├── frontend/             # React UI (minimal)
+├── frontend/             # React 19 + Vite + Mantine UI
 └── e2e/                  # Playwright tests
 ```
 
 ## Quick Start
 ```bash
 make setup          # Install dependencies
-make demo           # Run comprehensive demo
+./start-app.sh      # Start full application (frontend + backend)
 make api            # Start API server (http://localhost:8000)
+make frontend       # Start frontend (http://localhost:3001)
+make mcp            # Start MCP server for Claude Desktop
 make test           # Run test suite
-make help           # See all commands
 ```
 
 ## Banking Operations & Risk Levels
@@ -58,6 +59,15 @@ make help           # See all commands
 | Disputes | Fraud reports | HIGH | FULL |
 
 ## Development
+
+### Running the Application
+```bash
+./start-app.sh         # Start both frontend and backend
+make start             # Alternative startup command
+make api               # Backend only
+make frontend          # Frontend only
+make mcp               # MCP server for Claude Desktop
+```
 
 ### Running Demos
 ```bash

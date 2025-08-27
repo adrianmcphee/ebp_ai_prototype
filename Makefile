@@ -1,7 +1,7 @@
 # EBP AI Banking Capabilities - Makefile
 # ===========================================
 
-.PHONY: help setup install test lint format clean demo api mcp docker
+.PHONY: help setup install test lint format clean demo api mcp frontend start
 
 # Default Python and paths
 PYTHON := python3
@@ -46,11 +46,8 @@ help: ## Show this help message
 	@echo "Services:"
 	@echo "  api       - Start the API server"
 	@echo "  mcp       - Start the MCP server"
-	@echo ""
-	@echo "Docker:"
-	@echo "  docker-build - Build Docker image"
-	@echo "  docker-run   - Run in Docker container"
-	@echo "  docker-test  - Run tests in Docker"
+	@echo "  frontend  - Start the frontend development server"
+	@echo "  start     - Start both frontend and backend"
 
 setup: install ## Complete project setup
 	@echo "$(GREEN)✅ Project setup complete!$(NC)"
@@ -136,33 +133,23 @@ api: ## Start the API server
 	export DATABASE_URL=mock && \
 	export REDIS_URL=mock && \
 	export LLM_PROVIDER=mock && \
-	$(PYTHON_VENV) -m uvicorn src.api:app --reload --host 0.0.0.0 --port 8000
+	$(PYTHON) -m uvicorn src.api:app --reload --host 0.0.0.0 --port 8000
 
 mcp: ## Start the MCP server
 	@echo "$(BLUE)🔗 Starting MCP server...$(NC)"
 	@cd $(BACKEND_DIR) && \
 	export LLM_PROVIDER=mock && \
-	$(PYTHON_VENV) run_mcp_server.py
+	$(PYTHON) run_mcp_server.py
 
-docker-build: ## Build Docker image
-	@echo "$(BLUE)🐳 Building Docker image...$(NC)"
-	@docker build -t ebp-ai-banking $(BACKEND_DIR)
+frontend: ## Start the frontend development server
+	@echo "$(BLUE)🖥️  Starting frontend...$(NC)"
+	@cd frontend && npm run dev
 
-docker-run: docker-build ## Run in Docker container
-	@echo "$(BLUE)🐳 Running in Docker...$(NC)"
-	@docker run -p 8000:8000 \
-		-e DATABASE_URL=mock \
-		-e REDIS_URL=mock \
-		-e LLM_PROVIDER=mock \
-		ebp-ai-banking
+start: ## Start both frontend and backend services
+	@echo "$(BLUE)🚀 Starting EBP Banking Application...$(NC)"
+	@./start-app.sh
 
-docker-test: docker-build ## Run tests in Docker
-	@echo "$(BLUE)🐳 Running tests in Docker...$(NC)"
-	@docker run --rm \
-		-e DATABASE_URL=mock \
-		-e REDIS_URL=mock \
-		-e LLM_PROVIDER=mock \
-		ebp-ai-banking pytest tests/ -v
+# Docker targets removed - using direct startup for simplicity
 
 # Development utilities
 dev-setup: ## Setup development environment with git hooks

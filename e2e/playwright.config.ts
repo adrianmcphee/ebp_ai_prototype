@@ -13,7 +13,7 @@ export default defineConfig({
   ],
   
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:3001',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -46,14 +46,14 @@ export default defineConfig({
 
   webServer: [
     {
-      command: 'cd ../backend && python -m uvicorn src.api:app --port 8000',
+      command: 'cd ../backend && export DATABASE_URL=mock && export REDIS_URL=mock && export LLM_PROVIDER=mock && python -m uvicorn src.api:app --port 8000',
       port: 8000,
       timeout: 120 * 1000,
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: 'cd ../frontend && npm start',
-      port: 3000,
+      command: 'cd ../frontend && npm run dev',
+      port: 3001,
       timeout: 120 * 1000,
       reuseExistingServer: !process.env.CI,
     }
