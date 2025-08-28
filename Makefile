@@ -51,6 +51,12 @@ help: ## Show this help message
 	@echo ""
 	@echo "Testing:"
 	@echo "  test         - Run all tests"
+	@echo "  test-unit    - Run unit tests only"
+	@echo "  test-api     - Run API integration tests"
+	@echo "  test-e2e     - Run end-to-end tests"
+	@echo "  test-e2e-debug     - Run E2E tests in debug mode"
+	@echo "  test-e2e-headed    - Run E2E tests with visible browser"
+	@echo "  test-e2e-chrome    - Run E2E tests in Chrome only"
 	@echo "  test-mcp     - Test MCP server functionality"
 	@echo "  test-mcp-comprehensive - Run comprehensive MCP and intent testing"
 
@@ -103,8 +109,16 @@ test-api: ## Run API integration tests
 	@bash $(SCRIPTS_DIR)/test_setup.sh
 
 test-e2e: ## Run end-to-end tests
-	@echo "$(BLUE)🔄 Running E2E tests...$(NC)"
-	@bash $(SCRIPTS_DIR)/run_e2e_tests.sh
+	@bash $(SCRIPTS_DIR)/run_simple_e2e.sh
+
+test-e2e-debug: ## Run E2E tests in debug mode
+	@bash $(SCRIPTS_DIR)/run_simple_e2e.sh debug
+
+test-e2e-headed: ## Run E2E tests with visible browser
+	@bash $(SCRIPTS_DIR)/run_simple_e2e.sh headed
+
+test-e2e-chrome: ## Run E2E tests in Chrome only
+	@bash $(SCRIPTS_DIR)/run_simple_e2e.sh chrome
 
 test-full: ## Run comprehensive test suite
 	@echo "$(BLUE)🔬 Running full test suite...$(NC)"
