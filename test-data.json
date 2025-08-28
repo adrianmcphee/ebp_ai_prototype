@@ -237,6 +237,20 @@
       "intent_id": "international.wire.send",
       "queries": ["Send money overseas", "International wire transfer", "Send money to London", "Wire funds to Europe"],
       "expected_confidence_min": 0.85
+    },
+    "payments_p2p_send": {
+      "id": "payments_p2p_send",
+      "name": "Send P2P Payment",
+      "intent_id": "payments.p2p.send",
+      "queries": ["Send money to a friend", "Pay John $50", "Zelle $100 to Sarah", "Venmo Mike for dinner"],
+      "expected_confidence_min": 0.85
+    },
+    "security_2fa_setup": {
+      "id": "security_2fa_setup",
+      "name": "Setup Two-Factor Authentication",
+      "intent_id": "security.2fa.setup",
+      "queries": ["Setup 2FA", "Enable two-factor authentication", "Setup two-factor", "Security verification setup"],
+      "expected_confidence_min": 0.80
     }
   },
   "performance": {
@@ -292,6 +306,8 @@
     "freeze_card",
     "get_transaction_history",
     "dispute_transaction",
-    "request_human_agent"
+    "request_human_agent",
+    "setup_2fa",
+    "send_international_wire"
   ]
 } 

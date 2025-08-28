@@ -221,7 +221,7 @@ async def create_session():
     return SessionResponse(session_id=session_id, created=True)
 
 
-@app.post("/api/process", response_model=ProcessResponse)
+@app.post("/api/process")
 @limiter.limit(f"{settings.rate_limit_per_minute}/minute")
 async def process_query(request: Request, body: ProcessRequest):
     """Process a natural language query"""
@@ -250,26 +250,31 @@ async def process_query(request: Request, body: ProcessRequest):
             result.get("processing_time_ms", 0),
         )
 
-        # Convert new format to old ProcessResponse format
-        response_data = {
+        # Return simplified response format for frontend
+        return {
+            "status": result.get("status", "error"),
             "intent": result.get("intent", "unknown"),
             "confidence": result.get("confidence", 0.0),
             "entities": result.get("entities", {}),
-            "validation": {"valid": result.get("status") != "error", "invalid_fields": {}},
-            "missing_fields": result.get("missing_fields", []),
-            "disambiguations": {},
-            "warnings": [],
-            "suggestions": result.get("suggestions", {}),
-            "requires_confirmation": result.get("status") == "confirmation_needed",
-            "can_execute": result.get("status") == "success",
-            "ui_hints": {"display_mode": "modal" if result.get("status") == "auth_required" else "toast"},
+            "message": result.get("message", "I'm processing your request..."),
+            "ui_assistance": result.get("ui_assistance"),
+            "execution": result.get("execution")
         }
-        
-        return ProcessResponse(**response_data)
 
     except Exception as e:
         print(f"Processing error: {e}")
-        raise HTTPException(500, "Processing failed")
+        import traceback
+        traceback.print_exc()
+        # Return error in expected format instead of raising HTTPException
+        return {
+            "status": "error",
+            "intent": "unknown",
+            "confidence": 0.0,
+            "entities": {},
+            "message": "Sorry, I encountered an error processing your request.",
+            "ui_assistance": None,
+            "execution": None
+        }
 
 
 @app.get("/api/session/{session_id}/summary")

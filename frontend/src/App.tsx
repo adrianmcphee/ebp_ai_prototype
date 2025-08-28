@@ -593,7 +593,7 @@ const App: React.FC = () => {
 
                 <Tabs.Panel value="chat" pt="md">
                   <Card shadow="sm" padding="lg" radius="md" withBorder>
-                    <Stack spacing="xs" style={{ height: '400px', overflowY: 'auto' }} mb="md">
+                    <Stack data-testid="messages" spacing="xs" style={{ height: '400px', overflowY: 'auto' }} mb="md">
                       {messages.map((message) => (
                         <Paper
                           key={message.id}
@@ -609,6 +609,7 @@ const App: React.FC = () => {
                           <Text size="sm">{message.content}</Text>
                           {message.confidence !== undefined && (
                             <Badge 
+                              data-testid="confidence"
                               size="xs" 
                               color={getConfidenceColor(message.confidence)}
                               mt="xs"
@@ -638,15 +639,30 @@ const App: React.FC = () => {
                       </Group>
                     </form>
 
-                    <Group mt="md" spacing="xs">
+                    <Group data-testid="quick-actions" mt="md" spacing="xs">
                       <Text size="xs" color="dimmed">Quick examples:</Text>
-                      <Button size="xs" variant="subtle" onClick={() => form.setFieldValue('message', 'Take me to international transfers')}>
+                      <Button 
+                        data-testid="quick-transfer"
+                        size="xs" 
+                        variant="subtle" 
+                        onClick={() => form.setFieldValue('message', 'Take me to international transfers')}
+                      >
                         Navigation
                       </Button>
-                      <Button size="xs" variant="subtle" onClick={() => form.setFieldValue('message', 'Send $500 to my friend in Canada')}>
+                      <Button 
+                        data-testid="quick-transaction"
+                        size="xs" 
+                        variant="subtle" 
+                        onClick={() => form.setFieldValue('message', 'Send $500 to my friend in Canada')}
+                      >
                         Transaction
                       </Button>
-                      <Button size="xs" variant="subtle" onClick={() => form.setFieldValue('message', 'What\'s my balance?')}>
+                      <Button 
+                        data-testid="quick-balance"
+                        size="xs" 
+                        variant="subtle" 
+                        onClick={() => form.setFieldValue('message', 'What\'s my balance?')}
+                      >
                         Balance
                       </Button>
                     </Group>

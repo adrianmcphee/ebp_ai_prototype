@@ -34,7 +34,7 @@ class TestMCPComprehensive:
             "accounts": ["accounts_balance_check", "accounts_balance_history", "accounts_statement_download", 
                         "accounts_statement_view", "accounts_alerts_setup", "accounts_close_request"],
             "payments": ["payments_transfer_internal", "payments_transfer_external", "payments_bill_pay",
-                        "payments_bill_schedule", "payments_recurring_setup", "payments_status_check"],
+                        "payments_bill_schedule", "payments_recurring_setup", "payments_status_check", "payments_p2p_send"],
             "cards": ["cards_block_temporary", "cards_replace_lost", "cards_activate", 
                      "cards_pin_change", "cards_limit_increase"],
             "authentication": ["authentication_login", "authentication_logout"],
@@ -43,7 +43,7 @@ class TestMCPComprehensive:
             "inquiries": ["inquiries_transaction_search"],
             "lending": ["lending_apply_personal", "lending_apply_mortgage", "lending_payment_make"],
             "investments": ["investments_portfolio_view", "investments_buy_stock", "investments_sell_stock"],
-            "security": ["security_password_reset"],
+            "security": ["security_password_reset", "security_2fa_setup"],
             "onboarding": ["onboarding_account_open"],
             "business": ["business_account_open"],
             "cash": ["cash_deposit_schedule"],
@@ -59,7 +59,7 @@ class TestMCPComprehensive:
         print(f"✅ All {len(scenarios)} intent scenarios are defined")
 
     def test_all_mcp_tools_defined(self):
-        """Test that all 8 MCP tools are defined in test data"""
+        """Test that all 10 MCP tools are defined in test data"""
         expected_tools = [
             "check_account_balance",
             "transfer_funds_internal", 
@@ -68,7 +68,9 @@ class TestMCPComprehensive:
             "freeze_card",
             "get_transaction_history",
             "dispute_transaction",
-            "request_human_agent"
+            "request_human_agent",
+            "setup_2fa",
+            "send_international_wire"
         ]
         
         actual_tools = TEST_DATA["mcp_tools"]
@@ -76,8 +78,8 @@ class TestMCPComprehensive:
         for tool in expected_tools:
             assert tool in actual_tools, f"Missing MCP tool: {tool}"
             
-        assert len(actual_tools) == 8, f"Expected 8 MCP tools, got {len(actual_tools)}"
-        print(f"✅ All 8 MCP tools are defined: {actual_tools}")
+        assert len(actual_tools) == 10, f"Expected 10 MCP tools, got {len(actual_tools)}"
+        print(f"✅ All 10 MCP tools are defined: {actual_tools}")
 
     @pytest.mark.asyncio
     async def test_intent_catalog_completeness(self):
@@ -310,7 +312,7 @@ async def test_full_mcp_system_integration():
     
     # Test data loading
     assert len(TEST_DATA["scenarios"]) >= 30, "Should have comprehensive scenario coverage"
-    assert len(TEST_DATA["mcp_tools"]) == 8, "Should have all 8 MCP tools"
+    assert len(TEST_DATA["mcp_tools"]) == 10, "Should have all 10 MCP tools"
     
     # Test banking service
     from src.mock_banking import MockBankingService

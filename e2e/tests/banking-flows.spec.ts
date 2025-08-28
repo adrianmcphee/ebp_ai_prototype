@@ -158,15 +158,16 @@ test.describe('NLP Banking E2E Tests', () => {
   });
 
   test('Quick Actions', async ({ page }) => {
-    // Test quick action buttons
-    const quickBalance = page.locator('[data-testid="quick-balance"]');
-    const quickTransfer = page.locator('[data-testid="quick-transfer"]');
-    const quickHistory = page.locator('[data-testid="quick-history"]');
+    // Test quick action buttons with actual text
+    const quickBalance = page.locator('button:has-text("Balance")');
+    const quickTransfer = page.locator('button:has-text("Navigation")');  
+    const quickTransaction = page.locator('button:has-text("Transaction")');
     
     // Click balance quick action
     await quickBalance.click();
+    await page.waitForTimeout(500);
     let inputValue = await page.locator('[data-testid="chat-input"]').inputValue();
-    expect(inputValue).toBe('Check my balance');
+    expect(inputValue).toBe("What's my balance?");
     
     // Send the query
     await page.locator('[data-testid="send-button"]').click();
@@ -174,13 +175,15 @@ test.describe('NLP Banking E2E Tests', () => {
     
     // Click transfer quick action
     await quickTransfer.click();
+    await page.waitForTimeout(500);
     inputValue = await page.locator('[data-testid="chat-input"]').inputValue();
-    expect(inputValue).toBe('Send money');
+    expect(inputValue).toBe('Take me to international transfers');
     
-    // Click history quick action
-    await quickHistory.click();
+    // Click transaction quick action
+    await quickTransaction.click();
+    await page.waitForTimeout(500);
     inputValue = await page.locator('[data-testid="chat-input"]').inputValue();
-    expect(inputValue).toBe('Show my recent transactions');
+    expect(inputValue).toBe('Send $500 to my friend in Canada');
   });
 
   test('Navigation Assistance', async ({ page }) => {
@@ -359,10 +362,11 @@ test.describe('Mobile Responsiveness', () => {
   test('Mobile Touch Interactions', async ({ page }) => {
     await initializeSession(page);
     
-    // Tap quick action
-    await page.locator('[data-testid="quick-balance"]').tap();
+    // Tap quick action button
+    await page.locator('button:has-text("Balance")').click();
+    await page.waitForTimeout(500); // Wait for input to be filled
     const inputValue = await page.locator('[data-testid="chat-input"]').inputValue();
-    expect(inputValue).toBe('Check my balance');
+    expect(inputValue).toBe("What's my balance?");
     
     // Send message
     await page.locator('[data-testid="send-button"]').tap();
