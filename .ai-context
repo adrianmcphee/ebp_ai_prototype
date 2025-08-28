@@ -1,7 +1,11 @@
 # EBP AI Banking Capabilities - Project Context
 
 ## Overview
-Research prototype exploring AI enhancements for Backbase Enterprise Banking Platform (EBP) with focus on navigation assistance, transaction assistance, and MCP integration for AI agents.
+Research prototype exploring AI enhancements for Backbase Enterprise Banking Platform (EBP):
+
+1. **Navigation Assistance**: Intent-based routing to existing banking screens ("Take me to transfers" → routes to pre-built interface)
+2. **Transaction Assistance**: Dynamic UI generation based on user intent ("Send $500 to Canada" → builds custom 4-field form)
+3. **MCP Integration**: AI agent capabilities through Model Context Protocol (shared intent architecture)
 
 ## Core Capabilities
 - **Intent Classification**: 34 comprehensive banking intents across 5 categories with risk assessment (LOW/MEDIUM/HIGH/CRITICAL)

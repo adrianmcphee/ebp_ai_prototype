@@ -137,22 +137,26 @@ BankingOperation(
 - **NAVIGATIONAL**: UI guidance (low risk)
 
 ### **3. UI Screen Catalog** *(Phase 2 - In Development)*
-**Purpose**: Maps banking operations to UI screens for navigation assistance.
+**Purpose**: Maps banking operations to pre-built UI screens for navigation assistance.
 
-**The Navigation Problem**: Traditional banking UIs are like being in an unfamiliar supermarket where items are organized by the bank's internal logic rather than how customers think.
+**Navigation Assistance**: Routes users to existing banking interfaces based on intent detection.
 
-**Traditional Banking UI**:
+**Navigation Example**:
 ```
-Customer thinks: "I want to send money to my friend"
-Bank UI organizing: Products → Transfers → International → Wire Transfer → Setup Form
-Customer gets lost: "Where's international? Is this a wire? What's SWIFT?"
+Customer: "Take me to international transfers"
+AI Analysis: Intent = navigation.screen.transfers.international
+System Action: Routes to existing wire transfer screen (/banking/transfers/international)
+Result: User lands on pre-built international transfer interface
 ```
 
-**AI-Powered Navigation**:
+**Transaction Assistance**: Dynamically builds custom UI based on specific user intent.
+
+**Transaction Example**:
 ```
-Customer says: "Send money to my friend in Canada"
-AI understands: Intent + context + complexity
-System responds: "I'll guide you to international transfers and help with the details"
+Customer: "Send $500 to my friend in Canada"  
+AI Analysis: Intent = payments.transfer.international + entities
+System Action: Builds custom form with 4 relevant fields
+Result: Streamlined interface specific to this transaction type
 ```
 
 **Concept**:
@@ -168,15 +172,131 @@ UIScreen(
 )
 ```
 
-**The Supermarket Analogy**:
-- **Traditional Bank**: Items organized by bank departments (like putting all beans together)
-- **Customer-Centric AI**: Items organized by customer intent (Mexican section, Italian section)
-- **Smart Navigation**: "Looking for taco ingredients? Let me show you where everything is"
+**Navigation vs Transaction Assistance**:
+- **Navigation**: "Take me to transfers" → Routes to existing /banking/transfers screen
+- **Transaction**: "Send $500 to Canada" → Builds custom form specific to this transaction
+- **Shared Architecture**: Both use the same intent classification and entity extraction system
+
+### **Transaction Assistance: Dynamic Form Assembly**
+
+**The Core Concept**: Instead of navigating to pre-built screens, the system dynamically constructs the perfect interface for each specific transaction.
+
+```python
+# Navigation Assistance: Routes to existing screen
+Customer: "Take me to wire transfers"
+→ Routes to: /banking/transfers/wire (pre-built 57-field form)
+
+# Transaction Assistance: Builds custom interface  
+Customer: "Send $500 to my friend in Canada"
+→ Builds: Custom 4-field form specific to this transaction
+```
+
+**Dynamic Form Assembly**:
+```python
+# Traditional approach: One-size-fits-all form
+WireTransferForm(
+    fields=["recipient_name", "bank_name", "swift_code", "iban", "routing", 
+            "account_number", "purpose_code", "correspondent_bank", ...]
+)
+
+# Transaction Assistance: Intent-driven form assembly
+User: "Send $500 to my friend in Canada"
+System assembles: ["recipient_name", "amount", "canadian_bank_details"]
+System hides: ["swift_code", "correspondent_bank", "purpose_codes"]
+System pre-fills: ["your_account", "currency_conversion_info"]
+```
+
+**Form Intelligence**:
+- **Context-Aware Fields**: Only show what's needed for this specific transaction
+- **Smart Defaults**: Pre-fill based on previous transactions and preferences  
+- **Progressive Disclosure**: "Need to add intermediary bank details? Click here"
+- **Validation Intelligence**: "This looks like a Canadian routing number, should be 9 digits"
+- **Help When Needed**: "Can't find SWIFT code? I'll look it up for you"
+
+**Real-World Example**:
+```
+Traditional Form: [57 fields, user overwhelmed]
+├── Recipient Name: _______________
+├── Recipient Address Line 1: _______________  
+├── Recipient Address Line 2: _______________
+├── Bank Name: _______________
+├── Bank Address: _______________
+├── SWIFT/BIC Code: _______________
+├── IBAN: _______________
+├── Account Number: _______________
+├── Routing Number: _______________
+├── Correspondent Bank: _______________
+├── Purpose Code: [dropdown with 127 options]
+└── ... 46 more fields
+
+Smart Form: "Send $500 to friend in Canada"
+├── ✓ Amount: $500 (detected from intent)
+├── Friend's Name: _______________
+├── Their Bank: [Canadian banks dropdown]
+├── Account Number: _______________
+└── That's it! (System handles routing, currency, compliance)
+```
+
+### **Dynamic Form Assembly: Probabilistic → Deterministic → Auditable**
+
+**🎯 Probabilistic Layer (AI Understanding)**:
+```python
+User Input: "Send $500 to my friend in Canada"
+AI Analysis:
+├── Intent: payments.transfer.international (confidence: 0.94)
+├── Amount: $500 (confidence: 0.98)
+├── Recipient Type: "friend" = personal (confidence: 0.89)
+├── Destination: Canada = international (confidence: 0.99)
+└── Form Type Needed: international_personal_transfer
+```
+
+**⚖️ Deterministic Layer (Business Rules)**:
+```python
+Form Assembly Rules:
+if (intent == "international_transfer" AND destination == "Canada"):
+    required_fields = ["recipient_name", "amount", "canadian_bank_details"]
+    hide_fields = ["swift_code", "correspondent_bank", "purpose_codes"]
+    pre_populate = ["source_account", "currency_conversion"]
+    validation_rules = ["canadian_routing_format", "amount_limits"]
+    
+if (recipient_type == "personal" AND amount < 10000):
+    compliance_level = "standard"
+    skip_fields = ["business_registration", "tax_codes"]
+```
+
+**📋 Auditable Layer (Transaction Record)**:
+```python
+Form_Generation_Audit = {
+    "user_input": "Send $500 to my friend in Canada",
+    "ai_analysis": {
+        "intent_confidence": 0.94,
+        "form_type_selected": "international_personal_transfer",
+        "fields_shown": ["recipient_name", "amount", "bank_details"],
+        "fields_hidden": ["swift_code", "correspondent_bank"],
+        "business_rules_applied": ["canadian_transfer_rules", "personal_recipient_rules"]
+    },
+    "form_configuration": {
+        "total_possible_fields": 57,
+        "fields_displayed": 4,
+        "complexity_reduction": "93%",
+        "user_action_required": "minimal"
+    },
+    "compliance_trail": "All required fields captured, business rules enforced"
+}
+```
+
+**Why This Matters for Banks**:
+- **🤖 AI Innovation**: Natural language creates perfect forms
+- **⚖️ Bank Control**: Deterministic rules ensure compliance
+- **📊 Regulator Transparency**: Complete audit trail of decisions
+- **👤 Customer Experience**: 93% complexity reduction
 
 **Benefits**:
 - **Natural Language Access**: "Pay my rent" → Direct to bill pay setup
 - **Context-Aware Routing**: Knows if you've done this before, suggests shortcuts
 - **Progressive Disclosure**: Shows only relevant options based on your situation
+- **Dynamic Form Generation**: Assembles perfect form for each specific intent
+- **Intelligent Field Management**: Hides complexity, surfaces relevance
 - **Cross-Channel Consistency**: Same logic works on web, mobile, voice
 - **Reduced Support Calls**: Self-service with intelligent guidance
 

@@ -35,24 +35,51 @@ Based on taxonomy.txt analysis and current system gaps, here's what's needed to 
 
 ---
 
-## **PHASE 2: UI NAVIGATION ASSISTANCE** 🧭
+## **PHASE 2: NAVIGATION ASSISTANCE** 🧭
 
 ### **2.1 Screen Catalog System**
 - [ ] **Create `UIScreenCatalog`**
-  - [ ] Define all banking UI screens/sections
-  - [ ] Map screens to intents (navigation assistance)
-  - [ ] Create navigation flow definitions
-  - [ ] Add screen state management
+  - [ ] Define all existing banking UI screens/sections
+  - [ ] Map navigation intents to pre-built screens
+  - [ ] Create routing definitions for existing interfaces
+  - [ ] Add screen metadata and prerequisites
 
 ### **2.2 Navigation Intent Processing**
-- [ ] **Implement navigation assistance**
-  - [ ] Handle "take me to transfers" queries
-  - [ ] Process "show me account settings" requests
-  - [ ] Guide users through multi-step processes
-  - [ ] Provide contextual help for each screen
+- [ ] **Implement navigation routing**
+  - [ ] Handle "take me to transfers" → route to /banking/transfers
+  - [ ] Process "show me account settings" → route to /banking/accounts/settings
+  - [ ] Create intent-to-URL mapping system
+  - [ ] Add contextual screen suggestions
 
 ### **2.3 Frontend Navigation Integration**
-- [ ] **Update React frontend**
+- [ ] **Update React frontend for routing**
+  - [ ] Add intent-based navigation system
+  - [ ] Implement screen routing logic
+  - [ ] Create navigation breadcrumbs
+  - [ ] Add contextual help for existing screens
+
+---
+
+## **PHASE 3: TRANSACTION ASSISTANCE** 💸
+
+### **3.1 Dynamic Form Assembly System**
+- [ ] **Intent-based UI generation**
+  - [ ] Create form field selection engine based on intent
+  - [ ] Implement context-aware field hiding/showing
+  - [ ] Add smart default population from user history
+  - [ ] Build progressive disclosure for complex forms
+  - [ ] Add validation intelligence with helpful error messages
+  - [ ] Create form template system for common banking patterns
+
+### **3.2 Transaction Processing Integration**
+- [ ] **Connect form assembly to banking operations**
+  - [ ] Link dynamic forms to `BankingOperationsCatalog`
+  - [ ] Implement real-time form validation
+  - [ ] Add transaction preview and confirmation flows
+  - [ ] Create adaptive UI based on risk levels
+
+### **3.3 Frontend Transaction Interface**
+- [ ] **Update React frontend for dynamic forms**
   - [ ] Add screen/section routing
   - [ ] Implement guided navigation flows
   - [ ] Create breadcrumb navigation
@@ -180,32 +207,39 @@ Based on taxonomy.txt analysis and current system gaps, here's what's needed to 
 
 ## **🎭 DEMO SCENARIOS TO PROVE**
 
-### **Scenario A: Intelligent Banking Operations**
+### **Scenario A: Navigation Assistance**
 ```
-User: "What's my checking account balance?"
-System: Shows balance, offers related actions
-User: "Transfer $500 to John"
-System: Finds John, confirms transfer, executes
-```
-
-### **Scenario B: Navigation Assistance** 
-```
-User: "I need to pay my electricity bill"
-System: "I'll take you to bill pay. Is this a one-time payment or do you want to set up autopay?"
-User: "Just once for now"
-System: "Opening bill pay. I can help you find your utility company - what's the name?"
-User: "PG&E" 
-System: "Found Pacific Gas & Electric. I'll pre-fill their details for you."
+User: "Take me to international transfers"
+System: "Routing you to international wire transfers."
+[Opens existing wire transfer screen at /banking/transfers/international]
+System: "You're now on the international transfer page. This form handles all international wire transfers."
 ```
 
-### **Scenario B2: Complex Navigation (International Transfer)**
+### **Scenario B: Transaction Assistance** 
 ```
-User: "I want to send money to my daughter at college"
-System: "Is she at a US college or international?"
-User: "University of Toronto"
-System: "That's international - I'll guide you through the wire transfer process."
-System: "You'll need her Canadian bank details. Let me walk you through this step by step."
-[Navigates to international transfers with contextual help]
+User: "Send $500 to my friend in Canada"
+System: "Building a custom transfer form for this transaction."
+[Generates 4-field form: Friend's Name, Bank, Account Number, Amount ($500 pre-filled)]
+System: "This streamlined form has everything you need for a Canadian transfer."
+User: [Fills out John Smith, TD Bank, 123456789]
+System: "Transfer ready. $500 to John Smith at TD Bank. Confirm?"
+```
+
+### **Scenario C: MCP Integration**
+```
+Claude Desktop: "Check my account balance and then transfer $200 to my savings"
+[Via MCP tools: get_account_balance() → transfer_funds()]
+System: "Checking balance... $2,150 available. Transferring $200 to savings..."
+Claude Desktop: "Transfer complete. New checking balance: $1,950"
+```
+
+### **Scenario D: Navigation vs Transaction Comparison**
+```
+Navigation Intent: "Take me to bill pay" 
+→ Routes to existing /banking/payments/bills interface (pre-built form)
+
+Transaction Intent: "Pay my electricity bill"
+→ Builds custom PG&E payment form with smart company lookup and amount suggestions
 ```
 
 ### **Scenario C: Multi-turn Conversation**

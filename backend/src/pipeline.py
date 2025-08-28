@@ -14,6 +14,7 @@ from .mock_banking import MockBankingService
 from .state_manager import ConversationStateManager
 from .validator import EntityValidator
 from .banking_operations import BankingOperationsCatalog, OperationStatus
+from .ui_screen_catalog import ui_screen_catalog, ScreenType
 
 
 class IntentPipeline:
@@ -463,6 +464,11 @@ class IntentPipeline:
             "next_steps": response.next_steps,
         }
 
+        # Add UI assistance (navigation or transaction forms)
+        ui_assistance = self._generate_ui_assistance(classification, entities)
+        if ui_assistance:
+            result["ui_assistance"] = ui_assistance
+
         if execution_result:
             result["execution_result"] = execution_result
 
@@ -470,6 +476,45 @@ class IntentPipeline:
             result["estimated_completion_seconds"] = response.estimated_completion_time
 
         return result
+
+    def _generate_ui_assistance(
+        self, classification: dict[str, Any], entities: dict[str, Any]
+    ) -> Optional[dict[str, Any]]:
+        """Generate UI assistance for navigation or transaction forms"""
+        intent_id = classification.get("intent_id", "")
+        
+        # Check if this is a navigation intent
+        if intent_id.startswith("navigation."):
+            screen = ui_screen_catalog.get_screen_for_intent(intent_id)
+            if screen and screen.screen_type == ScreenType.PRE_BUILT:
+                return {
+                    "type": "navigation",
+                    "action": "route_to_screen",
+                    "screen_id": screen.screen_id,
+                    "route_path": screen.route_path,
+                    "component_name": screen.component_name,
+                    "title": screen.title_template,
+                    "description": screen.description
+                }
+        
+        # Check if this is a transaction intent that needs dynamic form
+        else:
+            screen = ui_screen_catalog.get_screen_for_intent(intent_id)
+            if screen and screen.screen_type == ScreenType.DYNAMIC_FORM:
+                form_config = ui_screen_catalog.assemble_dynamic_form(
+                    intent_id, entities.get("entities", {}), {}
+                )
+                if form_config:
+                    return {
+                        "type": "transaction_form",
+                        "action": "assemble_dynamic_form",
+                        "form_config": form_config,
+                        "title": screen.title_template,
+                        "subtitle": screen.subtitle_template,
+                        "success_message": screen.success_message
+                    }
+        
+        return None
 
     async def _is_approval_response(self, query: str) -> bool:
         """Check if query looks like an approval/rejection response"""

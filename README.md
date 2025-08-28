@@ -11,23 +11,23 @@ A research prototype exploring how AI capabilities could enhance the Backbase En
 ## 🎯 Three AI Exploration Areas
 
 ### 1. Navigation Assistance
-- **Natural Language Navigation**: "Show me my recent transfers" → Direct routing to transaction history
-- **Context-Aware Routing**: Understanding user intent to suggest optimal EBP workflows
-- **Smart Search**: Finding specific banking functions through conversational queries
-- **Workflow Guidance**: Step-by-step assistance through complex banking processes
+- **Intent-Based Routing**: "Take me to international transfers" → Routes to pre-built wire transfer screen
+- **Context-Aware Navigation**: Understanding user intent to navigate to existing EBP interfaces
+- **Smart Screen Discovery**: Finding specific banking screens through conversational queries
+- **Workflow Guidance**: Direct routing to appropriate pre-assembled banking interfaces
 
 ### 2. Transaction Assistance  
-- **Intent Recognition**: 36 comprehensive banking intents across 16 categories covering all standard banking operations
-- **Risk Assessment**: LOW, MEDIUM, HIGH, CRITICAL risk levels with appropriate authentication
-- **Entity Extraction**: Smart parsing of amounts, accounts, recipients, dates from natural language
-- **Multi-Turn Conversations**: Handle missing information, confirmations, and complex workflows
-- **Business Rules Integration**: Balance checks, limits, compliance validation
+- **Dynamic UI Generation**: Builds custom forms based on intent ("Send $500 to Canada" → 4-field form vs 57-field generic)
+- **Context-Aware Form Assembly**: Smart field selection, hiding complexity, progressive disclosure
+- **Smart Defaults**: Pre-populates forms based on user history and transaction context
+- **Intent Recognition**: 36 comprehensive banking intents with risk assessment and entity extraction
+- **Business Rules Integration**: Balance checks, limits, compliance validation with real-time form adaptation
 
 ### 3. MCP Integration for AI Agents
 - **Standardized Banking Tools**: 8 core banking operations exposed via MCP protocol
 - **AI Assistant Compatibility**: Works with Claude Desktop, ChatGPT, and other MCP clients
+- **Shared Intent Architecture**: Same intent classification system across all three use cases
 - **Production-Grade Security**: Full risk assessment and authentication for AI-initiated operations
-- **Developer Ecosystem**: Enables third-party AI agents to interact with banking services
 
 ## 🏗️ Technical Capabilities
 
