@@ -190,10 +190,22 @@ System: Finds John, confirms transfer, executes
 
 ### **Scenario B: Navigation Assistance** 
 ```
-User: "Take me to bill pay"
-System: Navigates to bill pay screen, offers guidance
-User: "How do I set up autopay?"
-System: Guides through autopay setup process
+User: "I need to pay my electricity bill"
+System: "I'll take you to bill pay. Is this a one-time payment or do you want to set up autopay?"
+User: "Just once for now"
+System: "Opening bill pay. I can help you find your utility company - what's the name?"
+User: "PG&E" 
+System: "Found Pacific Gas & Electric. I'll pre-fill their details for you."
+```
+
+### **Scenario B2: Complex Navigation (International Transfer)**
+```
+User: "I want to send money to my daughter at college"
+System: "Is she at a US college or international?"
+User: "University of Toronto"
+System: "That's international - I'll guide you through the wire transfer process."
+System: "You'll need her Canadian bank details. Let me walk you through this step by step."
+[Navigates to international transfers with contextual help]
 ```
 
 ### **Scenario C: Multi-turn Conversation**
