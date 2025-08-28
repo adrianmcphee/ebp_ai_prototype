@@ -4,24 +4,29 @@
 Research prototype exploring AI enhancements for Backbase Enterprise Banking Platform (EBP) with focus on navigation assistance, transaction assistance, and MCP integration for AI agents.
 
 ## Core Capabilities
-- **Intent Classification**: 36 comprehensive banking intents across 16 categories with risk assessment (LOW/MEDIUM/HIGH/CRITICAL)
+- **Intent Classification**: 34 comprehensive banking intents across 5 categories with risk assessment (LOW/MEDIUM/HIGH/CRITICAL)
+- **Banking Operations Catalog**: 15+ operations mapped to intents with business rules and execution handlers
 - **Entity Extraction**: Smart parsing with validation (amounts, accounts, recipients, dates)
 - **Multi-turn Conversations**: Context persistence, reference resolution, missing info handling
 - **Risk & Authentication**: Automatic auth escalation based on transaction risk
 - **MCP Integration**: Expose banking operations to AI assistants via Model Context Protocol
 
-> **Detailed Intent Documentation**: See [INTENT_SYSTEM.md](INTENT_SYSTEM.md) for comprehensive intent catalog and classification system details.
+## Documentation
+- **[📋 TODO & Progress Tracker](./TODO.md)** - Current development status and roadmap
+- **[🏗️ System Architecture](./ARCHITECTURE.md)** - Comprehensive technical architecture guide
+- **[📖 Intent System](./INTENT_SYSTEM.md)** - Detailed intent catalog and classification system
 
 ## Architecture
 
 ### Key Modules (`backend/src/`)
-- `api.py` - FastAPI REST endpoints
-- `pipeline.py` - Intent processing orchestration
+- `api.py` - FastAPI REST endpoints with WebSocket support
+- `pipeline.py` - Intent processing orchestration with multi-turn support
 - `intent_classifier.py` - Banking intent classification with confidence scoring
 - `entity_extractor.py` - Extract & validate entities from natural language
 - `context_aware_responses.py` - Generate intelligent contextual responses
 - `state_manager.py` - Manage conversation state across turns
-- `mock_banking.py` - Simulated banking service
+- `banking_operations.py` - **NEW** Banking Operations Catalog with 15+ operations
+- `mock_banking.py` - Simulated banking service with comprehensive operations
 - `mcp_server.py` - MCP protocol server for AI agents
 - `llm_wrapper.py` - LLM abstraction supporting mock/OpenAI/Anthropic
 
@@ -29,23 +34,28 @@ Research prototype exploring AI enhancements for Backbase Enterprise Banking Pla
 ```
 ebpnlp/
 ├── Makefile              # Workflow automation (make help for commands)
+├── TODO.md               # Progress tracker and development roadmap
+├── ARCHITECTURE.md       # Comprehensive system architecture guide
+├── test-data.json        # Centralized test data (34 scenarios, 8 MCP tools)
 ├── backend/
 │   ├── src/              # Core modules (FastAPI + Python)
-│   ├── tests/            # 136+ test cases
-│   ├── scripts/          # Utility scripts
-│   └── demo.py           # Comprehensive demo
-├── frontend/             # React 19 + Vite + Mantine UI
-└── e2e/                  # Playwright tests
+│   │   └── banking_operations.py  # NEW: Operations catalog
+│   ├── tests/            # Comprehensive test suite
+│   │   └── test_mcp_comprehensive.py  # NEW: Full system tests
+│   └── scripts/          # Utility scripts
+├── frontend/             # React 19 + Vite + Mantine UI (modern stack)
+└── e2e/                  # Playwright E2E tests (with data-testid)
 ```
 
 ## Quick Start
 ```bash
-make setup          # Install dependencies
-./start-app.sh      # Start full application (frontend + backend)
-make api            # Start API server (http://localhost:8000)
-make frontend       # Start frontend (http://localhost:3001)
-make mcp            # Start MCP server for Claude Desktop
-make test           # Run test suite
+make setup               # Install dependencies
+./start-app.sh          # Start full application (frontend + backend)
+make api                # Start API server (http://localhost:8000)
+make frontend           # Start frontend (http://localhost:3001)
+make mcp                # Start MCP server for Claude Desktop
+make test               # Run all tests
+make test-mcp-comprehensive  # Run comprehensive MCP tests
 ```
 
 ## Banking Operations & Risk Levels
@@ -79,10 +89,12 @@ make demo-providers    # Test LLM providers
 
 ### Testing
 ```bash
-make test              # All tests
-make test-unit         # Unit tests only
-make lint              # Code quality check
-make format            # Auto-fix formatting
+make test                    # All tests
+make test-unit              # Unit tests only  
+make test-mcp-comprehensive # Comprehensive MCP system tests
+cd e2e && npx playwright test  # E2E tests
+make lint                   # Code quality check
+make format                 # Auto-fix formatting
 ```
 
 ### Environment Variables
@@ -140,10 +152,12 @@ Configure in Claude Desktop's config to enable banking operations via natural la
 4. See [INTENT_SYSTEM.md](INTENT_SYSTEM.md) for detailed instructions
 
 ### Add New Banking Operation
-1. Implement in `mock_banking.py`
-2. Add MCP tool in `mcp_server.py`
-3. Update pipeline processing in `pipeline.py`
-4. Add tests
+1. Add operation to `banking_operations.py` BankingOperationsCatalog
+2. Implement execution handler in the catalog
+3. Map intent to operation in `get_operation_for_intent()`
+4. Update `mock_banking.py` if new service methods needed
+5. Add MCP tool in `mcp_server.py` if external access required
+6. Add tests to `test_mcp_comprehensive.py`
 
 ### Debug Issues
 ```bash
@@ -151,10 +165,15 @@ Configure in Claude Desktop's config to enable banking operations via natural la
 make api  # Verbose API logs
 
 # Run specific test
-cd backend && python -m pytest tests/test_mock_banking.py -v
+cd backend && python -m pytest tests/test_mcp_comprehensive.py -v
 
-# Test specific demo scenario
-python backend/demo.py --scenario basic
+# Test API directly
+curl -X POST http://localhost:8000/api/process \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is my checking account balance?", "session_id": "test123"}'
+
+# Check current app status
+./start-app.sh  # Shows frontend and backend URLs
 ```
 
 ## Performance Targets
@@ -163,7 +182,11 @@ python backend/demo.py --scenario basic
 - Full pipeline: <500ms
 - API response: <1s including network
 
+## Current Development Status
+See **[📋 TODO.md](./TODO.md)** for detailed development status, progress tracking, and current issues.
+
 ## Future Enhancements
+- UI Navigation Catalog (Phase 2)
 - Real banking API integration (currently mock only)
 - Advanced fraud detection
 - Multilingual support

@@ -2,6 +2,12 @@
 
 A research prototype exploring how AI capabilities could enhance the Backbase Enterprise Banking Platform (EBP). This prototype investigates three key areas: **navigation assistance**, **transaction assistance**, and **MCP (Model Context Protocol) integration** for AI agents.
 
+## 📚 **Documentation**
+
+- **[📋 TODO & Progress Tracker](./TODO.md)** - Current development status and roadmap
+- **[🏗️ System Architecture](./ARCHITECTURE.md)** - Comprehensive technical architecture guide
+- **[📖 Quick Start](#-quick-start)** - Get the prototype running locally
+
 ## 🎯 Three AI Exploration Areas
 
 ### 1. Navigation Assistance

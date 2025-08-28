@@ -13,6 +13,7 @@ from .intent_classifier import IntentClassifier
 from .mock_banking import MockBankingService
 from .state_manager import ConversationStateManager
 from .validator import EntityValidator
+from .banking_operations import BankingOperationsCatalog, OperationStatus
 
 
 class IntentPipeline:
@@ -33,6 +34,7 @@ class IntentPipeline:
         self.state = state_manager
         self.banking = banking_service
         self.legacy_validator = legacy_validator
+        self.operations_catalog = BankingOperationsCatalog(banking_service)
 
     async def process(
         self,
@@ -339,42 +341,44 @@ class IntentPipeline:
         entities: dict[str, Any],
         user_profile: Optional[dict[str, Any]],
     ) -> dict[str, Any]:
-        """Execute the actual banking operation"""
+        """Execute banking operation using the operations catalog"""
         intent_id = intent.get("intent_id", "")
-
-        # Map intent to banking service method
-        if "balance" in intent_id:
-            account_type = entities.get("account_type", {}).get("value", "checking")
-            result = await self.banking.get_balance(account_type)
-
-        elif "transfer.internal" in intent_id:
-            result = await self.banking.transfer_funds(
-                from_account=entities.get("from_account", {}).get("value"),
-                to_account=entities.get("to_account", {}).get("value"),
-                amount=entities.get("amount", {}).get("value"),
-            )
-
-        elif "transfer.external" in intent_id or "p2p" in intent_id:
-            result = await self.banking.send_payment(
-                recipient=entities.get("recipient", {}).get("value"),
-                amount=entities.get("amount", {}).get("value"),
-            )
-
-        elif "card" in intent_id and "block" in intent_id:
-            card_id = entities.get("card_identifier", {}).get("value", "default")
-            result = await self.banking.block_card(card_id, temporary=True)
-
-        elif "dispute" in intent_id:
-            transaction_id = entities.get("transaction_id", {}).get("value")
-            result = await self.banking.dispute_transaction(transaction_id)
-
-        else:
-            # Default mock response
-            result = {
-                "success": True,
-                "message": f"Operation {intent.get('name', 'completed')} successfully",
+        
+        # Get the appropriate operation from catalog
+        operation = self.operations_catalog.get_operation_for_intent(intent_id)
+        
+        if not operation:
+            # Fallback for unmapped intents
+            return {
+                "success": False,
+                "message": f"Operation not implemented for intent: {intent_id}",
                 "reference_id": f"REF{datetime.now().strftime('%Y%m%d%H%M%S')}",
             }
+
+        # Convert entities to simple dict (remove nested structure if present)
+        simple_entities = {}
+        for key, value in entities.items():
+            if isinstance(value, dict) and "value" in value:
+                simple_entities[key] = value["value"]
+            else:
+                simple_entities[key] = value
+
+        # Execute operation through catalog
+        operation_result = await self.operations_catalog.execute_operation(
+            operation.operation_id,
+            simple_entities,
+            user_profile
+        )
+
+        # Convert OperationResult to dict format expected by pipeline
+        result = {
+            "success": operation_result.status == OperationStatus.COMPLETED,
+            "message": operation_result.message,
+            "data": operation_result.data,
+            "reference_id": operation_result.reference_id,
+            "ui_hints": operation_result.ui_hints or {},
+            "next_steps": operation_result.next_steps or []
+        }
 
         return result
 
