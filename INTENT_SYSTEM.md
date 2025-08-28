@@ -1,6 +1,18 @@
-# Banking Intent System
+# Unified Banking Intent System
 
-The EBP NLP system features a comprehensive banking intent catalog with 36 standard banking intents across 16 categories, designed to handle all common banking operations and customer requests.
+The EBP NLP system features a **unified intent model** with 36 comprehensive banking intents that work consistently across all contexts: Navigation Assistance, Transaction Assistance, Chat Assistant, and MCP (AI Agent) integration.
+
+## **Core Innovation: Intent Unity Across Contexts**
+
+**Same Intent, Different Execution Based on Context:**
+
+| User Input | Intent | Navigation Context | Transaction Context | Chat Context | MCP Context |
+|------------|--------|-------------------|-------------------|--------------|-------------|
+| "Take me to international transfers" | `international.wire.send` | Route to wire screen | Create dynamic form | Extract entities | Expose wire tools |
+| "What's my balance?" | `accounts.balance.check` | Show accounts overview | Display balance card | Return balance text | API balance call |
+| "Send $500 to John" | `payments.transfer.internal` | Go to transfers | Smart 3-field form | Ask for account | Execute transfer |
+
+This unified approach ensures consistent intent recognition while adapting execution to the user's current context and interface.
 
 ## Intent Categories
 

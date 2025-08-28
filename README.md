@@ -8,35 +8,79 @@ A research prototype exploring how AI capabilities could enhance the Backbase En
 - **[🏗️ System Architecture](./ARCHITECTURE.md)** - Comprehensive technical architecture guide
 - **[📖 Quick Start](#-quick-start)** - Get the prototype running locally
 
-## 🎯 Three AI Exploration Areas
+## 🎯 Unified Intent Model with Context-Aware Execution
+
+### **Core Innovation: Same Intent, Different Context = Different Action**
+
+The system uses a **unified intent model** where the same user goal is expressed through different interfaces but achieves the same outcome through context-appropriate methods:
+
+**Example: "Take me to international transfers" / "Send money to Canada"**
+- **Intent**: `international.wire.send` (same banking goal)
+- **Navigation Context**: → Routes to pre-built wire transfer screen
+- **Transaction Context**: → Creates dynamic 4-field form (vs 57-field generic)
+- **Chat Context**: → Conversational entity extraction
+- **MCP Context**: → AI agent uses standardized banking tools
 
 ### 1. Navigation Assistance
-- **Intent-Based Routing**: "Take me to international transfers" → Routes to pre-built wire transfer screen
-- **Context-Aware Navigation**: Understanding user intent to navigate to existing EBP interfaces
-- **Smart Screen Discovery**: Finding specific banking screens through conversational queries
-- **Workflow Guidance**: Direct routing to appropriate pre-assembled banking interfaces
+- **Intent-Based Routing**: User intent + navigation context → Pre-built banking screens
+- **Context-Aware Navigation**: Same intent, different execution based on UI context
+- **Smart Screen Discovery**: Finding specific banking workflows through conversational queries
+- **Unified Routing**: Single intent system routes to appropriate pre-assembled interfaces
 
 ### 2. Transaction Assistance  
-- **Dynamic UI Generation**: Builds custom forms based on intent ("Send $500 to Canada" → 4-field form vs 57-field generic)
-- **Context-Aware Form Assembly**: Smart field selection, hiding complexity, progressive disclosure
-- **Smart Defaults**: Pre-populates forms based on user history and transaction context
-- **Intent Recognition**: 36 comprehensive banking intents with risk assessment and entity extraction
-- **Business Rules Integration**: Balance checks, limits, compliance validation with real-time form adaptation
+- **Dynamic UI Generation**: User intent + transaction context → Custom forms with smart defaults
+- **Context-Aware Form Assembly**: Same intent creates different complexity levels based on extracted entities
+- **Progressive Disclosure**: Forms adapt in real-time based on user input and business rules
+- **Intelligent Simplification**: 4-field international transfer vs 57-field generic form from same intent
 
 ### 3. MCP Integration for AI Agents
-- **Standardized Banking Tools**: 8 core banking operations exposed via MCP protocol
-- **AI Assistant Compatibility**: Works with Claude Desktop, ChatGPT, and other MCP clients
-- **Shared Intent Architecture**: Same intent classification system across all three use cases
-- **Production-Grade Security**: Full risk assessment and authentication for AI-initiated operations
+- **Standardized Banking Tools**: User intent + MCP context → AI agent actions via protocol
+- **Cross-Platform Consistency**: Same intent works in Claude Desktop, ChatGPT, custom AI agents
+- **Unified Intent Architecture**: Single classification system serves all contexts (UI, forms, AI agents)
+- **Context-Aware Security**: Risk assessment and authentication adapt to execution context
+
+## 🚀 Quick Start
+
+Get the EBP AI Banking prototype running in under 2 minutes:
+
+### **Essential Commands**
+
+```bash
+# 1. Start the complete application (backend + frontend)
+make start
+
+# 2. Run comprehensive demo
+make demo
+
+# 3. Start MCP server for AI agents (Claude Desktop, etc.)
+make mcp
+
+# 4. Run all tests
+make test
+
+# 5. Run end-to-end tests
+make test-e2e
+```
+
+### **Application URLs**
+- **Frontend**: http://localhost:3001 (Navigation, Transaction, Chat tabs)
+- **Backend API**: http://localhost:8000 (REST API + WebSocket)
+- **API Documentation**: http://localhost:8000/docs (OpenAPI/Swagger)
+
+### **Try It Out**
+1. **Navigation**: Go to Navigation Assistance tab → "Take me to international transfers"
+2. **Transaction**: Go to Transaction Assistance tab → "Send $500 to John in Canada"  
+3. **Chat**: Go to Chat Assistant tab → Full conversational banking
+4. **MCP**: Run `make mcp` → Connect AI agents like Claude Desktop
 
 ## 🏗️ Technical Capabilities
 
-### Enhanced Intent Classification
-- **Comprehensive Coverage**: 36 banking intents across 16 categories (Account Management, Payments, Cards, Lending, etc.)
-- **Hierarchical Structure**: Banking-specific intents (e.g., `accounts.balance.check`, `payments.transfer.internal`)
-- **Hybrid Classification**: LLM-based primary classification with pattern-based fallback
-- **Confidence Scoring**: Precision confidence levels (0.0-1.0) with configurable thresholds
-- **Alternative Suggestions**: Returns top alternatives when confidence is low
+### Unified Intent Classification with Context-Aware Execution
+- **Single Intent Model**: 36 banking intents work across all contexts (Navigation, Transaction, Chat, MCP)
+- **Context-Aware Routing**: Same intent + different UI context = different execution method
+- **Hierarchical Structure**: Banking-specific intents (e.g., `accounts.balance.check`, `international.wire.send`)
+- **Execution Adaptation**: Intent determines WHAT, context determines HOW
+- **Cross-Platform Consistency**: Same intent classification serves web UI, AI agents, and chat interfaces
 
 ### Smart Entity Extraction & Validation
 - **Required vs Optional Entities**: Validates presence of mandatory fields
@@ -262,14 +306,13 @@ Mock Banking Service (Production-Ready Logic)
 
 See [MCP_INTEGRATION.md](MCP_INTEGRATION.md) for complete technical documentation.
 
-## 🚀 Quick Start
+## 📋 Prerequisites
 
-### Prerequisites
 - Python 3.11+
 - Node.js 18+
 - Optional: Anthropic or OpenAI API key for real LLM features
 
-### Installation & Setup
+## ⚙️ Installation & Setup
 
 1. Clone the repository:
 ```bash

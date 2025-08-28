@@ -23,7 +23,10 @@ import {
   Checkbox,
   Textarea,
   Modal,
-  Box
+  Box,
+  ActionIcon,
+  Affix,
+  Transition
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
@@ -331,7 +334,8 @@ const App: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [currentScreen, setCurrentScreen] = useState<string | null>(null);
   const [dynamicForm, setDynamicForm] = useState<DynamicFormConfig | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('chat');
+  const [activeTab, setActiveTab] = useState<string>('banking');
+  const [showNavigationAssistant, setShowNavigationAssistant] = useState<boolean>(false);
 
   const form = useForm({
     initialValues: {
@@ -487,7 +491,8 @@ const App: React.FC = () => {
 
     try {
       const response = await axios.post(`${API_BASE}/api/process`, {
-        query: userMessage
+        query: userMessage,
+        ui_context: activeTab  // Pass current tab context to backend
       });
       handleProcessResponse(response.data);
     } catch (error) {
@@ -586,9 +591,9 @@ const App: React.FC = () => {
             <Container size="xl">
               <Tabs value={activeTab} onChange={setActiveTab}>
                 <Tabs.List>
+                  <Tabs.Tab value="banking">🧭 Navigation Assistance</Tabs.Tab>
+                  <Tabs.Tab value="transaction">📝 Transaction Assistance</Tabs.Tab>
                   <Tabs.Tab value="chat">💬 Chat Assistant</Tabs.Tab>
-                  <Tabs.Tab value="banking">🏦 Banking Screens</Tabs.Tab>
-                  <Tabs.Tab value="transaction">📝 Smart Forms</Tabs.Tab>
                 </Tabs.List>
 
                 <Tabs.Panel value="chat" pt="md">
@@ -670,7 +675,111 @@ const App: React.FC = () => {
                 </Tabs.Panel>
 
                 <Tabs.Panel value="banking" pt="md">
-                  {renderBankingScreen()}
+                  <Container size="md" py="xl">
+                    {/* Show traditional banking UI by default */}
+                    {!currentScreen && (
+                      <>
+                        <Title order={1} ta="center" mb="xl">Your Banking Dashboard</Title>
+                        <SimpleGrid cols={1} spacing="xl">
+                          <BankingScreens.AccountsOverview accounts={accounts} />
+                          <BankingScreens.TransfersHub />
+                          <BankingScreens.BillPayHub />
+                        </SimpleGrid>
+                      </>
+                    )}
+                    
+                    {/* Show specific banking screen when navigated */}
+                    {renderBankingScreen()}
+                    
+                    {/* Floating AI Navigation Assistant */}
+                    <Affix position={{ bottom: 20, right: 20 }}>
+                      <Transition transition="slide-up" mounted={!showNavigationAssistant}>
+                        {(transitionStyles) => (
+                          <ActionIcon
+                            size="xl"
+                            radius="xl"
+                            variant="filled"
+                            color="blue"
+                            style={{ ...transitionStyles }}
+                            onClick={() => setShowNavigationAssistant(true)}
+                            title="Navigation Assistant"
+                          >
+                            🤖
+                          </ActionIcon>
+                        )}
+                      </Transition>
+                    </Affix>
+                    
+                    {/* Navigation Assistant Modal/Overlay */}
+                    {showNavigationAssistant && (
+                      <Card 
+                        shadow="xl" 
+                        padding="lg" 
+                        radius="md" 
+                        withBorder 
+                        style={{
+                          position: 'fixed',
+                          bottom: 80,
+                          right: 20,
+                          width: 400,
+                          zIndex: 1000,
+                          background: 'white'
+                        }}
+                      >
+                        <Group position="apart" mb="md">
+                          <Group>
+                            <Text>🤖</Text>
+                            <Text fw={500}>Navigation Assistant</Text>
+                          </Group>
+                          <ActionIcon 
+                            size="sm" 
+                            variant="subtle"
+                            onClick={() => setShowNavigationAssistant(false)}
+                          >
+                            ✕
+                          </ActionIcon>
+                        </Group>
+                        
+                        <Text size="sm" color="dimmed" mb="md">
+                          Tell me where you want to go and I'll take you there.
+                        </Text>
+                        
+                        <form onSubmit={form.onSubmit(handleSubmit)}>
+                          <Stack spacing="sm">
+                            <TextInput
+                              {...form.getInputProps('message')}
+                              placeholder="Try: 'Take me to international transfers'"
+                              size="sm"
+                            />
+                            <Group position="apart">
+                              <Button 
+                                size="xs" 
+                                variant="subtle" 
+                                onClick={() => form.setFieldValue('message', 'Take me to international transfers')}
+                              >
+                                International Transfers
+                              </Button>
+                              <Button 
+                                size="xs" 
+                                variant="subtle" 
+                                onClick={() => form.setFieldValue('message', 'Show me account overview')}
+                              >
+                                Account Overview
+                              </Button>
+                            </Group>
+                            <Button 
+                              type="submit" 
+                              disabled={!isConnected}
+                              size="sm"
+                              onClick={() => setShowNavigationAssistant(false)}
+                            >
+                              Navigate
+                            </Button>
+                          </Stack>
+                        </form>
+                      </Card>
+                    )}
+                  </Container>
                 </Tabs.Panel>
 
                 <Tabs.Panel value="transaction" pt="md">
@@ -681,14 +790,14 @@ const App: React.FC = () => {
                         onSubmit={handleDynamicFormSubmit}
                         onCancel={() => {
                           setDynamicForm(null);
-                          setActiveTab('chat');
+                          setActiveTab('banking');
                         }}
                       />
                     ) : (
                       <Card shadow="sm" padding="lg" radius="md" withBorder>
-                        <Title order={2} ta="center" mb="md">Smart Transaction Forms</Title>
+                        <Title order={2} ta="center" mb="md">Transaction Assistance</Title>
                         <Text ta="center" color="dimmed" mb="xl">
-                          Dynamic forms will appear here when you make transaction requests through the chat assistant.
+                          Smart forms will appear here when you make transaction requests through the chat assistant.
                         </Text>
                         <Text ta="center">
                           Try saying: "Send $500 to my friend in Canada" in the chat to see a custom form.

@@ -2,38 +2,50 @@
 
 ## 🏗️ **ARCHITECTURAL OVERVIEW**
 
-The EBP (Enterprise Banking Platform) AI system transforms natural language banking conversations into deterministic, auditable banking operations while maintaining regulatory compliance and user control.
+The EBP (Enterprise Banking Platform) AI system uses a **unified intent model** where the same user goal is achieved through different execution methods based on context, maintaining regulatory compliance and user control across all interfaces.
 
-### **Core Principle: The Certainty Gradient**
+### **Core Principle: Intent Unity with Context-Aware Execution**
 
 ```
-Natural Language → Probabilistic Understanding → Deterministic Action
-     ↓                    ↓                         ↓
-  (Ambiguous)         (Confidence %)            (Executed)
+Natural Language → Unified Intent → Context-Aware Execution → Appropriate Action
+     ↓                   ↓                    ↓                      ↓
+  (Ambiguous)        (Same Intent)      (UI Context)           (Navigation/Form/Chat/MCP)
 ```
 
-The system bridges the gap between probabilistic AI understanding and the deterministic requirements of financial services.
+**Key Innovation**: The same intent (`international.wire.send`) produces different experiences:
+- **Navigation Context**: Routes to pre-built wire transfer screen
+- **Transaction Context**: Creates dynamic form with smart defaults  
+- **Chat Context**: Conversational entity extraction
+- **MCP Context**: AI agent executes via standardized tools
+
+This architecture bridges probabilistic AI understanding with deterministic financial operations while providing consistent intent recognition across all user interfaces.
 
 ---
 
 ## 🧠 **CONCEPTUAL FOUNDATIONS**
 
-### **1. Intent Classification**
-**What it is**: The system's ability to understand what a user wants to do from natural language.
+### **1. Unified Intent Classification**
+**What it is**: A single intent model that serves all contexts - the system understands WHAT the user wants to do, then adapts HOW based on context.
 
 **How it works**: 
-- **Probabilistic Layer**: AI analyzes user queries and assigns confidence scores (0.0-1.0)
-- **Pattern Matching**: Fallback rules ensure reliability when AI confidence is low
-- **Risk Assessment**: Each intent has an associated risk level (LOW → CRITICAL)
+- **Single Intent Recognition**: Same intent classification across Navigation, Transaction, Chat, and MCP contexts
+- **Context-Aware Execution**: UI context determines execution method (screen routing, form generation, conversation, API calls)
+- **Consistent Risk Assessment**: Same risk level and authentication requirements regardless of execution context
 
-**Why it matters**: Banks need to understand customer intent reliably before executing financial operations.
+**Why it matters**: Unified intent model ensures consistent behavior whether user interacts via web UI, AI agent, or chat interface.
 
 ```python
-# Example: "What's my balance?" → 
+# Example: "Take me to international transfers" → 
 {
-  "intent_id": "accounts.balance.check",
+  "intent_id": "international.wire.send",  # Same intent everywhere
   "confidence": 0.89,
-  "risk_level": "LOW"
+  "risk_level": "HIGH",
+  "execution": {
+    "navigation": "route_to_wire_screen",
+    "transaction": "create_dynamic_form", 
+    "chat": "extract_entities",
+    "mcp": "expose_wire_tools"
+  }
 }
 ```
 
@@ -86,6 +98,39 @@ Entities: {
 - "same amount" → last_amount  
 - "there" → last_account
 - "again" → repeat last_action
+
+---
+
+## 🔄 **CONTEXT-AWARE EXECUTION FLOW**
+
+### **Implementation of Unified Intent Model**
+
+```python
+# Frontend sends context with query
+{
+  "query": "Take me to international transfers",
+  "ui_context": "banking"  # or "transaction", "chat"
+}
+
+# Backend processes with same intent classification
+intent = classify_intent(query)  # → "international.wire.send"
+
+# Context determines execution method
+if ui_context == "banking":
+    return {"type": "navigation", "screen": "wire_transfer"}
+elif ui_context == "transaction": 
+    return {"type": "transaction_form", "fields": [...]}
+elif ui_context == "chat":
+    return {"type": "conversation", "extract": "entities"}
+```
+
+### **Benefits of Unified Intent Model**
+
+1. **Consistency**: Same intent recognition across all interfaces
+2. **Flexibility**: Single intent system serves multiple UX patterns
+3. **Maintainability**: One intent catalog, multiple execution paths
+4. **User Experience**: Natural language works the same way everywhere
+5. **AI Integration**: Same intents work for human UI and AI agents
 
 ---
 

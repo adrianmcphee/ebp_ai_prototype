@@ -43,6 +43,7 @@ class IntentPipeline:
         session_id: str,
         user_profile: Optional[dict[str, Any]] = None,
         skip_resolution: bool = False,
+        ui_context: Optional[str] = None,
     ) -> dict[str, Any]:
         """Enhanced pipeline processing with multi-turn support
 
@@ -465,7 +466,7 @@ class IntentPipeline:
         }
 
         # Add UI assistance (navigation or transaction forms)
-        ui_assistance = self._generate_ui_assistance(classification, entities)
+        ui_assistance = self._generate_ui_assistance(classification, entities, ui_context)
         if ui_assistance:
             result["ui_assistance"] = ui_assistance
 
@@ -478,18 +479,22 @@ class IntentPipeline:
         return result
 
     def _generate_ui_assistance(
-        self, classification: dict[str, Any], entities: dict[str, Any]
+        self, classification: dict[str, Any], entities: dict[str, Any], ui_context: Optional[str] = None
     ) -> Optional[dict[str, Any]]:
-        """Generate UI assistance for navigation or transaction forms"""
+        """Generate UI assistance based on intent and UI context"""
         intent_id = classification.get("intent_id", "")
         
-        # Check if this is a navigation intent
-        if intent_id.startswith("navigation."):
-            screen = ui_screen_catalog.get_screen_for_intent(intent_id)
-            if screen and screen.screen_type == ScreenType.PRE_BUILT:
+        # Context-aware routing: Same intent, different UI response based on active tab
+        screen = ui_screen_catalog.get_screen_for_intent(intent_id)
+        if not screen:
+            return None
+            
+        # Banking (Navigation) context: Route to pre-built screens
+        if ui_context == "banking":
+            if screen.screen_type in [ScreenType.PRE_BUILT, ScreenType.DYNAMIC_FORM]:
                 return {
                     "type": "navigation",
-                    "action": "route_to_screen",
+                    "action": "route_to_screen", 
                     "screen_id": screen.screen_id,
                     "route_path": screen.route_path,
                     "component_name": screen.component_name,
@@ -497,10 +502,9 @@ class IntentPipeline:
                     "description": screen.description
                 }
         
-        # Check if this is a transaction intent that needs dynamic form
-        else:
-            screen = ui_screen_catalog.get_screen_for_intent(intent_id)
-            if screen and screen.screen_type == ScreenType.DYNAMIC_FORM:
+        # Transaction context: Create dynamic forms
+        elif ui_context == "transaction":
+            if screen.screen_type == ScreenType.DYNAMIC_FORM:
                 form_config = ui_screen_catalog.assemble_dynamic_form(
                     intent_id, entities.get("entities", {}), {}
                 )
@@ -514,6 +518,8 @@ class IntentPipeline:
                         "success_message": screen.success_message
                     }
         
+        # Chat context: No UI assistance, handle via conversation
+        # (ui_context == "chat" or None)
         return None
 
     async def _is_approval_response(self, query: str) -> bool:

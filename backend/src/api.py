@@ -28,6 +28,7 @@ class ProcessRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=500)
     session_id: Optional[str] = None
     skip_resolution: bool = False
+    ui_context: Optional[str] = None  # 'banking', 'transaction', 'chat'
 
 
 class ProcessResponse(BaseModel):
@@ -239,7 +240,7 @@ async def process_query(request: Request, body: ProcessRequest):
     # Process through pipeline
     try:
         result = await pipeline.process(
-            sanitized_query, session_id, skip_resolution=body.skip_resolution
+            sanitized_query, session_id, skip_resolution=body.skip_resolution, ui_context=body.ui_context
         )
 
         # Update analytics with available fields
