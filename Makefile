@@ -6,7 +6,8 @@
 # Default Python and paths
 PYTHON := python3
 BACKEND_DIR := backend
-SCRIPTS_DIR := $(BACKEND_DIR)/scripts
+SCRIPTS_DIR := scripts
+BACKEND_SCRIPTS_DIR := $(BACKEND_DIR)/scripts
 VENV_DIR := $(BACKEND_DIR)/venv
 
 # Use system Python consistently
@@ -47,7 +48,8 @@ help: ## Show this help message
 	@echo "  api       - Start the API server"
 	@echo "  mcp       - Start the MCP server"
 	@echo "  frontend  - Start the frontend development server"
-	@echo "  start     - Start both frontend and backend"
+	@echo "  start     - Start both frontend and backend (default ports)"
+	@echo "  start-ports - Start with custom ports (BACKEND_PORT=8000 FRONTEND_PORT=3001)"
 	@echo ""
 	@echo "Testing:"
 	@echo "  test         - Run all tests"
@@ -106,23 +108,23 @@ test-unit: ## Run unit tests only
 
 test-api: ## Run API integration tests  
 	@echo "$(BLUE)🌐 Running API tests...$(NC)"
-	@bash $(SCRIPTS_DIR)/test_setup.sh
+	@bash $(BACKEND_SCRIPTS_DIR)/test_setup.sh
 
 test-e2e: ## Run end-to-end tests
-	@bash $(SCRIPTS_DIR)/run_simple_e2e.sh
+	@bash $(SCRIPTS_DIR)/run-e2e-tests.sh
 
 test-e2e-debug: ## Run E2E tests in debug mode
-	@bash $(SCRIPTS_DIR)/run_simple_e2e.sh debug
+	@bash $(SCRIPTS_DIR)/run-e2e-tests.sh debug
 
 test-e2e-headed: ## Run E2E tests with visible browser
-	@bash $(SCRIPTS_DIR)/run_simple_e2e.sh headed
+	@bash $(SCRIPTS_DIR)/run-e2e-tests.sh headed
 
 test-e2e-chrome: ## Run E2E tests in Chrome only
-	@bash $(SCRIPTS_DIR)/run_simple_e2e.sh chrome
+	@bash $(SCRIPTS_DIR)/run-e2e-tests.sh chrome
 
 test-full: ## Run comprehensive test suite
 	@echo "$(BLUE)🔬 Running full test suite...$(NC)"
-	@bash $(SCRIPTS_DIR)/run_full_test.sh
+	@bash $(BACKEND_SCRIPTS_DIR)/run_full_test.sh
 
 demo: ## Run comprehensive demo
 	@echo "$(BLUE)🎭 Running comprehensive demo...$(NC)"
@@ -156,9 +158,7 @@ api: ## Start the API server
 
 mcp: ## Start the MCP server
 	@echo "$(BLUE)🔗 Starting MCP server...$(NC)"
-	@cd $(BACKEND_DIR) && \
-	export LLM_PROVIDER=mock && \
-	$(PYTHON) run_mcp_server.py
+	@./$(SCRIPTS_DIR)/run-mcp-server.sh
 
 frontend: ## Start the frontend development server
 	@echo "$(BLUE)🖥️  Starting frontend...$(NC)"
@@ -166,7 +166,11 @@ frontend: ## Start the frontend development server
 
 start: ## Start both frontend and backend services
 	@echo "$(BLUE)🚀 Starting EBP Banking Application...$(NC)"
-	@./start-app.sh
+	@./$(SCRIPTS_DIR)/start-app.sh
+
+start-ports: ## Start services with custom ports (usage: make start-ports BACKEND_PORT=8000 FRONTEND_PORT=3001)
+	@echo "$(BLUE)🚀 Starting EBP Banking Application on custom ports...$(NC)"
+	@./$(SCRIPTS_DIR)/start-app.sh $(BACKEND_PORT) $(FRONTEND_PORT)
 
 test-mcp: ## Test MCP server functionality
 	@echo "$(BLUE)🤖 Testing MCP Server...$(NC)"
@@ -189,7 +193,7 @@ test-mcp-comprehensive: ## Run comprehensive MCP and intent testing
 # Development utilities
 dev-setup: ## Setup development environment with git hooks
 	@echo "$(BLUE)⚙️  Setting up development environment...$(NC)"
-	@bash $(SCRIPTS_DIR)/setup_providers.sh
+	@bash $(BACKEND_SCRIPTS_DIR)/setup_providers.sh
 
 check: lint test-unit ## Quick development check (lint + unit tests)
 	@echo "$(GREEN)✅ Quick check complete$(NC)"

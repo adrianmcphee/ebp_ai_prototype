@@ -44,18 +44,5 @@ export default defineConfig({
     },
   ],
 
-  webServer: [
-    {
-      command: 'cd ../backend && export DATABASE_URL=mock && export REDIS_URL=mock && export LLM_PROVIDER=mock && python -m uvicorn src.api:app --port 8000 --host 127.0.0.1',
-      port: 8000,
-      timeout: 120 * 1000,
-      reuseExistingServer: !process.env.CI,
-    },
-    {
-      command: 'cd ../frontend && npm run dev -- --port 3001 --host 127.0.0.1',
-      port: 3001,
-      timeout: 120 * 1000,
-      reuseExistingServer: !process.env.CI,
-    }
-  ],
+  // webServer configuration removed - services are started by run-e2e-tests.sh script
 });
