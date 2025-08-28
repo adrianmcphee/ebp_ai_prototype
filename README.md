@@ -510,12 +510,12 @@ RATE_LIMIT_PER_MINUTE=30
 
 ## 🛠️ Development
 
-### Adding New Intents
+### Adding Intents
 
 1. Define in `intent_classifier.py`:
 ```python
-"new.intent.name": IntentConfig(
-    intent_id="new.intent.name",
+"intent.name": IntentConfig(
+    intent_id="intent.name",
     name="Human Readable Name",
     category=IntentCategory.APPROPRIATE,
     risk_level=RiskLevel.MEDIUM,
@@ -539,7 +539,7 @@ uvicorn src.api:app --reload --host 0.0.0.0 --port 8000
 
 ### Core Endpoints
 - `POST /api/process` - Process natural language query with risk assessment
-- `POST /api/session` - Create new session with context
+- `POST /api/session` - Create session with context
 - `GET /api/session/{id}/history` - Get conversation history
 
 ### Enhanced Endpoints

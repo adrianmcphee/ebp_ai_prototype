@@ -91,7 +91,7 @@ Entities: {
 
 ## 📁 **SYSTEM CATALOGS**
 
-### **1. Intent Catalog (34 Banking Intents)**
+### **1. Intent Catalog (36 Banking Intents)**
 **Purpose**: Defines all possible banking operations the system can understand.
 
 **Structure**:
@@ -312,14 +312,30 @@ Form_Generation_Audit = {
    ↓  
 3. Entity Extraction (Probabilistic)
    ↓
-4. Confidence Evaluation (Deterministic Rules)
+4. USER INTERFACE LAYER (Human-in-the-Loop)
+   ├── Navigation: Route to appropriate screen
+   ├── Transaction: Present dynamic form with AI suggestions
+   ├── Confirmation: User reviews and confirms action
+   └── Decision Point: User converts probability to certainty
    ↓
-5. Business Rule Validation (Deterministic)
+5. Confidence Evaluation (Deterministic Rules)
    ↓
-6. Banking Operation Execution (Deterministic)
+6. Business Rule Validation (Deterministic)
    ↓
-7. Audit Logging (Deterministic)
+7. Banking Operation Execution (Deterministic)
+   ↓
+8. Audit Logging (Deterministic)
 ```
+
+### **The Critical Human-in-the-Loop Layer**
+
+**Why the User Interface Layer is Essential:**
+
+- **🎯 Probability → Certainty Conversion**: AI suggests intent with 85% confidence, user confirms = 100% certainty
+- **🛡️ Error Prevention**: User can correct misunderstood intents before execution
+- **⚖️ Legal Compliance**: Human confirmation creates legally defensible decision trail
+- **🔍 Transparency**: User sees exactly what will happen before it happens
+- **📊 Audit Trail**: Records both AI suggestion AND user decision
 
 ### **Layer-by-Layer Example: "Transfer $500 to my mom"**
 
@@ -339,7 +355,31 @@ Let's trace this query through each layer to see exactly what happens:
 - Missing: from_account (needs clarification)
 - Result: `{amount: 500, recipient: "my mom", from_account: null}`
 
-#### **Layer 2: Business Logic (Deterministic Rules)**
+#### **Layer 2: User Interface (Human-in-the-Loop)**
+**UI Assembly & Presentation**:
+```python
+# System detects transaction intent → builds dynamic form
+dynamic_form = {
+    "title": "Send Money",
+    "fields": [
+        {"id": "amount", "value": "$500", "pre_filled": True},
+        {"id": "recipient", "value": "Sarah Johnson (Mom)", "resolved": True},
+        {"id": "from_account", "options": ["Checking", "Savings"], "required": True}
+    ],
+    "confirmation": "Send $500 to Sarah Johnson from [selected account]?"
+}
+```
+
+**User Decision Process**:
+```
+1. User sees: Pre-filled form with AI suggestions
+2. User selects: "Checking Account" for from_account
+3. User reviews: "Send $500 to Sarah Johnson from Checking Account"
+4. User confirms: ✓ "Yes, proceed"
+5. Result: Probabilistic suggestion → Confirmed user decision
+```
+
+#### **Layer 3: Business Logic (Deterministic Rules)**
 **Confidence Evaluation**:
 ```python
 if confidence >= 0.85:  # 0.92 > 0.85
@@ -367,7 +407,7 @@ if checking_balance < amount:  # $2,150 > $500 ✓
     reject_insufficient_funds()
 ```
 
-#### **Layer 3: Execution (Deterministic)**
+#### **Layer 4: Execution (Deterministic)**
 **Banking Operation**:
 ```python
 transfer_result = banking_service.send_payment(
@@ -382,12 +422,43 @@ transfer_result = banking_service.send_payment(
 ```python
 audit_log = {
     "user_input": "Transfer $500 to my mom",
-    "intent_confidence": 0.92,
+    "ai_analysis": {
+        "intent_confidence": 0.92,
+        "entities_extracted": {"amount": 500, "recipient": "my mom"},
+        "suggestions_made": ["Sarah Johnson (Mom)", "Checking Account"]
+    },
+    "user_decisions": {
+        "recipient_confirmed": "Sarah Johnson",
+        "account_selected": "Checking Account", 
+        "final_confirmation": True,
+        "confirmation_timestamp": "2025-01-15T10:29:45Z"
+    },
     "business_rules_applied": ["amount_check", "recipient_resolution", "balance_validation"],
     "transaction_id": "TXN-123456",
-    "timestamp": "2025-01-15T10:30:00Z"
+    "execution_timestamp": "2025-01-15T10:30:00Z",
+    "decision_trail": "AI suggested → User confirmed → System executed"
 }
 ```
+
+### **Human-in-the-Loop Benefits**
+
+**For Banks**:
+- **🛡️ Risk Mitigation**: User confirms every transaction, reducing liability
+- **⚖️ Regulatory Compliance**: Clear human authorization for all financial actions  
+- **📊 Defensible Audit Trail**: "User explicitly confirmed this transaction"
+- **🔍 Error Correction**: Users catch and fix AI misunderstandings before execution
+
+**For Users**:
+- **🎯 Control**: Always see and confirm what will happen
+- **✨ Enhanced UX**: AI does the heavy lifting, user makes final decision
+- **🔒 Security**: No automated actions without explicit approval
+- **📱 Smart Interfaces**: Pre-filled forms with intelligent suggestions
+
+**For Regulators**:
+- **📋 Complete Transparency**: Every decision point documented
+- **👤 Human Accountability**: Clear user authorization chain
+- **🔍 Audit Capability**: Can trace any transaction from intent to execution
+- **⚖️ Compliance Verification**: Meets human-in-the-loop requirements
 
 ### **Probabilistic vs Deterministic Components**
 
@@ -692,8 +763,16 @@ Financial services require robust error handling:
 Conversational Banking = 
     (Intent + Entities + Context) × Confidence
     ÷ Risk
-    + Human Confirmation
+    + Human-in-the-Loop Confirmation
     = Deterministic Action
+```
+
+### **The Human-in-the-Loop Principle**
+```
+AI Probability + User Decision = Legal Certainty
+
+Probabilistic Suggestion → UI Presentation → User Confirmation → Deterministic Execution
+     (85% confidence)      (Smart form)      (100% certainty)    (Auditable action)
 ```
 
 ### **The Banking Intent Formula**

@@ -244,24 +244,24 @@ POST /api/process
 
 The system is designed for easy extension:
 
-### Adding New Intents
+### Adding Intents
 ```python
-new_intent = BankingIntent(
-    intent_id="new.category.action",
-    name="New Banking Action",
-    category=IntentCategory.NEW_CATEGORY,
+intent = BankingIntent(
+    intent_id="category.action",
+    name="Banking Action",
+    category=IntentCategory.CATEGORY,
     # ... other attributes
 )
 
 # Add to catalog
-BANKING_INTENTS["new.category.action"] = new_intent
+BANKING_INTENTS["category.action"] = intent
 ```
 
 ### Custom Categories
 ```python
 class IntentCategory(Enum):
     # Existing categories...
-    NEW_CATEGORY = "New Banking Domain"
+    CATEGORY = "Banking Domain"
 ```
 
-The intent catalog automatically updates all classification and routing logic when new intents are added. 
+The intent catalog automatically updates all classification and routing logic when intents are added. 

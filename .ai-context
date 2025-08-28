@@ -8,7 +8,7 @@ Research prototype exploring AI enhancements for Backbase Enterprise Banking Pla
 3. **MCP Integration**: AI agent capabilities through Model Context Protocol (shared intent architecture)
 
 ## Core Capabilities
-- **Intent Classification**: 34 comprehensive banking intents across 5 categories with risk assessment (LOW/MEDIUM/HIGH/CRITICAL)
+- **Intent Classification**: 36 comprehensive banking intents across 16 categories with risk assessment (LOW/MEDIUM/HIGH/CRITICAL)
 - **Banking Operations Catalog**: 15+ operations mapped to intents with business rules and execution handlers
 - **Entity Extraction**: Smart parsing with validation (amounts, accounts, recipients, dates)
 - **Multi-turn Conversations**: Context persistence, reference resolution, missing info handling
@@ -29,7 +29,7 @@ Research prototype exploring AI enhancements for Backbase Enterprise Banking Pla
 - `entity_extractor.py` - Extract & validate entities from natural language
 - `context_aware_responses.py` - Generate intelligent contextual responses
 - `state_manager.py` - Manage conversation state across turns
-- `banking_operations.py` - **NEW** Banking Operations Catalog with 15+ operations
+- `banking_operations.py` - Banking Operations Catalog with 15+ operations
 - `mock_banking.py` - Simulated banking service with comprehensive operations
 - `mcp_server.py` - MCP protocol server for AI agents
 - `llm_wrapper.py` - LLM abstraction supporting mock/OpenAI/Anthropic
@@ -43,9 +43,9 @@ ebpnlp/
 ├── test-data.json        # Centralized test data (34 scenarios, 8 MCP tools)
 ├── backend/
 │   ├── src/              # Core modules (FastAPI + Python)
-│   │   └── banking_operations.py  # NEW: Operations catalog
+│   │   └── banking_operations.py  # Operations catalog
 │   ├── tests/            # Comprehensive test suite
-│   │   └── test_mcp_comprehensive.py  # NEW: Full system tests
+│   │   └── test_mcp_comprehensive.py  # Full system tests
 │   └── scripts/          # Utility scripts
 ├── frontend/             # React 19 + Vite + Mantine UI (modern stack)
 └── e2e/                  # Playwright E2E tests (with data-testid)
@@ -149,13 +149,13 @@ Configure in Claude Desktop's config to enable banking operations via natural la
 
 ## Common Tasks
 
-### Add New Intent
+### Add Intent
 1. Update `intent_catalog.py` with intent definition in BANKING_INTENTS dict
 2. Add test cases in `test_intent_classifier.py`
 3. Update entity extraction rules if needed
 4. See [INTENT_SYSTEM.md](INTENT_SYSTEM.md) for detailed instructions
 
-### Add New Banking Operation
+### Add Banking Operation
 1. Add operation to `banking_operations.py` BankingOperationsCatalog
 2. Implement execution handler in the catalog
 3. Map intent to operation in `get_operation_for_intent()`

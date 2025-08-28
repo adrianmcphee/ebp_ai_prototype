@@ -19,7 +19,7 @@ Based on taxonomy.txt analysis and current system gaps, here's what's needed to 
 
 ### **1.2 Banking Operations Catalog**
 - [ ] **Create `BankingOperationsCatalog`**
-  - [ ] Map each of 34 intents to specific banking operations
+  - [ ] Map each of 36 intents to specific banking operations
   - [ ] Define operation parameters and validation rules
   - [ ] Implement business logic for each operation type
   - [ ] Add risk-based operation approval workflows
@@ -90,7 +90,7 @@ Based on taxonomy.txt analysis and current system gaps, here's what's needed to 
 ## **PHASE 3: CONVERSATION INTELLIGENCE** 🧠
 
 ### **3.1 Enhanced Disambiguation**
-- [ ] **Expand disambiguation beyond recipients** (Currently ⚠️ partial)
+- [ ] **Expand disambiguation beyond recipients** (⚠️ partial)
   - [ ] Account disambiguation ("which account?")
   - [ ] Amount disambiguation ("how much?") 
   - [ ] Date/time disambiguation ("when?")
@@ -115,14 +115,14 @@ Based on taxonomy.txt analysis and current system gaps, here's what's needed to 
 ## **PHASE 4: SECURITY & VALIDATION** 🔐
 
 ### **4.1 Authentication Flow Implementation**
-- [ ] **Risk-based authentication** (Currently ⚠️ defined but not enforced)
+- [ ] **Risk-based authentication** (⚠️ defined but not enforced)
   - [ ] LOW risk: View-only operations
   - [ ] MEDIUM risk: Password confirmation
   - [ ] HIGH risk: MFA + explicit confirmation
   - [ ] CRITICAL risk: Multi-step approval process
 
 ### **4.2 Confirmation & Approval Workflows**
-- [ ] **Enhanced confirmation UI** (Currently ⚠️ partial)
+- [ ] **Enhanced confirmation UI** (⚠️ partial)
   - [ ] Confirm/cancel buttons for transactions
   - [ ] Transaction preview screens
   - [ ] Risk level indicators
@@ -140,7 +140,7 @@ Based on taxonomy.txt analysis and current system gaps, here's what's needed to 
 ## **PHASE 5: ERROR HANDLING & RECOVERY** ❌→✅
 
 ### **5.1 Error Recovery System**
-- [ ] **Robust error handling** (Currently missing)
+- [ ] **Robust error handling** (missing)
   - [ ] Network failure recovery
   - [ ] LLM timeout handling
   - [ ] Invalid entity combination errors
@@ -161,7 +161,7 @@ Based on taxonomy.txt analysis and current system gaps, here's what's needed to 
 - [ ] **Fix Playwright test suite**
   - [ ] Resolve intent processing for test queries
   - [ ] Add comprehensive test scenarios
-  - [ ] Test all 34 intent types
+  - [ ] Test all 36 intent types
   - [ ] Validate MCP tool integration
 
 ### **6.2 Demo Scenarios**
@@ -268,4 +268,4 @@ Claude: Shows balance + offers follow-up actions
 3. **Create UI Navigation System** - Enable navigation assistance
 4. **Demo early and often** - Validate each phase with working demos
 
-*Updated: 2025-08-28* 
+ 
