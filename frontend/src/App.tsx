@@ -103,7 +103,7 @@ const App: React.FC = () => {
 
   const addSystemMessage = (content: string) => {
     const message: Message = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       type: 'system',
       content,
       timestamp: new Date()
@@ -113,7 +113,7 @@ const App: React.FC = () => {
 
   const addUserMessage = (content: string) => {
     const message: Message = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       type: 'user',
       content,
       timestamp: new Date()
@@ -123,7 +123,7 @@ const App: React.FC = () => {
 
   const addAssistantMessage = (content: string, data?: ProcessResponse) => {
     const message: Message = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       type: 'assistant',
       content,
       intent: data?.intent,

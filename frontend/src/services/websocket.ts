@@ -11,7 +11,7 @@ export type WebSocketMessageHandler = (message: WebSocketMessage) => void;
 export const websocketService = {
   // Create WebSocket connection
   connect(onMessage: WebSocketMessageHandler): WebSocket {
-    const websocket = new WebSocket(`ws://localhost:8000/ws/${Date.now()}`);
+    const websocket = new WebSocket(`ws://localhost:8000/ws/${crypto.randomUUID()}`);
     
     websocket.onmessage = (event) => {
       const message = JSON.parse(event.data);
