@@ -190,6 +190,11 @@ const App: React.FC = () => {
     const userMessage = values.message.trim();
     if (!userMessage) return;
 
+    // Close navigation assistant if it's open (prevents form disconnect issues)
+    if (showNavigationAssistant) {
+      setShowNavigationAssistant(false);
+    }
+
     addUserMessage(userMessage);
     form.reset();
 
@@ -275,7 +280,7 @@ const App: React.FC = () => {
 
           <AppShell.Main>
             <Container size="xl">
-              <Tabs value={activeTab} onChange={setActiveTab}>
+              <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'banking')}>
                 <Tabs.List>
                   <Tabs.Tab value="banking">🧭 Navigation Assistance</Tabs.Tab>
                   <Tabs.Tab value="transaction">📝 Transaction Assistance</Tabs.Tab>
@@ -388,7 +393,6 @@ const App: React.FC = () => {
                               type="submit" 
                               disabled={!isConnected}
                               size="sm"
-                              onClick={() => setShowNavigationAssistant(false)}
                             >
                               Navigate
                             </Button>
