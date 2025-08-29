@@ -12,18 +12,12 @@ import {
   Container,
   Card,
   Title,
-  Notification,
-  Loader,
   SimpleGrid,
-  Space,
-  Divider,
   Tabs,
   Select,
   NumberInput,
   Checkbox,
   Textarea,
-  Modal,
-  Box,
   ActionIcon,
   Affix,
   Transition
@@ -31,71 +25,9 @@ import {
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import axios from 'axios';
+import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, FormField, Account } from './types';
 
-// Types
-interface Message {
-  id: string;
-  type: 'user' | 'assistant' | 'system';
-  content: string;
-  intent?: string;
-  confidence?: number;
-  entities?: any;
-  timestamp: Date;
-}
 
-interface ProcessResponse {
-  status: string;
-  intent?: string;
-  confidence?: number;
-  entities?: any;
-  message?: string;
-  ui_assistance?: UIAssistance;
-  execution?: any;
-  [key: string]: any;
-}
-
-interface UIAssistance {
-  type: 'navigation' | 'transaction_form';
-  action: string;
-  screen_id?: string;
-  route_path?: string;
-  component_name?: string;
-  form_config?: DynamicFormConfig;
-  title?: string;
-  subtitle?: string;
-  description?: string;
-  success_message?: string;
-}
-
-interface DynamicFormConfig {
-  screen_id: string;
-  title: string;
-  subtitle: string;
-  fields: FormField[];
-  confirmation_required: boolean;
-  complexity_reduction: string;
-}
-
-interface FormField {
-  id: string;
-  type: string;
-  label: string;
-  required: boolean;
-  placeholder?: string;
-  options?: string[];
-  value?: any;
-  pre_filled?: boolean;
-  help_text?: string;
-  conditional_on?: string;
-  hidden?: boolean;
-}
-
-interface Account {
-  id: string;
-  name: string;
-  type: string;
-  balance: number;
-}
 
 // Pre-built Banking Screens
 const BankingScreens = {
@@ -189,14 +121,14 @@ const BankingScreens = {
 // Dynamic Form Component
 const DynamicForm: React.FC<{ 
   config: DynamicFormConfig;
-  onSubmit: (data: any) => void;
+  onSubmit: (data: Record<string, unknown>) => void;
   onCancel: () => void;
 }> = ({ config, onSubmit, onCancel }) => {
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
 
   // Initialize form with pre-filled values
   useEffect(() => {
-    const initialData: Record<string, any> = {};
+    const initialData: Record<string, unknown> = {};
     config.fields.forEach(field => {
       if (field.value !== undefined) {
         initialData[field.id] = field.value;
@@ -205,7 +137,7 @@ const DynamicForm: React.FC<{
     setFormData(initialData);
   }, [config]);
 
-  const handleFieldChange = (fieldId: string, value: any) => {
+  const handleFieldChange = (fieldId: string, value: unknown) => {
     setFormData(prev => ({ ...prev, [fieldId]: value }));
   };
 
@@ -430,7 +362,7 @@ const App: React.FC = () => {
     setMessages(prev => [...prev, message]);
   };
 
-  const handleWebSocketMessage = (message: any) => {
+  const handleWebSocketMessage = (message: { type: string; data: ProcessResponse }) => {
     if (message.type === 'result') {
       handleProcessResponse(message.data);
     }
@@ -501,7 +433,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDynamicFormSubmit = (formData: any) => {
+  const handleDynamicFormSubmit = (formData: Record<string, unknown>) => {
     console.log('Form submitted:', formData);
     notifications.show({
       title: 'Form Submitted',
