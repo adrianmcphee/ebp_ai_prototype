@@ -26,14 +26,6 @@ import { Header } from './components/Header';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
 
-
-
-
-
-
-
-
-
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -281,10 +273,10 @@ const App: React.FC = () => {
           <AppShell.Main>
             <Container size="xl">
               <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'banking')}>
-                <Tabs.List>
-                  <Tabs.Tab value="banking">🧭 Navigation Assistance</Tabs.Tab>
-                  <Tabs.Tab value="transaction">📝 Transaction Assistance</Tabs.Tab>
-                  <Tabs.Tab value="chat">💬 Chat Assistant</Tabs.Tab>
+                <Tabs.List data-testid="tab-list">
+                  <Tabs.Tab value="banking" data-testid="tab-banking">🧭 Navigation Assistance</Tabs.Tab>
+                  <Tabs.Tab value="transaction" data-testid="tab-transaction">📝 Transaction Assistance</Tabs.Tab>
+                  <Tabs.Tab value="chat" data-testid="tab-chat">💬 Chat Assistant</Tabs.Tab>
                 </Tabs.List>
 
                 <Tabs.Panel value="chat" pt="md">
