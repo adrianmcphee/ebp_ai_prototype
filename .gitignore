@@ -204,3 +204,5 @@ claude_desktop_config.json.backup
 !requirements.txt
 !package.json
 !package-lock.json
+.specstory/
+.cursorindexingignore
