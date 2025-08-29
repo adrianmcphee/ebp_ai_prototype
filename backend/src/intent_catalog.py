@@ -132,6 +132,63 @@ class BankingIntent:
 # Comprehensive Banking Intent Catalog
 BANKING_INTENTS = {
     # ============ ACCOUNT MANAGEMENT ============
+    "navigation.accounts.overview": BankingIntent(
+        intent_id="navigation.accounts.overview",
+        name="Navigate to Accounts Overview",
+        category=IntentCategory.ACCOUNT_MANAGEMENT,
+        subcategory="Navigation",
+        description="Navigate to accounts overview dashboard",
+        confidence_threshold=0.85,
+        risk_level=RiskLevel.LOW,
+        auth_required=AuthLevel.NONE, # FIX THIS ASAP! AuthLevel.NONE
+        required_entities=[],
+        optional_entities=[],
+        example_utterances=[
+            "Show me account overview",
+            "Take me to accounts",
+            "Go to accounts page",
+            "Account overview",
+            "Show me my accounts",
+            "Navigate to accounts",
+        ],
+        keywords=["account overview", "accounts", "show accounts", "my accounts", "accounts page", "account dashboard"],
+        patterns=[
+            r"\b(show|go to|take me to|navigate to) .* accounts?\b",
+            r"\baccount overview\b",
+            r"\bshow me .* accounts?\b",
+        ],
+        preconditions=[],
+        daily_limit=1000,
+        timeout_ms=1000,
+    ),
+
+    "navigation.accounts.details": BankingIntent(
+        intent_id="navigation.accounts.details",
+        name="Navigate to Account Details",
+        category=IntentCategory.ACCOUNT_MANAGEMENT,
+        subcategory="Navigation",
+        description="Navigate to specific account details page",
+        confidence_threshold=0.85,
+        risk_level=RiskLevel.LOW,
+        auth_required=AuthLevel.NONE, # FIX THIS ASAP! AuthLevel.NONE
+        required_entities=["account_id"],
+        optional_entities=[],
+        example_utterances=[
+            "Show account details",
+            "Go to account details",
+            "Account details page",
+            "View account details",
+        ],
+        keywords=["account details", "details page", "account info"],
+        patterns=[
+            r"\b(show|go to|view) .* account details\b",
+            r"\baccount details\b",
+        ],
+        preconditions=[],
+        daily_limit=500,
+        timeout_ms=1000,
+    ),
+
     "accounts.balance.check": BankingIntent(
         intent_id="accounts.balance.check",
         name="Check Account Balance",
@@ -307,6 +364,62 @@ BANKING_INTENTS = {
     ),
 
     # ============ PAYMENTS & TRANSFERS ============
+    "navigation.transfers.hub": BankingIntent(
+        intent_id="navigation.transfers.hub",
+        name="Navigate to Transfers Hub",
+        category=IntentCategory.TRANSFERS,
+        subcategory="Navigation",
+        description="Navigate to main transfers dashboard",
+        confidence_threshold=0.85,
+        risk_level=RiskLevel.LOW,
+        auth_required=AuthLevel.NONE, # FIX THIS ASAP! AuthLevel.NONE
+        required_entities=[],
+        optional_entities=[],
+        example_utterances=[
+            "Take me to transfers",
+            "Go to transfers page",
+            "Show transfers",
+            "Transfer hub",
+            "Money transfers",
+        ],
+        keywords=["transfers", "transfer hub", "money transfers", "transfers page"],
+        patterns=[
+            r"\b(take me to|go to|show) .* transfers?\b",
+            r"\btransfer hub\b",
+            r"\bmoney transfers?\b",
+        ],
+        preconditions=[],
+        daily_limit=500,
+        timeout_ms=1000,
+    ),
+
+    "navigation.transfers.wire": BankingIntent(
+        intent_id="navigation.transfers.wire",
+        name="Navigate to Wire Transfers",
+        category=IntentCategory.TRANSFERS,
+        subcategory="Navigation",
+        description="Navigate to wire transfer form",
+        confidence_threshold=0.85,
+        risk_level=RiskLevel.LOW,
+        auth_required=AuthLevel.NONE, # FIX THIS ASAP! AuthLevel.NONE
+        required_entities=[],
+        optional_entities=[],
+        example_utterances=[
+            "Take me to wire transfers",
+            "Go to wire transfer page",
+            "Show wire transfers",
+            "International transfers",
+        ],
+        keywords=["wire transfers", "international transfers", "wire transfer page"],
+        patterns=[
+            r"\b(take me to|go to|show) .* wire transfers?\b",
+            r"\binternational transfers?\b",
+        ],
+        preconditions=[],
+        daily_limit=200,
+        timeout_ms=1000,
+    ),
+
     "payments.transfer.internal": BankingIntent(
         intent_id="payments.transfer.internal",
         name="Internal Transfer",
@@ -425,6 +538,34 @@ BANKING_INTENTS = {
         timeout_ms=5000,
     ),
 
+    "navigation.payments.bills": BankingIntent(
+        intent_id="navigation.payments.bills",
+        name="Navigate to Bill Pay",
+        category=IntentCategory.PAYMENTS,
+        subcategory="Navigation",
+        description="Navigate to bill payment dashboard",
+        confidence_threshold=0.85,
+        risk_level=RiskLevel.LOW,
+        auth_required=AuthLevel.NONE, # FIX THIS ASAP! AuthLevel.NONE
+        required_entities=[],
+        optional_entities=[],
+        example_utterances=[
+            "Take me to bill pay",
+            "Go to bill payments",
+            "Show bill pay page",
+            "Pay bills",
+            "Bill payment hub",
+        ],
+        keywords=["bill pay", "bill payments", "pay bills", "bill payment hub"],
+        patterns=[
+            r"\b(take me to|go to|show) .* bill pay\b",
+            r"\bpay bills\b",
+            r"\bbill payment\b",
+        ],
+        preconditions=[],
+        daily_limit=200,
+        timeout_ms=1000,
+    ),
     # ============ CARDS ============
     "cards.block.temporary": BankingIntent(
         intent_id="cards.block.temporary",
