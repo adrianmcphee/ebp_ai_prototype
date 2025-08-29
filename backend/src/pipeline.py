@@ -110,6 +110,7 @@ class IntentPipeline:
                 query,
                 resolved_query,
                 user_profile,
+                ui_context,
             )
 
             # Update conversation state
@@ -247,6 +248,7 @@ class IntentPipeline:
         original_query: str,
         resolved_query: str,
         user_profile: Optional[dict[str, Any]],
+        ui_context: Optional[str] = None,
     ) -> dict[str, Any]:
         """Process different response types and prepare appropriate output"""
         if response.response_type == ResponseType.SUCCESS:
@@ -256,11 +258,11 @@ class IntentPipeline:
                     classification, entities.get("entities", {}), user_profile
                 )
                 return self._format_success_response(
-                    response, classification, entities, execution_result
+                    response, classification, entities, execution_result, ui_context
                 )
             else:
                 # Information query, no execution needed
-                return self._format_success_response(response, classification, entities)
+                return self._format_success_response(response, classification, entities, None, ui_context)
 
         elif response.response_type == ResponseType.MISSING_INFO:
             # Store pending clarification
@@ -451,6 +453,7 @@ class IntentPipeline:
         classification: dict[str, Any],
         entities: dict[str, Any],
         execution_result: Optional[dict[str, Any]] = None,
+        ui_context: Optional[str] = None,
     ) -> dict[str, Any]:
         """Format a successful operation response"""
         result = {
