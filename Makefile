@@ -76,7 +76,7 @@ install: ## Install dependencies and setup environment
 		cd $(BACKEND_DIR) && $(PYTHON) -m venv venv; \
 	fi
 	@cd $(BACKEND_DIR) && $(PYTHON) -m pip install --upgrade pip
-	@cd $(BACKEND_DIR) && $(PYTHON) -m pip install -r requirements.txt
+	@cd $(BACKEND_DIR) && $(PYTHON) -m pip install -r ../requirements.txt
 	@echo "$(GREEN)✅ Dependencies installed$(NC)"
 
 clean: ## Clean up generated files and cache
