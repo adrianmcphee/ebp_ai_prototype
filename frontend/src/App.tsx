@@ -3,21 +3,15 @@ import {
   MantineProvider,
   AppShell,
   Text,
-  TextInput,
   Button,
   Stack,
-  Paper,
-  Badge,
   Group,
+  TextInput,
   Container,
   Card,
   Title,
   SimpleGrid,
   Tabs,
-  Select,
-  NumberInput,
-  Checkbox,
-  Textarea,
   ActionIcon,
   Affix,
   Transition
@@ -26,236 +20,16 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import axios from 'axios';
 import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, FormField, Account } from './types';
+import { BankingScreens } from './components/BankingScreens';
+import { DynamicForm } from './components/DynamicForm';
+import { ChatPanel } from './components/ChatPanel';
+import { Header } from './components/Header';
 
 
 
-// Pre-built Banking Screens
-const BankingScreens = {
-  AccountsOverview: ({ accounts }: { accounts: Account[] }) => (
-    <Card shadow="sm" padding="lg" radius="md" withBorder>
-      <Title order={2} mb="md">Your Accounts</Title>
-      <SimpleGrid cols={2}>
-        {accounts.map(account => (
-          <Paper key={account.id} p="md" withBorder>
-            <Text size="sm" color="dimmed">{account.type}</Text>
-                         <Text fw={500}>{account.name}</Text>
-             <Text size="xl" fw={700} c="blue">
-              ${account.balance.toFixed(2)}
-            </Text>
-          </Paper>
-        ))}
-      </SimpleGrid>
-    </Card>
-  ),
 
-  TransfersHub: () => (
-    <Card shadow="sm" padding="lg" radius="md" withBorder>
-      <Title order={2} mb="md">Money Transfers</Title>
-      <SimpleGrid cols={3}>
-                 <Paper p="md" withBorder style={{ textAlign: 'center' }}>
-           <Text fw={500} mb="xs">Internal Transfer</Text>
-           <Text size="sm" c="dimmed">Between your accounts</Text>
-           <Button variant="light" mt="md" fullWidth>Start Transfer</Button>
-         </Paper>
-         <Paper p="md" withBorder style={{ textAlign: 'center' }}>
-           <Text fw={500} mb="xs">External Transfer</Text>
-           <Text size="sm" c="dimmed">To other banks</Text>
-           <Button variant="light" mt="md" fullWidth>Send Money</Button>
-         </Paper>
-         <Paper p="md" withBorder style={{ textAlign: 'center' }}>
-           <Text fw={500} mb="xs">International Wire</Text>
-           <Text size="sm" c="dimmed">Global transfers</Text>
-           <Button variant="light" mt="md" fullWidth>Wire Money</Button>
-         </Paper>
-       </SimpleGrid>
-     </Card>
-   ),
 
-   WireTransferForm: () => (
-     <Card shadow="sm" padding="lg" radius="md" withBorder>
-       <Title order={2} mb="md">International Wire Transfer</Title>
-       <Text size="sm" c="dimmed" mb="lg">Complete form with all required fields</Text>
-       <Stack gap="md">
-        <TextInput label="Recipient Name" placeholder="Full name" required />
-        <TextInput label="Recipient Address Line 1" placeholder="Street address" required />
-        <TextInput label="Recipient Address Line 2" placeholder="Apt, suite, etc." />
-        <TextInput label="Bank Name" placeholder="Recipient bank" required />
-        <TextInput label="Bank Address" placeholder="Bank address" required />
-        <TextInput label="SWIFT/BIC Code" placeholder="SWIFT code" required />
-        <TextInput label="IBAN" placeholder="International account number" />
-        <TextInput label="Account Number" placeholder="Account number" required />
-        <TextInput label="Routing Number" placeholder="Routing number" />
-        <TextInput label="Correspondent Bank" placeholder="If required" />
-        <Select 
-          label="Purpose Code" 
-          placeholder="Select purpose"
-          data={Array.from({length: 20}, (_, i) => `Purpose ${i + 1}`)}
-          required 
-        />
-        <NumberInput label="Amount" placeholder="0.00" required />
-        <Button size="lg" mt="md">Submit Wire Transfer</Button>
-      </Stack>
-    </Card>
-  ),
 
-  BillPayHub: () => (
-    <Card shadow="sm" padding="lg" radius="md" withBorder>
-      <Title order={2} mb="md">Pay Bills</Title>
-      <Text mb="lg">Manage your bill payments and payees</Text>
-      <SimpleGrid cols={2}>
-                 <Paper p="md" withBorder>
-           <Text fw={500} mb="xs">Upcoming Bills</Text>
-           <Text size="sm" c="dimmed">3 bills due this week</Text>
-           <Button variant="light" mt="md" fullWidth>View Bills</Button>
-         </Paper>
-         <Paper p="md" withBorder>
-           <Text fw={500} mb="xs">Add New Payee</Text>
-           <Text size="sm" c="dimmed">Set up new bill payment</Text>
-           <Button variant="light" mt="md" fullWidth>Add Payee</Button>
-         </Paper>
-      </SimpleGrid>
-    </Card>
-  )
-};
-
-// Dynamic Form Component
-const DynamicForm: React.FC<{ 
-  config: DynamicFormConfig;
-  onSubmit: (data: Record<string, unknown>) => void;
-  onCancel: () => void;
-}> = ({ config, onSubmit, onCancel }) => {
-  const [formData, setFormData] = useState<Record<string, unknown>>({});
-
-  // Initialize form with pre-filled values
-  useEffect(() => {
-    const initialData: Record<string, unknown> = {};
-    config.fields.forEach(field => {
-      if (field.value !== undefined) {
-        initialData[field.id] = field.value;
-      }
-    });
-    setFormData(initialData);
-  }, [config]);
-
-  const handleFieldChange = (fieldId: string, value: unknown) => {
-    setFormData(prev => ({ ...prev, [fieldId]: value }));
-  };
-
-  const renderField = (field: FormField) => {
-    if (field.hidden) return null;
-
-    const commonProps = {
-      key: field.id,
-      label: field.label,
-      placeholder: field.placeholder,
-      required: field.required,
-      value: formData[field.id] || '',
-      onChange: (value: any) => handleFieldChange(field.id, value),
-      description: field.help_text
-    };
-
-    switch (field.type) {
-      case 'amount':
-        return (
-                     <NumberInput
-             {...commonProps}
-             decimalScale={2}
-             min={0}
-             leftSection="$"
-             onChange={(value) => handleFieldChange(field.id, value)}
-           />
-        );
-
-      case 'dropdown':
-        return (
-          <Select
-            {...commonProps}
-            data={field.options || []}
-            onChange={(value) => handleFieldChange(field.id, value)}
-          />
-        );
-
-      case 'account_select':
-        return (
-          <Select
-            {...commonProps}
-            data={['Checking Account - $2,150.00', 'Savings Account - $15,432.18']}
-            onChange={(value) => handleFieldChange(field.id, value)}
-          />
-        );
-
-      case 'recipient_select':
-        return (
-          <Select
-            {...commonProps}
-            data={['John Smith', 'Sarah Johnson', 'Mike Chen', 'Add New Recipient']}
-            searchable
-            onChange={(value) => handleFieldChange(field.id, value)}
-          />
-        );
-
-      case 'checkbox':
-        return (
-          <Checkbox
-            key={field.id}
-            label={field.label}
-            checked={formData[field.id] || false}
-            onChange={(event) => handleFieldChange(field.id, event.currentTarget.checked)}
-          />
-        );
-
-      case 'textarea':
-        return (
-          <Textarea
-            {...commonProps}
-            onChange={(event) => handleFieldChange(field.id, event.currentTarget.value)}
-          />
-        );
-
-      default:
-        return (
-          <TextInput
-            {...commonProps}
-            onChange={(event) => handleFieldChange(field.id, event.currentTarget.value)}
-          />
-        );
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  return (
-    <Card shadow="sm" padding="lg" radius="md" withBorder>
-      <Group position="apart" mb="md">
-        <div>
-          <Title order={2}>{config.title}</Title>
-          <Text size="sm" color="dimmed">{config.subtitle}</Text>
-        </div>
-        <Badge color="green" variant="light">
-          {config.complexity_reduction} simpler
-        </Badge>
-      </Group>
-
-      <form onSubmit={handleSubmit}>
-        <Stack spacing="md">
-          {config.fields.map(renderField)}
-          
-          <Group position="apart" mt="xl">
-            <Button variant="subtle" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button type="submit" size="lg">
-              {config.confirmation_required ? 'Review & Confirm' : 'Submit'}
-            </Button>
-          </Group>
-        </Stack>
-      </form>
-    </Card>
-  );
-};
 
 const API_BASE = 'http://localhost:8000';
 
@@ -493,11 +267,7 @@ const App: React.FC = () => {
     return <div>Screen not found</div>;
   };
 
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.8) return 'green';
-    if (confidence >= 0.6) return 'yellow';
-    return 'red';
-  };
+
 
   return (
     <MantineProvider>
@@ -506,18 +276,7 @@ const App: React.FC = () => {
           header={{ height: 60 }}
           padding="md"
         >
-          <AppShell.Header data-testid="header">
-            <Container size="xl" h="100%">
-              <Group h="100%" px="md" position="apart">
-                <Title order={3}>EBP Banking AI Prototype</Title>
-                <Group>
-                  <Badge color={isConnected ? 'green' : 'red'} variant="light">
-                    {isConnected ? 'Connected' : 'Disconnected'}
-                  </Badge>
-                </Group>
-              </Group>
-            </Container>
-          </AppShell.Header>
+          <Header isConnected={isConnected} />
 
           <AppShell.Main>
             <Container size="xl">
@@ -529,81 +288,12 @@ const App: React.FC = () => {
                 </Tabs.List>
 
                 <Tabs.Panel value="chat" pt="md">
-                  <Card shadow="sm" padding="lg" radius="md" withBorder>
-                    <Stack data-testid="messages" spacing="xs" style={{ height: '400px', overflowY: 'auto' }} mb="md">
-                      {messages.map((message) => (
-                        <Paper
-                          key={message.id}
-                          data-testid={`message-${message.type}`}
-                          p="sm"
-                          style={{
-                            backgroundColor: message.type === 'user' ? '#e3f2fd' : 
-                                           message.type === 'assistant' ? '#f3e5f5' : '#fff3e0',
-                            alignSelf: message.type === 'user' ? 'flex-end' : 'flex-start',
-                            maxWidth: '80%'
-                          }}
-                        >
-                          <Text size="sm">{message.content}</Text>
-                          {message.confidence !== undefined && (
-                            <Badge 
-                              data-testid="confidence"
-                              size="xs" 
-                              color={getConfidenceColor(message.confidence)}
-                              mt="xs"
-                            >
-                              {Math.round(message.confidence * 100)}% confident
-                            </Badge>
-                          )}
-                        </Paper>
-                      ))}
-                    </Stack>
-
-                    <form onSubmit={form.onSubmit(handleSubmit)}>
-                      <Group>
-                        <TextInput
-                          data-testid="chat-input"
-                          {...form.getInputProps('message')}
-                          placeholder="Try: 'Take me to transfers' or 'Send $500 to John'"
-                          style={{ flex: 1 }}
-                        />
-                        <Button 
-                          data-testid="send-button"
-                          type="submit" 
-                          disabled={!isConnected}
-                        >
-                          Send
-                        </Button>
-                      </Group>
-                    </form>
-
-                    <Group data-testid="quick-actions" mt="md" spacing="xs">
-                      <Text size="xs" color="dimmed">Quick examples:</Text>
-                      <Button 
-                        data-testid="quick-transfer"
-                        size="xs" 
-                        variant="subtle" 
-                        onClick={() => form.setFieldValue('message', 'Take me to international transfers')}
-                      >
-                        Navigation
-                      </Button>
-                      <Button 
-                        data-testid="quick-transaction"
-                        size="xs" 
-                        variant="subtle" 
-                        onClick={() => form.setFieldValue('message', 'Send $500 to my friend in Canada')}
-                      >
-                        Transaction
-                      </Button>
-                      <Button 
-                        data-testid="quick-balance"
-                        size="xs" 
-                        variant="subtle" 
-                        onClick={() => form.setFieldValue('message', 'What\'s my balance?')}
-                      >
-                        Balance
-                      </Button>
-                    </Group>
-                  </Card>
+                  <ChatPanel
+                    messages={messages}
+                    form={form}
+                    isConnected={isConnected}
+                    onSubmit={handleSubmit}
+                  />
                 </Tabs.Panel>
 
                 <Tabs.Panel value="banking" pt="md">
