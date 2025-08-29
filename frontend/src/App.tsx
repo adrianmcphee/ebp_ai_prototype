@@ -18,12 +18,13 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
-import axios from 'axios';
-import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, FormField, Account } from './types';
+import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, Account } from './types';
 import { BankingScreens } from './components/BankingScreens';
 import { DynamicForm } from './components/DynamicForm';
 import { ChatPanel } from './components/ChatPanel';
 import { Header } from './components/Header';
+import { apiService } from './services/api';
+import { websocketService, type WebSocketMessageHandler } from './services/websocket';
 
 
 
@@ -31,7 +32,7 @@ import { Header } from './components/Header';
 
 
 
-const API_BASE = 'http://localhost:8000';
+
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -55,15 +56,13 @@ const App: React.FC = () => {
     connectWebSocket();
 
     return () => {
-      if (ws) {
-        ws.close();
-      }
+      websocketService.disconnect(ws);
     };
   }, []);
 
   const initializeSession = async () => {
     try {
-      await axios.post(`${API_BASE}/api/session`);
+      await apiService.initializeSession();
       addSystemMessage('Connected to EBP Banking Assistant');
     } catch (error) {
       console.error('Failed to initialize session:', error);
@@ -76,16 +75,15 @@ const App: React.FC = () => {
   };
 
   const connectWebSocket = () => {
-    const websocket = new WebSocket(`ws://localhost:8000/ws/${Date.now()}`);
+    const handleMessage: WebSocketMessageHandler = (message) => {
+      handleWebSocketMessage(message);
+    };
+    
+    const websocket = websocketService.connect(handleMessage);
     
     websocket.onopen = () => {
       setIsConnected(true);
       setWs(websocket);
-    };
-
-    websocket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      handleWebSocketMessage(message);
     };
 
     websocket.onclose = () => {
@@ -96,8 +94,8 @@ const App: React.FC = () => {
 
   const loadAccounts = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/api/accounts`);
-      setAccounts(response.data.accounts);
+      const accounts = await apiService.getAccounts();
+      setAccounts(accounts);
     } catch (error) {
       console.error('Failed to load accounts:', error);
     }
@@ -196,11 +194,8 @@ const App: React.FC = () => {
     form.reset();
 
     try {
-      const response = await axios.post(`${API_BASE}/api/process`, {
-        query: userMessage,
-        ui_context: activeTab  // Pass current tab context to backend
-      });
-      handleProcessResponse(response.data);
+      const data = await apiService.processMessage(userMessage, activeTab);
+      handleProcessResponse(data);
     } catch (error) {
       console.error('Error processing message:', error);
       addAssistantMessage('Sorry, I encountered an error processing your request.');
