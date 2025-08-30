@@ -47,8 +47,8 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ config, onSubmit, onCa
       label: field.label,
       placeholder: field.placeholder,
       required: field.required,
-      value: formData[field.id] || '',
-      onChange: (value: any) => handleFieldChange(field.id, value),
+      value: (formData[field.id] as string) || '',
+      onChange: (value: unknown) => handleFieldChange(field.id, value),
       description: field.help_text
     };
 
@@ -97,7 +97,7 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ config, onSubmit, onCa
           <Checkbox
             key={field.id}
             label={field.label}
-            checked={formData[field.id] || false}
+            checked={(formData[field.id] as boolean) || false}
             onChange={(event) => handleFieldChange(field.id, event.currentTarget.checked)}
           />
         );
@@ -127,10 +127,10 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ config, onSubmit, onCa
 
   return (
     <Card shadow="sm" padding="lg" radius="md" withBorder>
-      <Group position="apart" mb="md">
+      <Group justify="apart" mb="md">
         <div>
           <Title order={2}>{config.title}</Title>
-          <Text size="sm" color="dimmed">{config.subtitle}</Text>
+          <Text size="sm" c="dimmed">{config.subtitle}</Text>
         </div>
         <Badge color="green" variant="light">
           {config.complexity_reduction} simpler
@@ -138,10 +138,10 @@ export const DynamicForm: React.FC<DynamicFormProps> = ({ config, onSubmit, onCa
       </Group>
 
       <form onSubmit={handleSubmit}>
-        <Stack spacing="md">
+        <Stack gap="md">
           {config.fields.map(renderField)}
           
-          <Group position="apart" mt="xl">
+          <Group justify="apart" mt="xl">
             <Button variant="subtle" onClick={onCancel}>
               Cancel
             </Button>

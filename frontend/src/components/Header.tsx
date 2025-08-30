@@ -15,10 +15,14 @@ export const Header: React.FC<HeaderProps> = ({ isConnected }) => {
   return (
     <AppShell.Header data-testid="header">
       <Container size="xl" h="100%">
-        <Group h="100%" px="md" position="apart">
+        <Group h="100%" px="md" justify="apart">
           <Title order={3}>EBP Banking AI Prototype</Title>
           <Group>
-            <Badge color={isConnected ? 'green' : 'red'} variant="light">
+            <Badge 
+              data-testid="connection-status"
+              color={isConnected ? 'green' : 'red'} 
+              variant="light"
+            >
               {isConnected ? 'Connected' : 'Disconnected'}
             </Badge>
           </Group>

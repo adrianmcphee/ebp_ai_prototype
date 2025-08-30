@@ -9,11 +9,12 @@ import {
   TextInput,
   Button
 } from '@mantine/core';
+import type { UseFormReturnType } from '@mantine/form';
 import type { Message } from '../types';
 
 interface ChatPanelProps {
   messages: Message[];
-  form: any; // Form from useForm hook
+  form: UseFormReturnType<{ message: string }>;
   isConnected: boolean;
   onSubmit: (values: { message: string }) => void;
 }
@@ -33,7 +34,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
   return (
     <Card shadow="sm" padding="lg" radius="md" withBorder>
-      <Stack data-testid="messages" spacing="xs" style={{ height: '400px', overflowY: 'auto' }} mb="md">
+      <Stack data-testid="messages" gap="xs" style={{ height: '400px', overflowY: 'auto' }} mb="md">
         {messages.map((message) => (
           <Paper
             key={message.id}
@@ -79,8 +80,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         </Group>
       </form>
 
-      <Group data-testid="quick-actions" mt="md" spacing="xs">
-        <Text size="xs" color="dimmed">Quick examples:</Text>
+      <Group data-testid="quick-actions" mt="md" gap="xs">
+        <Text size="xs" c="dimmed">Quick examples:</Text>
         <Button 
           data-testid="quick-transfer"
           size="xs" 
