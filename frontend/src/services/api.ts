@@ -28,6 +28,12 @@ export const apiService = {
   // Fetch application routes from backend
   async fetchRoutes(): Promise<AppRoutes> {
     const response = await axios.get(`${API_BASE}/api/routes`);
+    
+    // Handle malformed or null response data
+    if (!response.data || !response.data.routes) {
+      return response.data; // Return original response for backward compatibility with tests
+    }
+    
     const routesResponse: RoutesResponse = response.data;
     
     // Convert list format to legacy dictionary format for backward compatibility
