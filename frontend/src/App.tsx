@@ -239,8 +239,15 @@ export const MainApp: React.FC = () => {
     <Container size="md" py="xl">
       <Title order={1} ta="center" mb="xl">Your Banking Dashboard</Title>
       
-      {/* Quick Actions and AI Assistant */}
-      <SimpleGrid cols={2} spacing="lg" mb="xl">
+      {/* Main Banking Hubs - moved to top */}
+      <SimpleGrid cols={1} spacing="xl" mb="xl">
+        <BankingScreens.AccountsOverview accounts={accounts} />
+        <BankingScreens.TransfersHub />
+        <BankingScreens.BillPayHub />
+      </SimpleGrid>
+
+      {/* Quick Actions and AI Assistant - moved to bottom */}
+      <SimpleGrid cols={2} spacing="lg">
         <Card shadow="sm" padding="lg" radius="md" withBorder>
           <Text fw={500} mb="xs">Quick Actions</Text>
           <Text size="sm" color="dimmed" mb="md">Common banking tasks</Text>
@@ -283,13 +290,6 @@ export const MainApp: React.FC = () => {
             Open Chat Assistant
           </Button>
         </Card>
-      </SimpleGrid>
-
-      {/* Main Banking Components */}
-      <SimpleGrid cols={1} spacing="xl">
-        <BankingScreens.AccountsOverview accounts={accounts} />
-        <BankingScreens.TransfersHub />
-        <BankingScreens.BillPayHub />
       </SimpleGrid>
     </Container>
   );
