@@ -42,16 +42,6 @@ const App: React.FC = () => {
     }
   });
 
-  useEffect(() => {
-    initializeSession();
-    loadAccounts();
-    connectWebSocket();
-
-    return () => {
-      websocketService.disconnect(ws);
-    };
-  }, []);
-
   const initializeSession = async () => {
     try {
       await apiService.initializeSession();
@@ -126,9 +116,27 @@ const App: React.FC = () => {
     setMessages(prev => [...prev, message]);
   };
 
-  const handleWebSocketMessage = (message: { type: string; data: ProcessResponse }) => {
-    if (message.type === 'result') {
-      handleProcessResponse(message.data);
+  const handleUIAssistance = (uiAssistance: UIAssistance) => {
+    if (uiAssistance.type === 'navigation') {
+      // Navigation Assistance - show pre-built screen
+      setCurrentScreen(uiAssistance.component_name || '');
+      setActiveTab('banking');
+      
+      notifications.show({
+        title: 'Navigation',
+        message: `Opened ${uiAssistance.title}`,
+        color: 'blue',
+      });
+    } else if (uiAssistance.type === 'transaction_form' && uiAssistance.form_config) {
+      // Transaction Assistance - show dynamic form
+      setDynamicForm(uiAssistance.form_config);
+      setActiveTab('transaction');
+      
+      notifications.show({
+        title: 'Smart Form Created',
+        message: `${uiAssistance.form_config.complexity_reduction} simpler than traditional forms`,
+        color: 'green',
+      });
     }
   };
 
@@ -154,27 +162,9 @@ const App: React.FC = () => {
     addAssistantMessage(responseMessage, data);
   };
 
-  const handleUIAssistance = (uiAssistance: UIAssistance) => {
-    if (uiAssistance.type === 'navigation') {
-      // Navigation Assistance - show pre-built screen
-      setCurrentScreen(uiAssistance.component_name || '');
-      setActiveTab('banking');
-      
-      notifications.show({
-        title: 'Navigation',
-        message: `Opened ${uiAssistance.title}`,
-        color: 'blue',
-      });
-    } else if (uiAssistance.type === 'transaction_form' && uiAssistance.form_config) {
-      // Transaction Assistance - show dynamic form
-      setDynamicForm(uiAssistance.form_config);
-      setActiveTab('transaction');
-      
-      notifications.show({
-        title: 'Smart Form Created',
-        message: `${uiAssistance.form_config.complexity_reduction} simpler than traditional forms`,
-        color: 'green',
-      });
+  const handleWebSocketMessage = (message: { type: string; data: ProcessResponse }) => {
+    if (message.type === 'result') {
+      handleProcessResponse(message.data);
     }
   };
 
@@ -217,9 +207,9 @@ const App: React.FC = () => {
           <Title order={2} ta="center" mb="xl">Banking Dashboard</Title>
           <SimpleGrid cols={2} spacing="lg">
             <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Text weight={500} mb="xs">Quick Actions</Text>
+              <Text fw={500} mb="xs">Quick Actions</Text>
               <Text size="sm" color="dimmed" mb="md">Common banking tasks</Text>
-              <Stack spacing="xs">
+              <Stack gap="xs">
                 <Button variant="light" fullWidth onClick={() => setCurrentScreen('AccountsOverview')}>
                   View Accounts
                 </Button>
@@ -232,7 +222,7 @@ const App: React.FC = () => {
               </Stack>
             </Card>
             <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Text weight={500} mb="xs">AI Assistant</Text>
+              <Text fw={500} mb="xs">AI Assistant</Text>
               <Text size="sm" color="dimmed" mb="md">Natural language banking</Text>
               <Button variant="light" fullWidth onClick={() => setActiveTab('chat')}>
                 Open Chat Assistant
@@ -259,7 +249,17 @@ const App: React.FC = () => {
     return <div>Screen not found</div>;
   };
 
+  // useEffect needs to be after all function declarations to avoid hoisting issues  
+  useEffect(() => {
+    initializeSession();
+    loadAccounts();
+    connectWebSocket();
 
+    return () => {
+      websocketService.disconnect(ws);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <MantineProvider>
@@ -340,36 +340,38 @@ const App: React.FC = () => {
                           background: 'white'
                         }}
                       >
-                        <Group position="apart" mb="md">
+                        <Group justify="apart" mb="md">
                           <Group>
                             <Text>🤖</Text>
-                            <Text fw={500}>Navigation Assistant</Text>
+                            <Text fw={500} data-testid="navigation-assistant-title">Navigation Assistant</Text>
                           </Group>
                           <ActionIcon 
                             size="sm" 
                             variant="subtle"
                             onClick={() => setShowNavigationAssistant(false)}
+                            data-testid="navigation-assistant-close"
                           >
                             ✕
                           </ActionIcon>
                         </Group>
                         
-                        <Text size="sm" color="dimmed" mb="md">
+                        <Text size="sm" color="dimmed" mb="md" data-testid="navigation-assistant-description">
                           Tell me where you want to go and I'll take you there.
                         </Text>
                         
                         <form onSubmit={form.onSubmit(handleSubmit)}>
-                          <Stack spacing="sm">
+                          <Stack gap="sm">
                             <TextInput
                               {...form.getInputProps('message')}
                               placeholder="Try: 'Take me to international transfers'"
                               size="sm"
                             />
-                            <Group position="apart">
+                            <Group justify="apart">
                               <Button 
                                 size="xs" 
                                 variant="subtle" 
                                 onClick={() => form.setFieldValue('message', 'Take me to international transfers')}
+                                data-testid="suggestion-international-transfers"
                               >
                                 International Transfers
                               </Button>
@@ -377,6 +379,7 @@ const App: React.FC = () => {
                                 size="xs" 
                                 variant="subtle" 
                                 onClick={() => form.setFieldValue('message', 'Show me account overview')}
+                                data-testid="suggestion-account-overview"
                               >
                                 Account Overview
                               </Button>
@@ -385,6 +388,7 @@ const App: React.FC = () => {
                               type="submit" 
                               disabled={!isConnected}
                               size="sm"
+                              data-testid="navigation-submit-button"
                             >
                               Navigate
                             </Button>
@@ -408,11 +412,11 @@ const App: React.FC = () => {
                       />
                     ) : (
                       <Card shadow="sm" padding="lg" radius="md" withBorder>
-                        <Title order={2} ta="center" mb="md">Transaction Assistance</Title>
-                        <Text ta="center" color="dimmed" mb="xl">
+                        <Title order={2} ta="center" mb="md" data-testid="transaction-assistance-title">Transaction Assistance</Title>
+                        <Text ta="center" color="dimmed" mb="xl" data-testid="transaction-assistance-description">
                           Smart forms will appear here when you make transaction requests through the chat assistant.
                         </Text>
-                        <Text ta="center">
+                        <Text ta="center" data-testid="transaction-assistance-instructions">
                           Try saying: "Send $500 to my friend in Canada" in the chat to see a custom form.
                         </Text>
                       </Card>
