@@ -11,7 +11,7 @@ import {
   Card,
   Title,
   SimpleGrid,
-  Tabs,
+
   ActionIcon,
   Affix,
   Transition
@@ -26,7 +26,7 @@ import { ChatPanel } from './components/ChatPanel';
 import { Header } from './components/Header';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
-import { APP_ROUTES, getRouteByComponent, getTabForRoute, getRouteByTab, isValidRoute } from './config/routes';
+import { APP_ROUTES, getRouteByComponent, getTabForRoute, isValidRoute } from './config/routes';
 
 export const MainApp: React.FC = () => {
   const navigate = useNavigate();
@@ -415,25 +415,13 @@ export const MainApp: React.FC = () => {
     <MantineProvider>
       <div data-testid="app">
         <AppShell
-          header={{ height: 60 }}
+          header={{ height: 56 }}
           padding="md"
         >
           <Header isConnected={isConnected} />
 
           <AppShell.Main>
             <Container size="xl">
-              {/* Visual Tab Navigation */}
-              <Tabs value={activeTab} onChange={(value) => {
-                const route = getRouteByTab(value || 'banking');
-                if (route) navigate(route);
-              }}>
-                <Tabs.List data-testid="tab-list">
-                  <Tabs.Tab value="banking" data-testid="tab-banking">🧭 Navigation Assistance</Tabs.Tab>
-                  <Tabs.Tab value="transaction" data-testid="tab-transaction">📝 Transaction Assistance</Tabs.Tab>
-                  <Tabs.Tab value="chat" data-testid="tab-chat">💬 Chat Assistant</Tabs.Tab>
-                </Tabs.List>
-              </Tabs>
-
               {/* Main Content Area - Configuration-driven Routes */}
               <Container size="xl" pt="md">
                 <Routes>

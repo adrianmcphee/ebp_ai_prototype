@@ -4,7 +4,7 @@ export const APP_ROUTES = {
   "/": {
     component: "BankingDashboard",
     intent: "navigation.banking.dashboard", 
-    breadcrumb: "Banking",
+    breadcrumb: "Dashboard",
     tab: "banking"
   },
   "/chat": {
