@@ -1,17 +1,25 @@
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
+import { vi } from 'vitest';
 
-// Mock crypto.randomUUID for tests
-Object.defineProperty(global, 'crypto', {
+// Mock crypto.randomUUID for deterministic tests
+Object.defineProperty(globalThis, 'crypto', {
   value: {
-    randomUUID: () => 'test-uuid-' + Math.random().toString(36).substr(2, 9)
+    randomUUID: () => 'test-uuid-123456789'
   }
 });
 
 // Mock ResizeObserver
-global.ResizeObserver = class ResizeObserver {
-  constructor(cb: ResizeObserverCallback) {}
-  observe(target: Element) {}
-  unobserve(target: Element) {}
+globalThis.ResizeObserver = class ResizeObserver {
+  constructor(callback: ResizeObserverCallback) {
+    // Store callback to satisfy TypeScript
+    void callback;
+  }
+  observe(target: Element) {
+    void target;
+  }
+  unobserve(target: Element) {
+    void target;
+  }
   disconnect() {}
 };
 
@@ -29,3 +37,24 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: () => {},
   }),
 });
+
+// Mock IntersectionObserver with proper interface
+const mockIntersectionObserver = vi.fn(() => ({
+  observe: vi.fn(),
+  unobserve: vi.fn(),
+  disconnect: vi.fn(),
+  root: null,
+  rootMargin: '0px',
+  thresholds: [0]
+}));
+
+globalThis.IntersectionObserver = mockIntersectionObserver as unknown as typeof IntersectionObserver;
+
+// Mock requestAnimationFrame and cancelAnimationFrame
+globalThis.requestAnimationFrame = (callback: FrameRequestCallback): number => {
+  return setTimeout(callback, 0);
+};
+
+globalThis.cancelAnimationFrame = (id: number): void => {
+  clearTimeout(id);
+};

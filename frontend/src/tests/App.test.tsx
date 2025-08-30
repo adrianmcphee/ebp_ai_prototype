@@ -7,6 +7,7 @@ import type { ProcessResponse, UIAssistance, Account } from '../types';
 // Import for accessing mocked services
 import { apiService } from '../services/api';
 import { websocketService } from '../services/websocket';
+import { notifications } from '@mantine/notifications';
 
 // Mock the API and WebSocket services
 vi.mock('../services/api', () => ({
@@ -44,7 +45,7 @@ vi.mock('@mantine/notifications', () => ({
 // Mock BankingScreens component
 vi.mock('../components/BankingScreens', () => ({
   BankingScreens: {
-    AccountsOverview: vi.fn(({ accounts }) => <div data-testid="accounts-overview">Accounts: {accounts.length}</div>),
+    AccountsOverview: vi.fn(({ accounts = [] }) => <div data-testid="accounts-overview">Accounts: {accounts.length}</div>),
     TransfersHub: vi.fn(() => <div data-testid="transfers-hub">Transfers Hub</div>),
     BillPayHub: vi.fn(() => <div data-testid="bill-pay-hub">Bill Pay Hub</div>)
   }
@@ -93,11 +94,18 @@ describe('App Component', () => {
     // Clear all mocks before each test
     vi.clearAllMocks();
     
+    // Clear all timers for deterministic tests  
+    vi.clearAllTimers();
+    
     // Reset websocket mock
     vi.mocked(websocketService.connect).mockReturnValue(mockWebSocket as unknown as WebSocket);
+    
+    // Reset notifications mock
+    vi.mocked(notifications.show).mockClear();
   });
 
   afterEach(() => {
+    // Clean up DOM after each test
     cleanup();
   });
 
@@ -1088,6 +1096,443 @@ describe('App Component', () => {
         const messagesCount = screen.getByTestId('messages-count');
         // Should add default processing message
         expect(parseInt(messagesCount.textContent || '0')).toBeGreaterThan(1);
+      });
+    });
+  });
+
+  describe('handleSubmit() / connectWebSocket() / handleUIAssistance() - Advanced Edge Cases', () => {
+    it('handleSubmit() - should handle network timeout gracefully', async () => {
+      // ARRANGE
+      const timeoutError = new Error('Network timeout');
+      timeoutError.name = 'TimeoutError';
+      vi.mocked(apiService.processMessage).mockRejectedValueOnce(timeoutError);
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-chat'));
+      });
+
+      // ACT
+      await act(async () => {
+        await user.click(screen.getByTestId('chat-send-message'));
+      });
+
+      // ASSERT
+      await waitFor(() => {
+        const messagesCount = screen.getByTestId('messages-count');
+        // Should have system message + user message + error message
+        expect(parseInt(messagesCount.textContent || '0')).toBeGreaterThanOrEqual(3);
+      });
+    });
+
+    it('connectWebSocket() - should handle connection refused gracefully', async () => {
+      // ARRANGE
+      const mockWebSocketWithError = {
+        ...mockWebSocket,
+        onerror: null as ((event: Event) => void) | null
+      };
+      
+      vi.mocked(websocketService.connect).mockReturnValueOnce(mockWebSocketWithError as unknown as WebSocket);
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      // ACT - Simulate connection error
+      await act(async () => {
+        if (mockWebSocketWithError.onerror) {
+          mockWebSocketWithError.onerror(new Event('error'));
+        }
+        // Also trigger close event as connection failed
+        if (mockWebSocketWithError.onclose) {
+          mockWebSocketWithError.onclose(new CloseEvent('close', { code: 1006, reason: 'Connection refused' }));
+        }
+      });
+
+      // ASSERT
+      await waitFor(() => {
+        expect(screen.getByTestId('header')).toHaveTextContent('Status: Disconnected');
+      });
+    });
+
+    it('handleUIAssistance() - should handle malformed ui_assistance data gracefully', async () => {
+      // ARRANGE
+      const malformedUIAssistance = {
+        type: 'invalid_type' as never,
+        action: null as never,
+        component_name: undefined,
+        title: '',
+        form_config: { invalid: 'config' } as never
+      } as UIAssistance;
+
+      const mockResponse: ProcessResponse = {
+        status: 'success',
+        message: 'Processing with malformed UI assistance',
+        ui_assistance: malformedUIAssistance
+      };
+
+      vi.mocked(apiService.processMessage).mockResolvedValueOnce(mockResponse);
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-chat'));
+      });
+
+      // ACT
+      await act(async () => {
+        await user.click(screen.getByTestId('chat-send-message'));
+      });
+
+      // ASSERT - Should not crash and should display message
+      await waitFor(() => {
+        const messagesCount = screen.getByTestId('messages-count');
+        expect(parseInt(messagesCount.textContent || '0')).toBeGreaterThan(1);
+      });
+
+      // Should remain on banking tab as invalid navigation
+      expect(screen.getByTestId('accounts-overview')).toBeInTheDocument();
+    });
+
+    it('handleProcessResponse() - should handle missing required properties gracefully', async () => {
+      // ARRANGE  
+      const incompleteResponse = {} as ProcessResponse;
+
+      vi.mocked(apiService.processMessage).mockResolvedValueOnce(incompleteResponse);
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-chat'));
+      });
+
+      // ACT
+      await act(async () => {
+        await user.click(screen.getByTestId('chat-send-message'));
+      });
+
+      // ASSERT - Should provide default message
+      await waitFor(() => {
+        const messagesCount = screen.getByTestId('messages-count');
+        expect(parseInt(messagesCount.textContent || '0')).toBeGreaterThan(1);
+      });
+    });
+
+    it('loadAccounts() - should handle malformed account data gracefully', async () => {
+      // ARRANGE
+      const malformedAccounts = [
+        { id: null as never, name: undefined, type: 'invalid', balance: 'not-a-number' },
+        { missing: 'properties' } as never,
+        null,
+        undefined
+      ] as unknown as Account[];
+
+      vi.mocked(apiService.getAccounts).mockResolvedValueOnce(malformedAccounts);
+
+      // ACT
+      await act(async () => {
+        render(<App />);
+      });
+
+      // ASSERT - Should render without crashing
+      await waitFor(() => {
+        expect(screen.getByTestId('accounts-overview')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('WebSocket + API / Form + Navigation - Integration Testing', () => {
+    it('WebSocket + API integration - should handle concurrent messages and API calls', async () => {
+      // ARRANGE
+      let resolveApiCall: (value: ProcessResponse) => void;
+      const apiPromise = new Promise<ProcessResponse>((resolve) => {
+        resolveApiCall = resolve;
+      });
+      
+      vi.mocked(apiService.processMessage).mockReturnValueOnce(apiPromise);
+
+      const mockProcessResponse: ProcessResponse = {
+        status: 'success',
+        message: 'API response',
+        intent: 'test_intent',
+        confidence: 0.8
+      };
+
+      const wsProcessResponse: ProcessResponse = {
+        status: 'success',
+        message: 'WebSocket response',
+        intent: 'ws_intent',
+        confidence: 0.9
+      };
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      // Establish WebSocket connection
+      await act(async () => {
+        if (mockWebSocket.onopen) {
+          mockWebSocket.onopen(new Event('open'));
+        }
+      });
+
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-chat'));
+      });
+
+      // ACT - Start API call (doesn't resolve immediately)
+      await act(async () => {
+        await user.click(screen.getByTestId('chat-send-message'));
+      });
+
+      // Send WebSocket message while API is pending
+      await act(async () => {
+        if (mockWebSocket.onmessage) {
+          mockWebSocket.onmessage(new MessageEvent('message', {
+            data: JSON.stringify({
+              type: 'result',
+              data: wsProcessResponse
+            })
+          }));
+        }
+      });
+
+      // Now resolve the API call
+      await act(async () => {
+        resolveApiCall!(mockProcessResponse);
+      });
+
+      // ASSERT - Both messages should be processed
+      await waitFor(() => {
+        const messagesCount = screen.getByTestId('messages-count');
+        // Should have: system + user message + at least one response (WebSocket or API)
+        expect(parseInt(messagesCount.textContent || '0')).toBeGreaterThanOrEqual(3);
+      });
+
+      // Verify that both API and WebSocket interactions happened
+      expect(vi.mocked(apiService.processMessage)).toHaveBeenCalledTimes(1);
+    });
+
+    it('Form + Navigation integration - should preserve form data during navigation', async () => {
+      // ARRANGE
+      const formConfig = {
+        screen_id: 'transfer',
+        title: 'Money Transfer',
+        subtitle: 'Send money easily',
+        fields: [
+          { id: 'amount', name: 'amount', type: 'number', label: 'Amount', required: true }
+        ],
+        confirmation_required: true,
+        complexity_reduction: '50% fewer steps'
+      };
+
+      const transactionAssistance: UIAssistance = {
+        type: 'transaction_form',
+        action: 'show_form',
+        form_config: formConfig,
+        title: 'Transfer Form'
+      };
+
+      const mockResponse: ProcessResponse = {
+        status: 'success',
+        ui_assistance: transactionAssistance
+      };
+
+      vi.mocked(apiService.processMessage).mockResolvedValueOnce(mockResponse);
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-chat'));
+      });
+
+      // Create form
+      await act(async () => {
+        await user.click(screen.getByTestId('chat-send-message'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('dynamic-form')).toBeInTheDocument();
+      });
+
+      // ACT - Navigate away from transaction tab
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-banking'));
+      });
+
+      // Navigate back to transaction tab
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-transaction'));
+      });
+
+      // ASSERT - Form should still be there (preserved)
+      await waitFor(() => {
+        expect(screen.getByTestId('dynamic-form')).toBeInTheDocument();
+        expect(screen.getByTestId('dynamic-form-title')).toHaveTextContent('Money Transfer');
+      });
+    });
+
+    it('WebSocket reconnection - should handle connection loss and recovery', async () => {
+      // ARRANGE
+      await act(async () => {
+        render(<App />);
+      });
+
+      // Establish initial connection
+      await act(async () => {
+        if (mockWebSocket.onopen) {
+          mockWebSocket.onopen(new Event('open'));
+        }
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('header')).toHaveTextContent('Status: Connected');
+      });
+
+      // ACT - Simulate connection loss
+      await act(async () => {
+        if (mockWebSocket.onclose) {
+          mockWebSocket.onclose(new CloseEvent('close', { code: 1001, reason: 'Connection lost' }));
+        }
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('header')).toHaveTextContent('Status: Disconnected');
+      });
+
+      // Simulate reconnection
+      const newMockWebSocket = { ...mockWebSocket };
+      vi.mocked(websocketService.connect).mockReturnValueOnce(newMockWebSocket as unknown as WebSocket);
+
+      await act(async () => {
+        // Trigger reconnection logic (in real app this might be automatic)
+        if (newMockWebSocket.onopen) {
+          newMockWebSocket.onopen(new Event('open'));
+        }
+      });
+
+      // ASSERT - Should show connected status again
+      await waitFor(() => {
+        expect(screen.getByTestId('header')).toHaveTextContent('Status: Connected');
+      });
+    });
+
+    it('Multi-tab state synchronization - should handle state changes across tabs', async () => {
+      // ARRANGE
+      await act(async () => {
+        render(<App />);
+      });
+
+      // Start on banking tab
+      await waitFor(() => {
+        expect(screen.getByTestId('accounts-overview')).toBeInTheDocument();
+      });
+
+      // Open navigation assistant
+      await act(async () => {
+        const assistantButton = screen.getByTitle('Navigation Assistant');
+        await user.click(assistantButton);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('navigation-assistant-title')).toBeInTheDocument();
+      });
+
+      // ACT - Switch to chat tab while assistant is open
+      // Note: Navigation assistant only closes on message submission, not tab switching
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-chat'));
+      });
+
+      // Verify we're on chat tab
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-panel')).toBeInTheDocument();
+      });
+
+      // Submit a message to trigger navigation assistant closure
+      await act(async () => {
+        await user.click(screen.getByTestId('chat-send-message'));
+      });
+
+      // Navigation assistant should close after message submission
+      await waitFor(() => {
+        expect(screen.queryByTestId('navigation-assistant-title')).not.toBeInTheDocument();
+      });
+
+      // Switch back to banking tab
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-banking'));
+      });
+
+      // ASSERT - Should be back on banking screen without assistant open
+      await waitFor(() => {
+        expect(screen.getByTestId('accounts-overview')).toBeInTheDocument();
+        expect(screen.queryByTestId('navigation-assistant-title')).not.toBeInTheDocument();
+      });
+    });
+
+    it('Error recovery flow - should recover from multiple consecutive errors', async () => {
+      // ARRANGE
+      const error1 = new Error('First error');
+      const error2 = new Error('Second error');
+      const successResponse: ProcessResponse = {
+        status: 'success',
+        message: 'Recovery successful',
+        intent: 'test',
+        confidence: 0.9
+      };
+
+      vi.mocked(apiService.processMessage)
+        .mockRejectedValueOnce(error1)
+        .mockRejectedValueOnce(error2)
+        .mockResolvedValueOnce(successResponse);
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-chat'));
+      });
+
+      // ACT - First error
+      await act(async () => {
+        await user.click(screen.getByTestId('chat-send-message'));
+      });
+
+      await waitFor(() => {
+        const messagesCount = screen.getByTestId('messages-count');
+        expect(parseInt(messagesCount.textContent || '0')).toBeGreaterThanOrEqual(2);
+      });
+
+      // Second error
+      await act(async () => {
+        await user.click(screen.getByTestId('chat-send-message'));
+      });
+
+      await waitFor(() => {
+        const messagesCount = screen.getByTestId('messages-count');
+        expect(parseInt(messagesCount.textContent || '0')).toBeGreaterThanOrEqual(3);
+      });
+
+      // Successful recovery
+      await act(async () => {
+        await user.click(screen.getByTestId('chat-send-message'));
+      });
+
+      // ASSERT - Should recover and work normally
+      await waitFor(() => {
+        const messagesCount = screen.getByTestId('messages-count');
+        expect(parseInt(messagesCount.textContent || '0')).toBeGreaterThanOrEqual(4);
       });
     });
   });

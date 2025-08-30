@@ -217,9 +217,9 @@ const App: React.FC = () => {
           <Title order={2} ta="center" mb="xl">Banking Dashboard</Title>
           <SimpleGrid cols={2} spacing="lg">
             <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Text weight={500} mb="xs">Quick Actions</Text>
+              <Text fw={500} mb="xs">Quick Actions</Text>
               <Text size="sm" color="dimmed" mb="md">Common banking tasks</Text>
-              <Stack spacing="xs">
+              <Stack gap="xs">
                 <Button variant="light" fullWidth onClick={() => setCurrentScreen('AccountsOverview')}>
                   View Accounts
                 </Button>
@@ -232,7 +232,7 @@ const App: React.FC = () => {
               </Stack>
             </Card>
             <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Text weight={500} mb="xs">AI Assistant</Text>
+              <Text fw={500} mb="xs">AI Assistant</Text>
               <Text size="sm" color="dimmed" mb="md">Natural language banking</Text>
               <Button variant="light" fullWidth onClick={() => setActiveTab('chat')}>
                 Open Chat Assistant
@@ -340,7 +340,7 @@ const App: React.FC = () => {
                           background: 'white'
                         }}
                       >
-                        <Group position="apart" mb="md">
+                        <Group justify="apart" mb="md">
                           <Group>
                             <Text>🤖</Text>
                             <Text fw={500} data-testid="navigation-assistant-title">Navigation Assistant</Text>
@@ -360,13 +360,13 @@ const App: React.FC = () => {
                         </Text>
                         
                         <form onSubmit={form.onSubmit(handleSubmit)}>
-                          <Stack spacing="sm">
+                          <Stack gap="sm">
                             <TextInput
                               {...form.getInputProps('message')}
                               placeholder="Try: 'Take me to international transfers'"
                               size="sm"
                             />
-                            <Group position="apart">
+                            <Group justify="apart">
                               <Button 
                                 size="xs" 
                                 variant="subtle" 
