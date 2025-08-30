@@ -10,6 +10,49 @@ import { apiService } from '../services/api';
 import { websocketService } from '../services/websocket';
 import { notifications } from '@mantine/notifications';
 
+// Mock the routes service
+vi.mock('../services/routes', () => ({
+  fetchAppRoutes: vi.fn().mockResolvedValue({
+    '/': { component: 'BankingDashboard', intent: 'view_dashboard', breadcrumb: 'Dashboard', tab: 'banking' },
+    '/chat': { component: 'ChatPanel', intent: 'open_chat', breadcrumb: 'Chat', tab: 'chat' },
+    '/transaction': { component: 'TransactionAssistance', intent: 'transaction_assistance', breadcrumb: 'Transaction', tab: 'transaction' },
+    '/banking/accounts': { component: 'AccountsOverview', intent: 'view_accounts', breadcrumb: 'Accounts', tab: 'banking' },
+    '/banking/transfers': { component: 'TransfersHub', intent: 'view_transfers', breadcrumb: 'Transfers', tab: 'banking' },
+    '/banking/transfers/wire': { component: 'WireTransferForm', intent: 'wire_transfer', breadcrumb: 'Wire Transfer', tab: 'banking' },
+    '/banking/payments/bills': { component: 'BillPayHub', intent: 'bill_pay', breadcrumb: 'Bill Pay', tab: 'banking' }
+  }),
+  createDerivedMappings: vi.fn().mockReturnValue({
+    getTabForRoute: vi.fn((path) => {
+      const routeTabMap: Record<string, string> = {
+        '/': 'banking',
+        '/chat': 'chat', 
+        '/transaction': 'transaction',
+        '/banking/accounts': 'banking',
+        '/banking/transfers': 'banking',
+        '/banking/transfers/wire': 'banking',
+        '/banking/payments/bills': 'banking'
+      };
+      return routeTabMap[path] || 'banking';
+    }),
+    isValidRoute: vi.fn((path) => [
+      '/', '/chat', '/transaction', '/banking/accounts', 
+      '/banking/transfers', '/banking/transfers/wire', '/banking/payments/bills'
+    ].includes(path)),
+    getRouteByComponent: vi.fn((componentName) => {
+      const componentRouteMap: Record<string, string> = {
+        'BankingDashboard': '/',
+        'ChatPanel': '/chat',
+        'TransactionAssistance': '/transaction', 
+        'AccountsOverview': '/banking/accounts',
+        'TransfersHub': '/banking/transfers',
+        'WireTransferForm': '/banking/transfers/wire',
+        'BillPayHub': '/banking/payments/bills'
+      };
+      return componentRouteMap[componentName];
+    })
+  })
+}));
+
 // Mock the API and WebSocket services
 vi.mock('../services/api', () => ({
   apiService: {
@@ -19,6 +62,15 @@ vi.mock('../services/api', () => ({
       message: 'Test response',
       intent: 'test',
       confidence: 0.9
+    }),
+    fetchRoutes: vi.fn().mockResolvedValue({
+      '/': { component: 'BankingDashboard', intent: 'view_dashboard', breadcrumb: 'Dashboard', tab: 'banking' },
+      '/chat': { component: 'ChatPanel', intent: 'open_chat', breadcrumb: 'Chat', tab: 'chat' },
+      '/transaction': { component: 'TransactionAssistance', intent: 'transaction_assistance', breadcrumb: 'Transaction', tab: 'transaction' },
+      '/banking/accounts': { component: 'AccountsOverview', intent: 'view_accounts', breadcrumb: 'Accounts', tab: 'banking' },
+      '/banking/transfers': { component: 'TransfersHub', intent: 'view_transfers', breadcrumb: 'Transfers', tab: 'banking' },
+      '/banking/transfers/wire': { component: 'WireTransferForm', intent: 'wire_transfer', breadcrumb: 'Wire Transfer', tab: 'banking' },
+      '/banking/payments/bills': { component: 'BillPayHub', intent: 'bill_pay', breadcrumb: 'Bill Pay', tab: 'banking' }
     })
   }
 }));
@@ -216,7 +268,7 @@ describe('App Component', () => {
       
       await waitFor(() => {
         // Should render the banking dashboard by default
-        expect(screen.getByText('Your Banking Dashboard')).toBeDefined();
+        expect(screen.getByTestId('accounts-overview')).toBeDefined();
         expect(screen.getByTestId('dashboard-view-accounts')).toBeDefined();
       });
     });
@@ -647,7 +699,9 @@ describe('App Component', () => {
         renderAppWithRouter(['/chat']); // Start on chat tab
       });
 
-      expect(screen.getByTestId('notifications-container')).toBeDefined();
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-panel')).toBeDefined();
+      });
 
       await act(async () => {
         await user.click(screen.getByTestId('chat-send-message'));
@@ -690,7 +744,9 @@ describe('App Component', () => {
         renderAppWithRouter(['/chat']); // Start on chat tab
       });
 
-      expect(screen.getByTestId('notifications-container')).toBeDefined();
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-panel')).toBeDefined();
+      });
 
       await act(async () => {
         await user.click(screen.getByTestId('chat-send-message'));
@@ -744,6 +800,10 @@ describe('App Component', () => {
 
       renderAppWithRouter(['/chat']); // Start on chat tab
 
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-panel')).toBeDefined();
+      });
+
       await act(async () => {
         await user.click(screen.getByTestId('chat-send-message'));
       });
@@ -776,6 +836,10 @@ describe('App Component', () => {
 
       await act(async () => {
         renderAppWithRouter(['/chat']); // Start on chat tab
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-panel')).toBeDefined();
       });
 
       await act(async () => {
@@ -909,6 +973,10 @@ describe('App Component', () => {
         renderAppWithRouter(['/chat']); // Start on chat tab
       });
 
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-panel')).toBeDefined();
+      });
+
       await act(async () => {
         await user.click(screen.getByTestId('chat-send-message'));
       });
@@ -1025,7 +1093,7 @@ describe('App Component', () => {
       // Banking dashboard route
       renderAppWithRouter(['/']);
       await waitFor(() => {
-        expect(screen.getByText('Your Banking Dashboard')).toBeDefined();
+        expect(screen.getByTestId('accounts-overview')).toBeDefined();
       });
 
       // Transaction route  
@@ -1043,6 +1111,10 @@ describe('App Component', () => {
 
     it('BankingDashboard() - should handle dashboard navigation buttons', async () => {
       renderAppWithRouter(['/']); // Start on banking dashboard
+
+      await waitFor(() => {
+        expect(screen.getByTestId('dashboard-view-accounts')).toBeDefined();
+      });
 
       // Test view accounts button navigation
       await act(async () => {
@@ -1121,6 +1193,10 @@ describe('App Component', () => {
 
       renderAppWithRouter(['/chat']); // Start on chat tab
 
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-panel')).toBeDefined();
+      });
+
       await act(async () => {
         await user.click(screen.getByTestId('chat-send-message'));
       });
@@ -1149,6 +1225,10 @@ describe('App Component', () => {
       vi.mocked(apiService.processMessage).mockResolvedValueOnce(mockResponse);
 
       renderAppWithRouter(['/chat']); // Start on chat tab
+
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-panel')).toBeDefined();
+      });
 
       await act(async () => {
         await user.click(screen.getByTestId('chat-send-message'));
