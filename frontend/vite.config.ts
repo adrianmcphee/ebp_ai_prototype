@@ -13,5 +13,11 @@ export default defineConfig({
   },
   css: {
     postcss: {} // Empty PostCSS config to avoid config file lookup
-  }
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
+    css: true,
+  },
 })
