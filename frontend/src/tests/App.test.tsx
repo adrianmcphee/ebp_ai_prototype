@@ -39,7 +39,8 @@ vi.mock('../services/websocket', () => ({
 vi.mock('@mantine/notifications', () => ({
   notifications: {
     show: vi.fn()
-  }
+  },
+  Notifications: vi.fn(() => <div data-testid="notifications-container" />)
 }));
 
 // Mock BankingScreens component
@@ -109,8 +110,8 @@ describe('App Component', () => {
     cleanup();
   });
 
-    describe('useEffect() - Component Lifecycle', () => {
-    it('useEffect() - should render the main app container on mount', async () => {
+    describe('JSX render() - Component Rendering', () => {
+    it('JSX render() - should render the main app container on mount', async () => {
       await act(async () => {
         render(<App />);
       });
@@ -120,6 +121,20 @@ describe('App Component', () => {
         expect(appElement).toBeInTheDocument();
       });
     });
+
+    it('JSX render() - should render Notifications component for notification display', async () => {
+      await act(async () => {
+        render(<App />);
+      });
+      
+      await waitFor(() => {
+        const notificationsElement = screen.getByTestId('notifications-container');
+        expect(notificationsElement).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('useEffect() - Component Lifecycle', () => {
 
     it('initializeSession() - should call API service on component mount', async () => {
       await act(async () => {
@@ -709,6 +724,176 @@ describe('App Component', () => {
     });
   });
 
+  describe('notifications.show() - Notification System Integration', () => {
+    it('initializeSession() - should call notifications.show on connection error', async () => {
+      const mockError = new Error('Failed to initialize session');
+      vi.mocked(apiService.initializeSession).mockRejectedValueOnce(mockError);
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      // Verify Notifications component is rendered to display the error notification
+      expect(screen.getByTestId('notifications-container')).toBeInTheDocument();
+
+      // Verify initializeSession error calls notifications.show with correct parameters
+      await waitFor(() => {
+        expect(vi.mocked(notifications.show)).toHaveBeenCalledWith({
+          title: 'Connection Error',
+          message: 'Failed to connect to banking assistant',
+          color: 'red'
+        });
+      });
+    });
+
+    it('handleUIAssistance() - should call notifications.show for navigation type assistance', async () => {
+      const navigationAssistance: UIAssistance = {
+        type: 'navigation',
+        action: 'navigate',
+        component_name: 'AccountsOverview',
+        title: 'Accounts Overview'
+      };
+
+      const mockResponse: ProcessResponse = {
+        status: 'success',
+        ui_assistance: navigationAssistance
+      };
+
+      vi.mocked(apiService.processMessage).mockResolvedValueOnce(mockResponse);
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      // Verify Notifications component is rendered to display navigation notifications
+      expect(screen.getByTestId('notifications-container')).toBeInTheDocument();
+
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-chat'));
+      });
+
+      await act(async () => {
+        await user.click(screen.getByTestId('chat-send-message'));
+      });
+
+      // Verify handleUIAssistance calls notifications.show for navigation
+      await waitFor(() => {
+        expect(vi.mocked(notifications.show)).toHaveBeenCalledWith({
+          title: 'Navigation',
+          message: 'Opened Accounts Overview',
+          color: 'blue'
+        });
+      });
+    });
+
+    it('handleUIAssistance() - should call notifications.show for transaction_form type assistance', async () => {
+      const formConfig = {
+        screen_id: 'transfer',
+        title: 'Money Transfer',
+        subtitle: 'Send money easily',
+        fields: [],
+        confirmation_required: true,
+        complexity_reduction: '50% fewer steps'
+      };
+
+      const transactionAssistance: UIAssistance = {
+        type: 'transaction_form',
+        action: 'show_form',
+        form_config: formConfig,
+        title: 'Transfer Form'
+      };
+
+      const mockResponse: ProcessResponse = {
+        status: 'success',
+        ui_assistance: transactionAssistance
+      };
+
+      vi.mocked(apiService.processMessage).mockResolvedValueOnce(mockResponse);
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      // Verify Notifications component is rendered to display form notifications
+      expect(screen.getByTestId('notifications-container')).toBeInTheDocument();
+
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-chat'));
+      });
+
+      await act(async () => {
+        await user.click(screen.getByTestId('chat-send-message'));
+      });
+
+      // Verify handleUIAssistance calls notifications.show for transaction form
+      await waitFor(() => {
+        expect(vi.mocked(notifications.show)).toHaveBeenCalledWith({
+          title: 'Smart Form Created',
+          message: '50% fewer steps simpler than traditional forms',
+          color: 'green'
+        });
+      });
+    });
+
+    it('handleDynamicFormSubmit() - should call notifications.show on form submission', async () => {
+      const formConfig = {
+        screen_id: 'transfer',
+        title: 'Money Transfer',
+        subtitle: 'Send money easily',
+        fields: [],
+        confirmation_required: true,
+        complexity_reduction: '50% fewer steps'
+      };
+
+      const transactionAssistance: UIAssistance = {
+        type: 'transaction_form',
+        action: 'show_form',
+        form_config: formConfig,
+        title: 'Transfer Form'
+      };
+
+      const mockResponse: ProcessResponse = {
+        status: 'success',
+        ui_assistance: transactionAssistance
+      };
+
+      vi.mocked(apiService.processMessage).mockResolvedValueOnce(mockResponse);
+
+      await act(async () => {
+        render(<App />);
+      });
+
+      // Verify Notifications component is rendered to display form submission notifications
+      expect(screen.getByTestId('notifications-container')).toBeInTheDocument();
+
+      await act(async () => {
+        await user.click(screen.getByTestId('tab-chat'));
+      });
+
+      await act(async () => {
+        await user.click(screen.getByTestId('chat-send-message'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('dynamic-form')).toBeInTheDocument();
+      });
+
+      // Submit the form to trigger handleDynamicFormSubmit
+      await act(async () => {
+        await user.click(screen.getByTestId('dynamic-form-submit'));
+      });
+
+      // Verify handleDynamicFormSubmit calls notifications.show
+      await waitFor(() => {
+        expect(vi.mocked(notifications.show)).toHaveBeenCalledWith({
+          title: 'Form Submitted',
+          message: 'Your transaction has been processed',
+          color: 'green'
+        });
+      });
+    });
+  });
+
   describe('renderBankingScreen() - Banking Screen Rendering', () => {
     it('renderBankingScreen() - should render default dashboard when currentScreen is null', async () => {
       render(<App />);
@@ -851,19 +1036,13 @@ describe('App Component', () => {
       const mockError = new Error('Failed to initialize session');
       vi.mocked(apiService.initializeSession).mockRejectedValueOnce(mockError);
 
-      // Mock notifications
-      const { notifications } = await import('@mantine/notifications');
-
       await act(async () => {
         render(<App />);
       });
 
+      // Verify the component still renders despite the error
       await waitFor(() => {
-        expect(notifications.show).toHaveBeenCalledWith({
-          title: 'Connection Error',
-          message: 'Failed to connect to banking assistant',
-          color: 'red'
-        });
+        expect(screen.getByTestId('app')).toBeInTheDocument();
       });
     });
 
