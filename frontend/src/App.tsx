@@ -17,7 +17,7 @@ import {
   Transition
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { notifications } from '@mantine/notifications';
+import { Notifications, notifications } from '@mantine/notifications';
 import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, Account } from './types';
 import { BankingScreens } from './components/BankingScreens';
 import { DynamicForm } from './components/DynamicForm';
@@ -428,6 +428,7 @@ const App: React.FC = () => {
           </AppShell.Main>
         </AppShell>
       </div>
+      <Notifications />
     </MantineProvider>
   );
 };
