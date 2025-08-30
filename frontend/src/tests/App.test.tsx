@@ -178,6 +178,16 @@ describe('App Component', () => {
     
     // Reset notifications mock
     vi.mocked(notifications.show).mockClear();
+    
+    // Reset API service mocks to default state
+    vi.mocked(apiService.processMessage).mockResolvedValue({
+      message: 'Default test response',
+      intent: 'test',
+      confidence: 0.9
+    });
+    
+    vi.mocked(apiService.initializeSession).mockResolvedValue(undefined);
+    vi.mocked(apiService.getAccounts).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -361,7 +371,15 @@ describe('App Component', () => {
     });
 
     it('handleSubmit() - should close navigation assistant when processing', async () => {
-      renderAppWithRouter(['/']); // Start on banking route where assistant is available
+      await act(async () => {
+        renderAppWithRouter(['/']); // Start on banking route where assistant is available
+      });
+
+      // Wait for loading to complete and assistant button to be available
+      await waitFor(() => {
+        expect(screen.getByTestId('dashboard-view-accounts')).toBeDefined();
+        expect(screen.getByTitle('Navigation Assistant')).toBeDefined();
+      }, { timeout: 3000 });
 
       // Open navigation assistant
       await act(async () => {
@@ -431,7 +449,15 @@ describe('App Component', () => {
 
       vi.mocked(apiService.processMessage).mockResolvedValueOnce(mockResponse);
 
-      renderAppWithRouter(['/chat']); // Start on chat tab
+      await act(async () => {
+        renderAppWithRouter(['/chat']); // Start on chat tab
+      });
+
+      // Wait for chat panel to be loaded first
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-panel')).toBeDefined();
+        expect(screen.getByTestId('chat-send-message')).toBeDefined();
+      }, { timeout: 3000 });
 
       await act(async () => {
         await user.click(screen.getByTestId('chat-send-message'));
@@ -444,6 +470,10 @@ describe('App Component', () => {
     });
 
     it('handleUIAssistance() - should handle transaction form creation', async () => {
+      // Clear any previous mocks that might interfere  
+      vi.mocked(apiService.processMessage).mockReset();
+      vi.mocked(notifications.show).mockClear();
+      
       const formConfig = {
         screen_id: 'transfer',
         title: 'Money Transfer',
@@ -471,6 +501,12 @@ describe('App Component', () => {
       await act(async () => {
         renderAppWithRouter(['/chat']); // Start on chat tab
       });
+
+      // Wait for chat panel to be loaded first
+      await waitFor(() => {
+        expect(screen.getByTestId('chat-panel')).toBeDefined();
+        expect(screen.getByTestId('chat-send-message')).toBeDefined();
+      }, { timeout: 3000 });
 
       await act(async () => {
         await user.click(screen.getByTestId('chat-send-message'));
@@ -681,6 +717,10 @@ describe('App Component', () => {
     });
 
     it('handleUIAssistance() - should call notifications for navigation', async () => {
+      // Clear any previous mocks that might interfere
+      vi.mocked(apiService.processMessage).mockReset();
+      vi.mocked(notifications.show).mockClear();
+      
       const navigationAssistance: UIAssistance = {
         type: 'navigation',
         action: 'navigate',
@@ -690,6 +730,7 @@ describe('App Component', () => {
 
       const mockResponse: ProcessResponse = {
         status: 'success',
+        message: 'Navigating to accounts',
         ui_assistance: navigationAssistance
       };
 
@@ -717,6 +758,10 @@ describe('App Component', () => {
     });
 
     it('handleDynamicFormSubmit() - should call notifications on form submission', async () => {
+      // Clear any previous mocks that might interfere
+      vi.mocked(apiService.processMessage).mockReset();
+      vi.mocked(notifications.show).mockClear();
+      
       const formConfig = {
         screen_id: 'transfer',
         title: 'Money Transfer',
@@ -735,6 +780,7 @@ describe('App Component', () => {
 
       const mockResponse: ProcessResponse = {
         status: 'success',
+        message: 'Creating smart form',
         ui_assistance: transactionAssistance
       };
 
@@ -783,6 +829,10 @@ describe('App Component', () => {
     });
 
     it('handleUIAssistance() - should navigate via router', async () => {
+      // Clear any previous mocks that might interfere
+      vi.mocked(apiService.processMessage).mockReset();
+      vi.mocked(notifications.show).mockClear();
+      
       const navigationAssistance: UIAssistance = {
         type: 'navigation',
         action: 'route_to_screen',
@@ -793,12 +843,15 @@ describe('App Component', () => {
 
       const mockResponse: ProcessResponse = {
         status: 'success',
+        message: 'Navigating to accounts overview',
         ui_assistance: navigationAssistance
       };
 
       vi.mocked(apiService.processMessage).mockResolvedValueOnce(mockResponse);
 
-      renderAppWithRouter(['/chat']); // Start on chat tab
+      await act(async () => {
+        renderAppWithRouter(['/chat']); // Start on chat tab
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId('chat-panel')).toBeDefined();
@@ -831,6 +884,10 @@ describe('App Component', () => {
     });
 
     it('handleSubmit() - should handle API processing errors gracefully', async () => {
+      // Clear any previous mocks that might interfere  
+      vi.mocked(apiService.processMessage).mockReset();
+      vi.mocked(notifications.show).mockClear();
+      
       const mockError = new Error('Processing failed');
       vi.mocked(apiService.processMessage).mockRejectedValueOnce(mockError);
 
@@ -953,6 +1010,10 @@ describe('App Component', () => {
     });
 
     it('handleUIAssistance() - should handle malformed assistance data gracefully', async () => {
+      // Clear any previous mocks that might interfere  
+      vi.mocked(apiService.processMessage).mockReset();
+      vi.mocked(notifications.show).mockClear();
+      
       const malformedUIAssistance = {
         type: 'invalid_type' as never,
         action: null as never,
@@ -1177,6 +1238,10 @@ describe('App Component', () => {
     });
 
     it('handleUIAssistance() - should handle route_path navigation correctly', async () => {
+      // Clear any previous mocks that might interfere  
+      vi.mocked(apiService.processMessage).mockReset();
+      vi.mocked(notifications.show).mockClear();
+      
       const navigationAssistance: UIAssistance = {
         type: 'navigation',
         action: 'route_to_screen',
@@ -1186,12 +1251,15 @@ describe('App Component', () => {
 
       const mockResponse: ProcessResponse = {
         status: 'success',
+        message: 'Navigating to wire transfer',
         ui_assistance: navigationAssistance
       };
 
       vi.mocked(apiService.processMessage).mockResolvedValueOnce(mockResponse);
 
-      renderAppWithRouter(['/chat']); // Start on chat tab
+      await act(async () => {
+        renderAppWithRouter(['/chat']); // Start on chat tab
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId('chat-panel')).toBeDefined();
@@ -1202,13 +1270,17 @@ describe('App Component', () => {
       });
 
       await waitFor(() => {
-        // Should navigate to wire transfer route
+        // Should navigate to wire transfer form (the navigation actually works!)
         expect(screen.getByTestId('wire-transfer-form')).toBeDefined();
         expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
       });
     });
 
     it('handleUIAssistance() - should fallback to component mapping when route_path invalid', async () => {
+      // Clear any previous mocks that might interfere  
+      vi.mocked(apiService.processMessage).mockReset();
+      vi.mocked(notifications.show).mockClear();
+      
       const navigationAssistance: UIAssistance = {
         type: 'navigation',
         action: 'navigate',
@@ -1219,12 +1291,15 @@ describe('App Component', () => {
 
       const mockResponse: ProcessResponse = {
         status: 'success',
+        message: 'Navigating to accounts overview',
         ui_assistance: navigationAssistance
       };
 
       vi.mocked(apiService.processMessage).mockResolvedValueOnce(mockResponse);
 
-      renderAppWithRouter(['/chat']); // Start on chat tab
+      await act(async () => {
+        renderAppWithRouter(['/chat']); // Start on chat tab
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId('chat-panel')).toBeDefined();
@@ -1235,7 +1310,7 @@ describe('App Component', () => {
       });
 
       await waitFor(() => {
-        // Should navigate to accounts overview via component mapping
+        // Should navigate to accounts overview via component fallback (it works!)
         expect(screen.getByTestId('accounts-overview')).toBeDefined();
         expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
       });
