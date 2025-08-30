@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
+import { render, screen, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ChatPanel } from '../components/ChatPanel';
 import type { Message } from '../types';

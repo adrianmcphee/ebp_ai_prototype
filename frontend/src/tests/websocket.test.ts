@@ -43,7 +43,7 @@ describe('WebSocket Service', () => {
     originalWebSocket = global.WebSocket;
     global.WebSocket = vi.fn().mockImplementation((url: string) => {
       return new MockWebSocket(url);
-    }) as any;
+    }) as unknown as typeof WebSocket;
   });
 
   afterEach(() => {
@@ -342,7 +342,7 @@ describe('WebSocket Service', () => {
     it('disconnect() - should handle undefined WebSocket gracefully', () => {
       // ARRANGE & ACT & ASSERT
       expect(() => {
-        websocketService.disconnect(undefined as any);
+        websocketService.disconnect(undefined as unknown as WebSocket);
       }).not.toThrow();
     });
 
@@ -473,7 +473,7 @@ describe('WebSocket Service', () => {
       const constructorError = new Error('WebSocket constructor failed');
       global.WebSocket = vi.fn().mockImplementation(() => {
         throw constructorError;
-      }) as any;
+      }) as unknown as typeof WebSocket;
       const mockHandler = vi.fn();
 
       // ACT & ASSERT
@@ -485,7 +485,7 @@ describe('WebSocket Service', () => {
     it('websocketService - should handle crypto.randomUUID not available', () => {
       // ARRANGE
       const originalRandomUUID = global.crypto.randomUUID;
-      delete (global.crypto as any).randomUUID;
+      delete (global.crypto as { randomUUID?: () => string }).randomUUID;
       const mockHandler = vi.fn();
 
       // ACT & ASSERT
@@ -522,7 +522,7 @@ describe('WebSocket Service', () => {
         onclose: null,
         onmessage: null,
         url: 'ws://test'
-      } as any;
+      } as unknown as WebSocket;
       
       // ACT & ASSERT
       expect(() => {

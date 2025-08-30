@@ -42,16 +42,6 @@ const App: React.FC = () => {
     }
   });
 
-  useEffect(() => {
-    initializeSession();
-    loadAccounts();
-    connectWebSocket();
-
-    return () => {
-      websocketService.disconnect(ws);
-    };
-  }, []);
-
   const initializeSession = async () => {
     try {
       await apiService.initializeSession();
@@ -126,9 +116,27 @@ const App: React.FC = () => {
     setMessages(prev => [...prev, message]);
   };
 
-  const handleWebSocketMessage = (message: { type: string; data: ProcessResponse }) => {
-    if (message.type === 'result') {
-      handleProcessResponse(message.data);
+  const handleUIAssistance = (uiAssistance: UIAssistance) => {
+    if (uiAssistance.type === 'navigation') {
+      // Navigation Assistance - show pre-built screen
+      setCurrentScreen(uiAssistance.component_name || '');
+      setActiveTab('banking');
+      
+      notifications.show({
+        title: 'Navigation',
+        message: `Opened ${uiAssistance.title}`,
+        color: 'blue',
+      });
+    } else if (uiAssistance.type === 'transaction_form' && uiAssistance.form_config) {
+      // Transaction Assistance - show dynamic form
+      setDynamicForm(uiAssistance.form_config);
+      setActiveTab('transaction');
+      
+      notifications.show({
+        title: 'Smart Form Created',
+        message: `${uiAssistance.form_config.complexity_reduction} simpler than traditional forms`,
+        color: 'green',
+      });
     }
   };
 
@@ -154,27 +162,9 @@ const App: React.FC = () => {
     addAssistantMessage(responseMessage, data);
   };
 
-  const handleUIAssistance = (uiAssistance: UIAssistance) => {
-    if (uiAssistance.type === 'navigation') {
-      // Navigation Assistance - show pre-built screen
-      setCurrentScreen(uiAssistance.component_name || '');
-      setActiveTab('banking');
-      
-      notifications.show({
-        title: 'Navigation',
-        message: `Opened ${uiAssistance.title}`,
-        color: 'blue',
-      });
-    } else if (uiAssistance.type === 'transaction_form' && uiAssistance.form_config) {
-      // Transaction Assistance - show dynamic form
-      setDynamicForm(uiAssistance.form_config);
-      setActiveTab('transaction');
-      
-      notifications.show({
-        title: 'Smart Form Created',
-        message: `${uiAssistance.form_config.complexity_reduction} simpler than traditional forms`,
-        color: 'green',
-      });
+  const handleWebSocketMessage = (message: { type: string; data: ProcessResponse }) => {
+    if (message.type === 'result') {
+      handleProcessResponse(message.data);
     }
   };
 
@@ -259,7 +249,17 @@ const App: React.FC = () => {
     return <div>Screen not found</div>;
   };
 
+  // useEffect needs to be after all function declarations to avoid hoisting issues  
+  useEffect(() => {
+    initializeSession();
+    loadAccounts();
+    connectWebSocket();
 
+    return () => {
+      websocketService.disconnect(ws);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <MantineProvider>
