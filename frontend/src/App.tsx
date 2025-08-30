@@ -343,18 +343,19 @@ const App: React.FC = () => {
                         <Group position="apart" mb="md">
                           <Group>
                             <Text>🤖</Text>
-                            <Text fw={500}>Navigation Assistant</Text>
+                            <Text fw={500} data-testid="navigation-assistant-title">Navigation Assistant</Text>
                           </Group>
                           <ActionIcon 
                             size="sm" 
                             variant="subtle"
                             onClick={() => setShowNavigationAssistant(false)}
+                            data-testid="navigation-assistant-close"
                           >
                             ✕
                           </ActionIcon>
                         </Group>
                         
-                        <Text size="sm" color="dimmed" mb="md">
+                        <Text size="sm" color="dimmed" mb="md" data-testid="navigation-assistant-description">
                           Tell me where you want to go and I'll take you there.
                         </Text>
                         
@@ -370,6 +371,7 @@ const App: React.FC = () => {
                                 size="xs" 
                                 variant="subtle" 
                                 onClick={() => form.setFieldValue('message', 'Take me to international transfers')}
+                                data-testid="suggestion-international-transfers"
                               >
                                 International Transfers
                               </Button>
@@ -377,6 +379,7 @@ const App: React.FC = () => {
                                 size="xs" 
                                 variant="subtle" 
                                 onClick={() => form.setFieldValue('message', 'Show me account overview')}
+                                data-testid="suggestion-account-overview"
                               >
                                 Account Overview
                               </Button>
@@ -385,6 +388,7 @@ const App: React.FC = () => {
                               type="submit" 
                               disabled={!isConnected}
                               size="sm"
+                              data-testid="navigation-submit-button"
                             >
                               Navigate
                             </Button>
@@ -408,11 +412,11 @@ const App: React.FC = () => {
                       />
                     ) : (
                       <Card shadow="sm" padding="lg" radius="md" withBorder>
-                        <Title order={2} ta="center" mb="md">Transaction Assistance</Title>
-                        <Text ta="center" color="dimmed" mb="xl">
+                        <Title order={2} ta="center" mb="md" data-testid="transaction-assistance-title">Transaction Assistance</Title>
+                        <Text ta="center" color="dimmed" mb="xl" data-testid="transaction-assistance-description">
                           Smart forms will appear here when you make transaction requests through the chat assistant.
                         </Text>
-                        <Text ta="center">
+                        <Text ta="center" data-testid="transaction-assistance-instructions">
                           Try saying: "Send $500 to my friend in Canada" in the chat to see a custom form.
                         </Text>
                       </Card>
