@@ -64,12 +64,18 @@ export interface Account {
 
 // Route types (avoiding circular import)
 export interface RouteConfig {
+  path: string;
   component: string;
-  intent: string;
+  intent: string | null;
   breadcrumb: string;
   tab: string;
 }
 
+export interface RoutesResponse {
+  routes: RouteConfig[];
+}
+
+// Legacy support - for compatibility during transition
 export interface AppRoutes {
-  [path: string]: RouteConfig;
+  [path: string]: Omit<RouteConfig, 'path'>;
 }
