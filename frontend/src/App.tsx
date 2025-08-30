@@ -11,30 +11,42 @@ import {
   Card,
   Title,
   SimpleGrid,
-  Tabs,
+  LoadingOverlay,
+  Alert,
   ActionIcon,
   Affix,
   Transition
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { Notifications, notifications } from '@mantine/notifications';
-import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, Account } from './types';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, Account, AppRoutes } from './types';
 import { BankingScreens } from './components/BankingScreens';
 import { DynamicForm } from './components/DynamicForm';
 import { ChatPanel } from './components/ChatPanel';
 import { Header } from './components/Header';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
+import { fetchAppRoutes, createDerivedMappings } from './services/routes';
 
-const App: React.FC = () => {
+export const MainApp: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [currentScreen, setCurrentScreen] = useState<string | null>(null);
   const [dynamicForm, setDynamicForm] = useState<DynamicFormConfig | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('banking');
   const [showNavigationAssistant, setShowNavigationAssistant] = useState<boolean>(false);
+  
+  // API-driven routes state
+  const [appRoutes, setAppRoutes] = useState<AppRoutes | null>(null);
+  const [routesLoading, setRoutesLoading] = useState(true);
+  const [routesError, setRoutesError] = useState<string | null>(null);
+  const [routeMappings, setRouteMappings] = useState<ReturnType<typeof createDerivedMappings> | null>(null);
+
+  // Derive active tab from URL using API-loaded routes
+  const activeTab = routeMappings?.getTabForRoute(location.pathname) || 'banking';
 
   const form = useForm({
     initialValues: {
@@ -118,19 +130,48 @@ const App: React.FC = () => {
 
   const handleUIAssistance = (uiAssistance: UIAssistance) => {
     if (uiAssistance.type === 'navigation') {
-      // Navigation Assistance - show pre-built screen
-      setCurrentScreen(uiAssistance.component_name || '');
-      setActiveTab('banking');
-      
-      notifications.show({
-        title: 'Navigation',
-        message: `Opened ${uiAssistance.title}`,
-        color: 'blue',
-      });
+      // Navigation Assistance - use React Router navigation
+      try {
+        let routePath: string | undefined;
+        
+        // Try to use route_path from backend response first
+        if (uiAssistance.route_path && routeMappings?.isValidRoute(uiAssistance.route_path)) {
+          routePath = uiAssistance.route_path;
+        }
+        // Fallback to component name mapping
+        else if (uiAssistance.component_name) {
+          routePath = routeMappings?.getRouteByComponent(uiAssistance.component_name);
+        }
+        
+        if (routePath) {
+          navigate(routePath);
+          // Tab will automatically update based on URL
+          
+          notifications.show({
+            title: 'Navigation',
+            message: `Opened ${uiAssistance.title}`,
+            color: 'blue',
+          });
+        } else {
+          console.error('No valid route found for navigation assistance:', uiAssistance);
+          notifications.show({
+            title: 'Navigation Error',
+            message: 'Unable to navigate to the requested screen',
+            color: 'red',
+          });
+        }
+      } catch (error) {
+        console.error('Navigation error:', error);
+        notifications.show({
+          title: 'Navigation Error', 
+          message: 'Failed to navigate to the requested screen',
+          color: 'red',
+        });
+      }
     } else if (uiAssistance.type === 'transaction_form' && uiAssistance.form_config) {
-      // Transaction Assistance - show dynamic form
+      // Transaction Assistance - navigate to transaction tab and show form
       setDynamicForm(uiAssistance.form_config);
-      setActiveTab('transaction');
+      navigate('/transaction');
       
       notifications.show({
         title: 'Smart Form Created',
@@ -197,239 +238,393 @@ const App: React.FC = () => {
       color: 'green',
     });
     setDynamicForm(null);
-    setActiveTab('chat');
+    navigate('/');
   };
 
-  const renderBankingScreen = () => {
-    if (!currentScreen) {
-      return (
-        <Container size="md" py="xl">
-          <Title order={2} ta="center" mb="xl">Banking Dashboard</Title>
-          <SimpleGrid cols={2} spacing="lg">
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Text fw={500} mb="xs">Quick Actions</Text>
-              <Text size="sm" color="dimmed" mb="md">Common banking tasks</Text>
-              <Stack gap="xs">
-                <Button variant="light" fullWidth onClick={() => setCurrentScreen('AccountsOverview')}>
-                  View Accounts
-                </Button>
-                <Button variant="light" fullWidth onClick={() => setCurrentScreen('TransfersHub')}>
-                  Transfer Money
-                </Button>
-                <Button variant="light" fullWidth onClick={() => setCurrentScreen('BillPayHub')}>
-                  Pay Bills
-                </Button>
-              </Stack>
-            </Card>
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Text fw={500} mb="xs">AI Assistant</Text>
-              <Text size="sm" color="dimmed" mb="md">Natural language banking</Text>
-              <Button variant="light" fullWidth onClick={() => setActiveTab('chat')}>
-                Open Chat Assistant
-              </Button>
-            </Card>
-          </SimpleGrid>
-        </Container>
-      );
-    }
+  // Main tab content components
+  const BankingDashboard = () => (
+    <Container size="md" py="xl">
+      <Title order={1} ta="center" mb="xl">Your Banking Dashboard</Title>
+      
+      {/* Main Banking Hubs - moved to top */}
+      <SimpleGrid cols={1} spacing="xl" mb="xl">
+        <BankingScreens.AccountsOverview accounts={accounts} />
+        <BankingScreens.TransfersHub />
+        <BankingScreens.BillPayHub />
+      </SimpleGrid>
 
-    // Render specific banking screen
-    const ScreenComponent = BankingScreens[currentScreen as keyof typeof BankingScreens];
-    if (ScreenComponent) {
-      return (
-        <Container size="md" py="xl">
-          <Button variant="subtle" mb="md" onClick={() => setCurrentScreen(null)}>
-            ← Back to Dashboard
+      {/* Quick Actions and AI Assistant - moved to bottom */}
+      <SimpleGrid cols={2} spacing="lg">
+        <Card shadow="sm" padding="lg" radius="md" withBorder>
+          <Text fw={500} mb="xs">Quick Actions</Text>
+          <Text size="sm" color="dimmed" mb="md">Common banking tasks</Text>
+          <Stack gap="xs">
+            <Button 
+              variant="light" 
+              fullWidth 
+              onClick={() => navigate('/banking/accounts')}
+              data-testid="dashboard-view-accounts"
+            >
+              View Accounts
+            </Button>
+            <Button 
+              variant="light" 
+              fullWidth 
+              onClick={() => navigate('/banking/transfers')}
+              data-testid="dashboard-transfer-money"
+            >
+              Transfer Money
+            </Button>
+            <Button 
+              variant="light" 
+              fullWidth 
+              onClick={() => navigate('/banking/payments/bills')}
+              data-testid="dashboard-pay-bills"
+            >
+              Pay Bills
+            </Button>
+          </Stack>
+        </Card>
+        <Card shadow="sm" padding="lg" radius="md" withBorder>
+          <Text fw={500} mb="xs">AI Assistant</Text>
+          <Text size="sm" color="dimmed" mb="md">Natural language banking</Text>
+          <Button 
+            variant="light" 
+            fullWidth 
+            onClick={() => navigate('/chat')}
+            data-testid="dashboard-open-chat"
+          >
+            Open Chat Assistant
           </Button>
-          <ScreenComponent accounts={accounts} />
-        </Container>
-      );
-    }
+        </Card>
+      </SimpleGrid>
+    </Container>
+  );
 
-    return <div>Screen not found</div>;
+  const ChatTabContent = () => (
+    <ChatPanel
+      messages={messages}
+      form={form}
+      isConnected={isConnected}
+      onSubmit={handleSubmit}
+    />
+  );
+
+  const TransactionTabContent = () => (
+    <Container size="md" py="xl">
+      {dynamicForm ? (
+        <DynamicForm
+          config={dynamicForm}
+          onSubmit={handleDynamicFormSubmit}
+          onCancel={() => {
+            setDynamicForm(null);
+            navigate('/');
+          }}
+        />
+      ) : (
+        <Card shadow="sm" padding="lg" radius="md" withBorder>
+          <Title order={2} ta="center" mb="md" data-testid="transaction-assistance-title">Transaction Assistance</Title>
+          <Text ta="center" color="dimmed" mb="xl" data-testid="transaction-assistance-description">
+            Smart forms that adapt to your banking needs. Ask me to help with transfers, payments, or account management.
+          </Text>
+          <Text ta="center" color="dimmed" size="sm" data-testid="transaction-assistance-help">
+            Try: "Help me transfer money to my savings" or "Set up a bill payment"
+          </Text>
+        </Card>
+      )}
+    </Container>
+  );
+
+  const NotFound = () => (
+    <Container size="md" py="xl">
+      <Card shadow="sm" padding="lg" radius="md" withBorder>
+        <Title order={2} ta="center" mb="md">Page Not Found</Title>
+        <Text ta="center" color="dimmed" mb="xl">
+          The page you're looking for doesn't exist.
+        </Text>
+        <Group justify="center">
+          <Button onClick={() => navigate('/')}>
+            Go to Dashboard
+          </Button>
+        </Group>
+      </Card>
+    </Container>
+  );
+
+  // Route component wrapper with back navigation
+  const RouteComponent: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    return (
+      <Container size="md" py="xl">
+        <Button 
+          variant="subtle" 
+          mb="md" 
+          onClick={() => navigate('/')}
+          data-testid="back-to-dashboard"
+        >
+          ← Back to Dashboard
+        </Button>
+        {children}
+      </Container>
+    );
   };
+
+  // Component renderer based on route config
+  const renderRouteComponent = (componentName: string) => {
+    switch (componentName) {
+      case 'BankingDashboard':
+        return <BankingDashboard />;
+      case 'ChatPanel':
+        return <ChatTabContent />;
+      case 'TransactionAssistance':
+        return <TransactionTabContent />;
+      case 'AccountsOverview':
+        return (
+          <RouteComponent>
+            <BankingScreens.AccountsOverview accounts={accounts} />
+          </RouteComponent>
+        );
+      case 'TransfersHub':
+        return (
+          <RouteComponent>
+            <BankingScreens.TransfersHub />
+          </RouteComponent>
+        );
+      case 'WireTransferForm':
+        return (
+          <RouteComponent>
+            <BankingScreens.WireTransferForm />
+          </RouteComponent>
+        );
+      case 'BillPayHub':
+        return (
+          <RouteComponent>
+            <BankingScreens.BillPayHub />
+          </RouteComponent>
+        );
+      default:
+        return <NotFound />;
+    }
+  };
+
+  // Load routes from API
+  const loadRoutes = async () => {
+    try {
+      setRoutesLoading(true);
+      setRoutesError(null);
+      
+      const routes = await fetchAppRoutes();
+      const mappings = createDerivedMappings(routes);
+      
+      setAppRoutes(routes);
+      setRouteMappings(mappings);
+      
+      console.log('Routes loaded successfully:', routes);
+    } catch (error) {
+      const errorMessage = 'Failed to load application routes';
+      setRoutesError(errorMessage);
+      console.error('Route loading error:', error);
+    } finally {
+      setRoutesLoading(false);
+    }
+  };
+
+  // Load routes on app startup
+  useEffect(() => {
+    loadRoutes();
+  }, []);
 
   // useEffect needs to be after all function declarations to avoid hoisting issues  
   useEffect(() => {
-    initializeSession();
-    loadAccounts();
-    connectWebSocket();
+    // Only initialize after routes are loaded
+    if (!routesLoading && !routesError) {
+      initializeSession();
+      loadAccounts();
+      connectWebSocket();
+    }
 
     return () => {
       websocketService.disconnect(ws);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [routesLoading, routesError]);
+
+  // Loading state
+  if (routesLoading) {
+    return (
+      <MantineProvider>
+        <div data-testid="app">
+          <LoadingOverlay 
+            visible={true} 
+            overlayProps={{ radius: "sm", blur: 2 }} 
+            loaderProps={{ color: 'blue', type: 'dots', size: 'md' }}
+          />
+        </div>
+      </MantineProvider>
+    );
+  }
+
+  // Error state
+  if (routesError || !appRoutes || !routeMappings) {
+    return (
+      <MantineProvider>
+        <div data-testid="app">
+          <Container size="sm" style={{ textAlign: 'center', marginTop: '2rem' }}>
+            <Alert variant="light" color="red" title="Loading Error">
+              {routesError || 'Failed to load application'}
+              <Button 
+                variant="light" 
+                color="blue" 
+                onClick={loadRoutes}
+                style={{ marginTop: '1rem' }}
+              >
+                Retry
+              </Button>
+            </Alert>
+          </Container>
+        </div>
+      </MantineProvider>
+    );
+  }
 
   return (
     <MantineProvider>
       <div data-testid="app">
         <AppShell
-          header={{ height: 60 }}
+          header={{ height: 56 }}
           padding="md"
         >
-          <Header isConnected={isConnected} />
+          <Header isConnected={isConnected} appRoutes={appRoutes} />
 
           <AppShell.Main>
             <Container size="xl">
-              <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'banking')}>
-                <Tabs.List data-testid="tab-list">
-                  <Tabs.Tab value="banking" data-testid="tab-banking">🧭 Navigation Assistance</Tabs.Tab>
-                  <Tabs.Tab value="transaction" data-testid="tab-transaction">📝 Transaction Assistance</Tabs.Tab>
-                  <Tabs.Tab value="chat" data-testid="tab-chat">💬 Chat Assistant</Tabs.Tab>
-                </Tabs.List>
+              {/* Main Content Area - Configuration-driven Routes */}
+              <Container size="xl" pt="md">
+                <Routes>
+                  {/* Generate routes from API-loaded routes configuration */}
+                  {Object.entries(appRoutes).map(([routePath, config]) => (
+                    <Route 
+                      key={routePath}
+                      path={routePath} 
+                      element={renderRouteComponent(config.component)} 
+                    />
+                  ))}
+                  
+                  {/* 404 - Must be last */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Container>
 
-                <Tabs.Panel value="chat" pt="md">
-                  <ChatPanel
-                    messages={messages}
-                    form={form}
-                    isConnected={isConnected}
-                    onSubmit={handleSubmit}
-                  />
-                </Tabs.Panel>
-
-                <Tabs.Panel value="banking" pt="md">
-                  <Container size="md" py="xl">
-                    {/* Show traditional banking UI by default */}
-                    {!currentScreen && (
-                      <>
-                        <Title order={1} ta="center" mb="xl">Your Banking Dashboard</Title>
-                        <SimpleGrid cols={1} spacing="xl">
-                          <BankingScreens.AccountsOverview accounts={accounts} />
-                          <BankingScreens.TransfersHub />
-                          <BankingScreens.BillPayHub />
-                        </SimpleGrid>
-                      </>
-                    )}
-                    
-                    {/* Show specific banking screen when navigated */}
-                    {renderBankingScreen()}
-                    
-                    {/* Floating AI Navigation Assistant */}
-                    <Affix position={{ bottom: 20, right: 20 }}>
-                      <Transition transition="slide-up" mounted={!showNavigationAssistant}>
-                        {(transitionStyles) => (
-                          <ActionIcon
-                            size="xl"
-                            radius="xl"
-                            variant="filled"
-                            color="blue"
-                            style={{ ...transitionStyles }}
-                            onClick={() => setShowNavigationAssistant(true)}
-                            title="Navigation Assistant"
-                          >
-                            🤖
-                          </ActionIcon>
-                        )}
-                      </Transition>
-                    </Affix>
-                    
-                    {/* Navigation Assistant Modal/Overlay */}
-                    {showNavigationAssistant && (
-                      <Card 
-                        shadow="xl" 
-                        padding="lg" 
-                        radius="md" 
-                        withBorder 
-                        style={{
-                          position: 'fixed',
-                          bottom: 80,
-                          right: 20,
-                          width: 400,
-                          zIndex: 1000,
-                          background: 'white'
-                        }}
-                      >
-                        <Group justify="apart" mb="md">
-                          <Group>
-                            <Text>🤖</Text>
-                            <Text fw={500} data-testid="navigation-assistant-title">Navigation Assistant</Text>
-                          </Group>
-                          <ActionIcon 
-                            size="sm" 
-                            variant="subtle"
-                            onClick={() => setShowNavigationAssistant(false)}
-                            data-testid="navigation-assistant-close"
-                          >
-                            ✕
-                          </ActionIcon>
+              {/* Floating AI Navigation Assistant - Only show on banking routes */}
+              {activeTab === 'banking' && (
+                <>
+                  <Affix position={{ bottom: 20, right: 20 }}>
+                    <Transition transition="slide-up" mounted={!showNavigationAssistant}>
+                      {(transitionStyles) => (
+                        <ActionIcon
+                          size="xl"
+                          radius="xl"
+                          variant="filled"
+                          color="blue"
+                          style={{ ...transitionStyles }}
+                          onClick={() => setShowNavigationAssistant(true)}
+                          title="Navigation Assistant"
+                        >
+                          🤖
+                        </ActionIcon>
+                      )}
+                    </Transition>
+                  </Affix>
+                  
+                  {/* Navigation Assistant Modal/Overlay */}
+                  {showNavigationAssistant && (
+                    <Card 
+                      shadow="xl" 
+                      padding="lg" 
+                      radius="md" 
+                      withBorder 
+                      style={{
+                        position: 'fixed',
+                        bottom: 80,
+                        right: 20,
+                        width: 400,
+                        zIndex: 1000,
+                        background: 'white'
+                      }}
+                    >
+                      <Group justify="apart" mb="md">
+                        <Group>
+                          <Text>🤖</Text>
+                          <Text fw={500} data-testid="navigation-assistant-title">Navigation Assistant</Text>
                         </Group>
-                        
-                        <Text size="sm" color="dimmed" mb="md" data-testid="navigation-assistant-description">
-                          Tell me where you want to go and I'll take you there.
-                        </Text>
-                        
-                        <form onSubmit={form.onSubmit(handleSubmit)}>
-                          <Stack gap="sm">
-                            <TextInput
-                              {...form.getInputProps('message')}
-                              placeholder="Try: 'Take me to international transfers'"
-                              size="sm"
-                            />
-                            <Group justify="apart">
-                              <Button 
-                                size="xs" 
-                                variant="subtle" 
-                                onClick={() => form.setFieldValue('message', 'Take me to international transfers')}
-                                data-testid="suggestion-international-transfers"
-                              >
-                                International Transfers
-                              </Button>
-                              <Button 
-                                size="xs" 
-                                variant="subtle" 
-                                onClick={() => form.setFieldValue('message', 'Show me account overview')}
-                                data-testid="suggestion-account-overview"
-                              >
-                                Account Overview
-                              </Button>
-                            </Group>
+                        <ActionIcon 
+                          size="sm" 
+                          variant="subtle"
+                          onClick={() => setShowNavigationAssistant(false)}
+                          data-testid="navigation-assistant-close"
+                        >
+                          ✕
+                        </ActionIcon>
+                      </Group>
+                      
+                      <Text size="sm" color="dimmed" mb="md" data-testid="navigation-assistant-description">
+                        Tell me where you want to go and I'll take you there.
+                      </Text>
+                      
+                      <form onSubmit={form.onSubmit(handleSubmit)}>
+                        <Stack gap="sm">
+                          <TextInput
+                            {...form.getInputProps('message')}
+                            placeholder="Try: 'Take me to international transfers'"
+                            size="sm"
+                            data-testid="navigation-assistant-input"
+                          />
+                          <Group justify="apart">
                             <Button 
-                              type="submit" 
-                              disabled={!isConnected}
-                              size="sm"
-                              data-testid="navigation-submit-button"
+                              size="xs" 
+                              variant="subtle" 
+                              onClick={() => form.setFieldValue('message', 'Take me to international transfers')}
+                              data-testid="suggestion-international-transfers"
                             >
-                              Navigate
+                              International Transfers
                             </Button>
-                          </Stack>
-                        </form>
-                      </Card>
+                            <Button 
+                              size="xs" 
+                              variant="subtle" 
+                              onClick={() => form.setFieldValue('message', 'Show me account overview')}
+                              data-testid="suggestion-account-overview"
+                            >
+                              Account Overview
+                            </Button>
+                          </Group>
+                          <Button 
+                            type="submit" 
+                            disabled={!isConnected}
+                            size="sm"
+                            data-testid="navigation-assistant-submit"
+                          >
+                            Navigate
+                          </Button>
+                        </Stack>
+                      </form>
+                    </Card>
                     )}
-                  </Container>
-                </Tabs.Panel>
-
-                <Tabs.Panel value="transaction" pt="md">
-                  <Container size="md" py="xl">
-                    {dynamicForm ? (
-                      <DynamicForm
-                        config={dynamicForm}
-                        onSubmit={handleDynamicFormSubmit}
-                        onCancel={() => {
-                          setDynamicForm(null);
-                          setActiveTab('banking');
-                        }}
-                      />
-                    ) : (
-                      <Card shadow="sm" padding="lg" radius="md" withBorder>
-                        <Title order={2} ta="center" mb="md" data-testid="transaction-assistance-title">Transaction Assistance</Title>
-                        <Text ta="center" color="dimmed" mb="xl" data-testid="transaction-assistance-description">
-                          Smart forms will appear here when you make transaction requests through the chat assistant.
-                        </Text>
-                        <Text ta="center" data-testid="transaction-assistance-instructions">
-                          Try saying: "Send $500 to my friend in Canada" in the chat to see a custom form.
-                        </Text>
-                      </Card>
-                    )}
-                  </Container>
-                </Tabs.Panel>
-              </Tabs>
+                </>
+              )}
             </Container>
           </AppShell.Main>
         </AppShell>
       </div>
       <Notifications />
     </MantineProvider>
+  );
+};
+
+// Wrapper component with BrowserRouter
+const App: React.FC = () => {
+  return (
+    <BrowserRouter>
+      <MainApp />
+    </BrowserRouter>
   );
 };
 

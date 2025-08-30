@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import axios from 'axios';
 import { apiService } from '../services/api';
-import type { Account, ProcessResponse } from '../types';
+import type { Account, ProcessResponse, AppRoutes } from '../types';
 
 // Mock axios for all HTTP requests
 vi.mock('axios');
@@ -387,13 +387,287 @@ describe('API Service', () => {
     });
   });
 
+  describe('fetchRoutes() - Application Routes Retrieval', () => {
+    it('fetchRoutes() - should call GET request to routes endpoint', async () => {
+      // ARRANGE
+      const mockRoutesResponse = {
+        routes: [
+          { path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' },
+          { path: '/banking/accounts', intent: 'view_accounts', component: 'AccountsOverview', breadcrumb: 'Accounts', tab: 'banking' },
+          { path: '/banking/transfers', intent: 'transfer_money', component: 'TransfersHub', breadcrumb: 'Transfers', tab: 'banking' }
+        ]
+      };
+      const mockResponse = { data: mockRoutesResponse };
+      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      
+      // Expected converted format
+      const expectedRoutes: AppRoutes = {
+        '/': { intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' },
+        '/banking/accounts': { intent: 'view_accounts', component: 'AccountsOverview', breadcrumb: 'Accounts', tab: 'banking' },
+        '/banking/transfers': { intent: 'transfer_money', component: 'TransfersHub', breadcrumb: 'Transfers', tab: 'banking' }
+      };
+
+      // ACT
+      const result = await apiService.fetchRoutes();
+
+      // ASSERT
+      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/routes');
+      expect(result).toEqual(expectedRoutes);
+      expect(typeof result).toBe('object');
+    });
+
+    it('fetchRoutes() - should return comprehensive route configuration', async () => {
+      // ARRANGE
+      const mockRoutesResponse = {
+        routes: [
+          { path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' },
+          { path: '/banking/accounts', intent: 'view_accounts', component: 'AccountsOverview', breadcrumb: 'Accounts', tab: 'banking' },
+          { path: '/banking/transfers', intent: 'transfer_money', component: 'TransfersHub', breadcrumb: 'Transfers', tab: 'banking' },
+          { path: '/banking/transfers/wire', intent: 'wire_transfer', component: 'WireTransferForm', breadcrumb: 'Wire Transfer', tab: 'banking' },
+          { path: '/banking/payments/bills', intent: 'pay_bills', component: 'BillPayHub', breadcrumb: 'Bill Pay', tab: 'banking' },
+          { path: '/customer-service', intent: 'customer_service', component: 'CustomerServiceHub', breadcrumb: 'Customer Service', tab: 'support' }
+        ]
+      };
+      const mockResponse = { data: mockRoutesResponse };
+      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+
+      // ACT
+      const result = await apiService.fetchRoutes();
+
+      // ASSERT
+      expect(result).toHaveProperty('/');
+      expect(result).toHaveProperty('/banking/accounts');
+      expect(result).toHaveProperty('/banking/transfers');
+      expect(result['/']).toMatchObject({
+        intent: 'dashboard',
+        component: 'BankingDashboard',
+        breadcrumb: 'Dashboard',
+        tab: 'banking'
+      });
+      expect(Object.keys(result)).toHaveLength(6);
+    });
+
+    it('fetchRoutes() - should return empty routes object when no routes exist', async () => {
+      // ARRANGE
+      const emptyRoutesResponse = { routes: [] };
+      const mockResponse = { data: emptyRoutesResponse };
+      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+
+      // ACT
+      const result = await apiService.fetchRoutes();
+
+      // ASSERT
+      expect(result).toEqual({});
+      expect(Object.keys(result)).toHaveLength(0);
+      expect(typeof result).toBe('object');
+    });
+
+    it('fetchRoutes() - should handle single route configuration', async () => {
+      // ARRANGE
+      const singleRouteResponse = {
+        routes: [
+          { path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' }
+        ]
+      };
+      const mockResponse = { data: singleRouteResponse };
+      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+
+      // ACT
+      const result = await apiService.fetchRoutes();
+
+      // ASSERT
+      expect(Object.keys(result)).toHaveLength(1);
+      expect(result['/']).toMatchObject({
+        intent: 'dashboard',
+        component: 'BankingDashboard',
+        breadcrumb: 'Dashboard',
+        tab: 'banking'
+      });
+    });
+
+    it('fetchRoutes() - should handle network errors during route fetching', async () => {
+      // ARRANGE
+      const networkError = new Error('Failed to fetch routes');
+      mockedAxios.get.mockRejectedValueOnce(networkError);
+
+      // ACT & ASSERT
+      await expect(apiService.fetchRoutes()).rejects.toThrow('Failed to fetch routes');
+      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/routes');
+    });
+
+    it('fetchRoutes() - should handle 404 not found errors', async () => {
+      // ARRANGE
+      const notFoundError = {
+        response: { status: 404, data: { error: 'Routes not configured' } },
+        message: 'Request failed with status code 404'
+      };
+      mockedAxios.get.mockRejectedValueOnce(notFoundError);
+
+      // ACT & ASSERT
+      await expect(apiService.fetchRoutes()).rejects.toEqual(notFoundError);
+      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/routes');
+    });
+
+    it('fetchRoutes() - should handle server error responses', async () => {
+      // ARRANGE
+      const serverError = {
+        response: { 
+          status: 500, 
+          data: { error: 'Internal server error while building routes' } 
+        },
+        message: 'Request failed with status code 500'
+      };
+      mockedAxios.get.mockRejectedValueOnce(serverError);
+
+      // ACT & ASSERT
+      await expect(apiService.fetchRoutes()).rejects.toEqual(serverError);
+    });
+
+    it('fetchRoutes() - should handle malformed server response', async () => {
+      // ARRANGE
+      const malformedResponse = { data: null };
+      mockedAxios.get.mockResolvedValueOnce(malformedResponse);
+
+      // ACT
+      const result = await apiService.fetchRoutes();
+
+      // ASSERT
+      expect(result).toBeNull();
+      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/routes');
+    });
+
+    it('fetchRoutes() - should handle routes with dynamic parameters', async () => {
+      // ARRANGE
+      const dynamicRoutesResponse = {
+        routes: [
+          { path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' },
+          { path: '/banking/accounts/{account_id}', intent: 'view_account_details', component: 'AccountDetails', breadcrumb: 'Account Details', tab: 'banking' },
+          { path: '/banking/transactions/{transaction_id}', intent: 'view_transaction', component: 'TransactionDetails', breadcrumb: 'Transaction Details', tab: 'banking' }
+        ]
+      };
+      const mockResponse = { data: dynamicRoutesResponse };
+      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+
+      // ACT
+      const result = await apiService.fetchRoutes();
+
+      // ASSERT
+      expect(result).toHaveProperty('/banking/accounts/{account_id}');
+      expect(result).toHaveProperty('/banking/transactions/{transaction_id}');
+      expect(result['/banking/accounts/{account_id}']).toMatchObject({
+        intent: 'view_account_details',
+        component: 'AccountDetails',
+        tab: 'banking'
+      });
+    });
+
+    it('fetchRoutes() - should handle routes with various tab categories', async () => {
+      // ARRANGE
+      const multiTabRoutesResponse = {
+        routes: [
+          { path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' },
+          { path: '/customer-service', intent: 'customer_service', component: 'CustomerServiceHub', breadcrumb: 'Customer Service', tab: 'support' },
+          { path: '/settings/profile', intent: 'edit_profile', component: 'ProfileSettings', breadcrumb: 'Profile', tab: 'settings' },
+          { path: '/help/faq', intent: 'view_faq', component: 'FAQ', breadcrumb: 'FAQ', tab: 'help' }
+        ]
+      };
+      const mockResponse = { data: multiTabRoutesResponse };
+      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+
+      // ACT
+      const result = await apiService.fetchRoutes();
+
+      // ASSERT
+      expect(result['/']).toMatchObject({ tab: 'banking' });
+      expect(result['/customer-service']).toMatchObject({ tab: 'support' });
+      expect(result['/settings/profile']).toMatchObject({ tab: 'settings' });
+      expect(result['/help/faq']).toMatchObject({ tab: 'help' });
+    });
+  });
+
+  describe('fetchRoutesArray() - Application Routes Array Format', () => {
+    it('fetchRoutesArray() - should return routes in new list format', async () => {
+      // ARRANGE
+      const mockRoutesResponse = {
+        routes: [
+          { path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' },
+          { path: '/banking/accounts', intent: 'view_accounts', component: 'AccountsOverview', breadcrumb: 'Accounts', tab: 'banking' },
+          { path: '/chat/:id?', intent: null, component: 'ChatAssistant', breadcrumb: 'Chat', tab: 'chat' }
+        ]
+      };
+      const mockResponse = { data: mockRoutesResponse };
+      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+
+      // ACT
+      const result = await apiService.fetchRoutesArray();
+
+      // ASSERT
+      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/routes');
+      expect(result).toEqual(mockRoutesResponse);
+      expect(result.routes).toHaveLength(3);
+      expect(result.routes[0]).toMatchObject({
+        path: '/',
+        component: 'BankingDashboard',
+        breadcrumb: 'Dashboard',
+        tab: 'banking'
+      });
+    });
+
+    it('fetchRoutesArray() - should handle routes with parameters and null intents', async () => {
+      // ARRANGE
+      const mockRoutesResponse = {
+        routes: [
+          { path: '/banking/account/:id', intent: 'view_account', component: 'AccountDetails', breadcrumb: 'Account Details', tab: 'banking' },
+          { path: '/transaction/:type/:id?', intent: null, component: 'TransactionHandler', breadcrumb: 'Transaction', tab: 'banking' }
+        ]
+      };
+      const mockResponse = { data: mockRoutesResponse };
+      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+
+      // ACT
+      const result = await apiService.fetchRoutesArray();
+
+      // ASSERT
+      expect(result.routes).toHaveLength(2);
+      expect(result.routes[0].path).toContain(':id');
+      expect(result.routes[1].intent).toBeNull();
+    });
+
+    it('fetchRoutesArray() - should handle empty routes array', async () => {
+      // ARRANGE
+      const emptyRoutesResponse = { routes: [] };
+      const mockResponse = { data: emptyRoutesResponse };
+      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+
+      // ACT
+      const result = await apiService.fetchRoutesArray();
+
+      // ASSERT
+      expect(result.routes).toHaveLength(0);
+      expect(Array.isArray(result.routes)).toBe(true);
+    });
+
+    it('fetchRoutesArray() - should handle network errors', async () => {
+      // ARRANGE
+      const networkError = new Error('Network connection failed');
+      mockedAxios.get.mockRejectedValueOnce(networkError);
+
+      // ACT & ASSERT
+      await expect(apiService.fetchRoutesArray()).rejects.toThrow('Network connection failed');
+      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/routes');
+    });
+  });
+
   describe('apiService - API Service Integration Points', () => {
     it('apiService - should export all required service methods', () => {
       // ARRANGE & ACT & ASSERT
       expect(typeof apiService.initializeSession).toBe('function');
       expect(typeof apiService.getAccounts).toBe('function');
       expect(typeof apiService.processMessage).toBe('function');
-      expect(Object.keys(apiService)).toHaveLength(3);
+      expect(typeof apiService.fetchRoutes).toBe('function');
+      expect(typeof apiService.fetchRoutesArray).toBe('function');
+      expect(Object.keys(apiService)).toHaveLength(5);
     });
 
     it('apiService - should handle concurrent API calls correctly', async () => {
@@ -401,6 +675,7 @@ describe('API Service', () => {
       const mockSessionResponse = { data: {} };
       const mockAccountsResponse = { data: { accounts: [] } };
       const mockProcessResponse = { data: { status: 'success' } };
+      const mockRoutesResponse = { data: { routes: [{ path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' }] } };
       
       mockedAxios.post.mockImplementation((url) => {
         if (url.includes('/session')) {
@@ -408,21 +683,32 @@ describe('API Service', () => {
         }
         return Promise.resolve(mockProcessResponse);
       });
-      mockedAxios.get.mockResolvedValueOnce(mockAccountsResponse);
+      
+      mockedAxios.get.mockImplementation((url) => {
+        if (url.includes('/accounts')) {
+          return Promise.resolve(mockAccountsResponse);
+        }
+        if (url.includes('/routes')) {
+          return Promise.resolve(mockRoutesResponse);
+        }
+        return Promise.resolve(mockAccountsResponse);
+      });
 
       // ACT
-      const [sessionResult, accountsResult, processResult] = await Promise.all([
+      const [sessionResult, accountsResult, processResult, routesResult] = await Promise.all([
         apiService.initializeSession(),
         apiService.getAccounts(),
-        apiService.processMessage('test', 'test')
+        apiService.processMessage('test', 'test'),
+        apiService.fetchRoutes()
       ]);
 
       // ASSERT
       expect(mockedAxios.post).toHaveBeenCalledTimes(2);
-      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+      expect(mockedAxios.get).toHaveBeenCalledTimes(2);
       expect(sessionResult).toBeUndefined();
       expect(accountsResult).toEqual([]);
       expect(processResult).toMatchObject({ status: 'success' });
+      expect(routesResult).toMatchObject({ '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking' } });
     });
 
     it('apiService - should handle mixed success and error responses in concurrent calls', async () => {
@@ -430,6 +716,7 @@ describe('API Service', () => {
       const mockSessionResponse = { data: {} };
       const accountsError = new Error('Accounts service unavailable');
       const mockProcessResponse = { data: { status: 'success' } };
+      const routesError = new Error('Routes service unavailable');
       
       mockedAxios.post.mockImplementation((url) => {
         if (url.includes('/session')) {
@@ -437,17 +724,28 @@ describe('API Service', () => {
         }
         return Promise.resolve(mockProcessResponse);
       });
-      mockedAxios.get.mockRejectedValueOnce(accountsError);
+      
+      mockedAxios.get.mockImplementation((url) => {
+        if (url.includes('/accounts')) {
+          return Promise.reject(accountsError);
+        }
+        if (url.includes('/routes')) {
+          return Promise.reject(routesError);
+        }
+        return Promise.reject(accountsError);
+      });
 
       // ACT & ASSERT
       await expect(Promise.allSettled([
         apiService.initializeSession(),
         apiService.getAccounts(),
-        apiService.processMessage('test', 'test')
+        apiService.processMessage('test', 'test'),
+        apiService.fetchRoutes()
       ])).resolves.toEqual([
         { status: 'fulfilled', value: undefined },
         { status: 'rejected', reason: accountsError },
-        { status: 'fulfilled', value: { status: 'success' } }
+        { status: 'fulfilled', value: { status: 'success' } },
+        { status: 'rejected', reason: routesError }
       ]);
     });
   });

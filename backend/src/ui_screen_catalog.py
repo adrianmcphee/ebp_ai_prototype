@@ -91,6 +91,43 @@ class UIScreenCatalog:
         # NAVIGATION ASSISTANCE - Pre-built Banking Screens
         # =============================================================================
         
+        # Main Navigation Screens
+        self.screens["banking_dashboard"] = UIScreen(
+            screen_id="banking_dashboard",
+            name="Dashboard",
+            screen_type=ScreenType.PRE_BUILT,
+            category="dashboard",
+            route_path="/",
+            component_name="BankingDashboard",
+            description="Main banking dashboard with account overview",
+            related_intents=["navigation.banking.dashboard"],
+            title_template="Banking Dashboard"
+        )
+
+        self.screens["chat_assistant"] = UIScreen(
+            screen_id="chat_assistant",
+            name="Chat Assistant", 
+            screen_type=ScreenType.PRE_BUILT,
+            category="support",
+            route_path="/chat",
+            component_name="ChatPanel",
+            description="AI-powered chat assistant for banking help",
+            related_intents=["navigation.chat.assistant"],
+            title_template="Chat Assistant"
+        )
+
+        self.screens["transaction_assistance"] = UIScreen(
+            screen_id="transaction_assistance",
+            name="Transaction Assistance",
+            screen_type=ScreenType.PRE_BUILT, 
+            category="transactions",
+            route_path="/transaction",
+            component_name="TransactionAssistance",
+            description="Dynamic transaction assistance interface",
+            related_intents=["navigation.transaction.assistance"],
+            title_template="Transaction Assistance"
+        )
+        
         # Account Management Screens
         self.screens["accounts_overview"] = UIScreen(
             screen_id="accounts_overview",
