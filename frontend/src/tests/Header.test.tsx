@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { Header } from '../components/Header';
 import { MantineProvider } from '@mantine/core';
 import { BrowserRouter } from 'react-router-dom';
+import type { AppRoutes } from '../types';
 
 // Mock React Router hooks
 const mockNavigate = vi.fn();
@@ -54,6 +55,17 @@ vi.mock('./Header.module.css', () => ({
     statusSection: 'statusSection'
   }
 }));
+
+// Mock app routes for testing
+const mockAppRoutes: AppRoutes = {
+  '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking', breadcrumb: 'Dashboard' },
+  '/banking/accounts': { intent: 'view_accounts', component: 'AccountsOverview', tab: 'banking', breadcrumb: 'Accounts' },
+  '/banking/transfers': { intent: 'transfer_money', component: 'TransfersHub', tab: 'banking', breadcrumb: 'Transfers' },
+  '/banking/payments/bills': { intent: 'pay_bills', component: 'BillPayHub', tab: 'banking', breadcrumb: 'Bill Pay' },
+  '/chat': { intent: 'chat_assistant', component: 'ChatPanel', tab: 'chat', breadcrumb: 'Chat' },
+  '/transaction': { intent: 'transaction_assistance', component: 'TransactionAssistance', tab: 'transaction', breadcrumb: 'Transaction' },
+  '/customer-service': { intent: 'customer_service', component: 'CustomerServiceHub', tab: 'support', breadcrumb: 'Support' }
+};
 
 // Mock Mantine components to isolate unit under test
 vi.mock('@mantine/core', async () => {
@@ -141,7 +153,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={false} />
+            <Header isConnected={false} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -156,7 +168,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={false} />
+            <Header isConnected={false} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -172,7 +184,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -191,7 +203,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -208,7 +220,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={false} />
+            <Header isConnected={false} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -224,7 +236,7 @@ describe('Header Component', () => {
       // ARRANGE
       const { rerender } = render(
         <TestWrapper>
-          <Header isConnected={false} />
+          <Header isConnected={false} appRoutes={mockAppRoutes} />
         </TestWrapper>
       );
 
@@ -236,7 +248,7 @@ describe('Header Component', () => {
       await act(async () => {
         rerender(
           <TestWrapper>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -253,7 +265,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -269,7 +281,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={false} />
+            <Header isConnected={false} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -292,7 +304,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -300,7 +312,7 @@ describe('Header Component', () => {
       // ASSERT
       const burgerButton = screen.getByTestId('burger-button');
       expect(burgerButton.getAttribute('data-opened')).toBe('true');
-    });
+    });   
   });
 
   describe('Drawer() - Mobile Navigation Drawer', () => {
@@ -309,7 +321,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -326,7 +338,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={false} />
+            <Header isConnected={false} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -344,7 +356,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -361,7 +373,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={false} />
+            <Header isConnected={false} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -384,7 +396,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -408,7 +420,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={false} />
+            <Header isConnected={false} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -435,7 +447,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -460,7 +472,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -477,7 +489,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={false} />
+            <Header isConnected={false} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -493,7 +505,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -512,7 +524,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={false} />
+            <Header isConnected={false} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -532,7 +544,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={undefined as unknown as boolean} />
+            <Header isConnected={undefined as unknown as boolean} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -548,7 +560,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={null as unknown as boolean} />
+            <Header isConnected={null as unknown as boolean} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
@@ -567,7 +579,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <MantineProvider>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </MantineProvider>
         );
       });
@@ -582,7 +594,7 @@ describe('Header Component', () => {
       // ARRANGE
       const { rerender } = render(
         <TestWrapper>
-          <Header isConnected={false} />
+          <Header isConnected={false} appRoutes={mockAppRoutes} />
         </TestWrapper>
       );
 
@@ -591,7 +603,7 @@ describe('Header Component', () => {
         await act(async () => {
           rerender(
             <TestWrapper>
-              <Header isConnected={i % 2 === 0} />
+              <Header isConnected={i % 2 === 0} appRoutes={mockAppRoutes} />
             </TestWrapper>
           );
         });
@@ -609,7 +621,7 @@ describe('Header Component', () => {
       await act(async () => {
         render(
           <TestWrapper>
-            <Header isConnected={true} />
+            <Header isConnected={true} appRoutes={mockAppRoutes} />
           </TestWrapper>
         );
       });
