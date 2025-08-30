@@ -501,6 +501,52 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             del websocket_connections[session_id]
 
 
+@app.get("/api/routes")
+async def get_application_routes():
+    """Get application routes assembled from intent catalog and UI screens"""
+    from .ui_screen_catalog import ui_screen_catalog, ScreenType
+    from .intent_catalog import intent_catalog
+    
+    routes = {}
+    
+    # Get all PRE_BUILT screens (navigation screens)
+    navigation_screens = [
+        screen for screen in ui_screen_catalog.screens.values() 
+        if screen.screen_type == ScreenType.PRE_BUILT and screen.route_path
+    ]
+    
+    for screen in navigation_screens:
+        # Get primary related intent (first one)
+        primary_intent_id = screen.related_intents[0] if screen.related_intents else None
+        
+        # Derive tab from route path
+        tab = _derive_tab_from_route(screen.route_path)
+        
+        routes[screen.route_path] = {
+            "component": screen.component_name,
+            "intent": primary_intent_id,
+            "breadcrumb": screen.name,
+            "tab": tab # @FIXME: This should not be here...
+        }
+    
+    return routes
+
+
+def _derive_tab_from_route(route_path: str) -> str:
+    """Derive tab name from route path"""
+    if route_path == "/":
+        return "banking"
+    elif route_path.startswith("/banking"):
+        return "banking"  
+    elif route_path.startswith("/chat"):
+        return "chat"
+    elif route_path.startswith("/transaction"):
+        return "transaction"
+    else:
+        # Default fallback
+        return "banking"
+
+
 @app.get("/api/demo/scenarios")
 async def get_demo_scenarios():
     """Get demo scenarios for testing"""

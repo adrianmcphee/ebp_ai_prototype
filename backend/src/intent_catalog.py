@@ -131,6 +131,97 @@ class BankingIntent:
 
 # Comprehensive Banking Intent Catalog
 BANKING_INTENTS = {
+    # ============ MAIN NAVIGATION ============
+    "navigation.banking.dashboard": BankingIntent(
+        intent_id="navigation.banking.dashboard",
+        name="Navigate to Banking Dashboard", 
+        category=IntentCategory.ACCOUNT_MANAGEMENT,
+        subcategory="Navigation",
+        description="Navigate to main banking dashboard",
+        confidence_threshold=0.85,
+        risk_level=RiskLevel.LOW,
+        auth_required=AuthLevel.NONE,
+        required_entities=[],
+        optional_entities=[],
+        example_utterances=[
+            "Go to dashboard",
+            "Take me home",
+            "Main page",
+            "Banking dashboard",
+            "Home screen",
+            "Navigate to dashboard",
+        ],
+        keywords=["dashboard", "home", "main", "banking dashboard", "home screen"],
+        patterns=[
+            r"\b(go to|take me to|navigate to) .* (dashboard|home)\b",
+            r"\b(banking )?dashboard\b",
+            r"\bhome .* screen\b",
+        ],
+        preconditions=[],
+        daily_limit=1000,
+        timeout_ms=1000,
+    ),
+
+    "navigation.chat.assistant": BankingIntent(
+        intent_id="navigation.chat.assistant", 
+        name="Navigate to Chat Assistant",
+        category=IntentCategory.SUPPORT,
+        subcategory="Navigation", 
+        description="Navigate to chat assistant interface",
+        confidence_threshold=0.85,
+        risk_level=RiskLevel.LOW,
+        auth_required=AuthLevel.NONE,
+        required_entities=[],
+        optional_entities=[], 
+        example_utterances=[
+            "Go to chat",
+            "Open chat",
+            "Chat assistant",
+            "Help chat",
+            "Support chat",
+            "Navigate to chat",
+        ],
+        keywords=["chat", "assistant", "help", "support chat", "chat assistant"],
+        patterns=[
+            r"\b(go to|open|navigate to) .* chat\b",
+            r"\bchat .* (assistant|help)\b",
+            r"\bsupport .* chat\b",
+        ],
+        preconditions=[],
+        daily_limit=1000,
+        timeout_ms=1000,
+    ),
+
+    "navigation.transaction.assistance": BankingIntent(
+        intent_id="navigation.transaction.assistance",
+        name="Navigate to Transaction Assistance", 
+        category=IntentCategory.TRANSFERS,
+        subcategory="Navigation",
+        description="Navigate to transaction assistance interface", 
+        confidence_threshold=0.85,
+        risk_level=RiskLevel.LOW,
+        auth_required=AuthLevel.NONE,
+        required_entities=[],
+        optional_entities=[],
+        example_utterances=[
+            "Transaction help",
+            "Go to transactions",
+            "Transaction assistant",
+            "Transaction assistance",
+            "Help with transactions",
+            "Navigate to transactions",
+        ],
+        keywords=["transaction", "assistance", "help", "transaction assistant", "transaction help"],
+        patterns=[
+            r"\b(go to|open|navigate to) .* transaction\b",
+            r"\btransaction .* (assistance|help|assistant)\b",
+            r"\bhelp .* transaction\b",
+        ],
+        preconditions=[],
+        daily_limit=1000,
+        timeout_ms=1000,
+    ),
+
     # ============ ACCOUNT MANAGEMENT ============
     "navigation.accounts.overview": BankingIntent(
         intent_id="navigation.accounts.overview",
