@@ -6,6 +6,11 @@ This document outlines the **golden standards** for writing unit tests in this R
 
 **Reference Implementation:** `src/tests/App.test.tsx` - 42 tests with 97.95% statement coverage and 94.54% branch coverage.
 
+## 🚨 **CRITICAL RULES**
+**🚫 NEVER test text content** - It changes and breaks tests  
+**🚫 NEVER test styling attributes** - Focus on behavior, not presentation  
+**✅ ONLY test functional attributes** - Test what affects component behavior
+
 ## 🔺 **Testing Pyramid Context**
 
 **Unit tests** are the foundation of the testing pyramid:
@@ -138,7 +143,53 @@ describe('useEffect() - Component Lifecycle', () => {
 
 ---
 
-## 📊 **3. Test Organization**
+## 🚫 **3. Critical Test Rules - Content & Style Independence**
+
+### **NEVER Test Text Content**
+
+Text content changes frequently and should not break tests. Focus on **behavior**, not **content**.
+
+```typescript
+// ❌ BAD: Testing text content (brittle)
+expect(screen.getByTestId('title').textContent).toBe('User Dashboard');
+expect(screen.getByTestId('status').textContent).toBe('Connected');
+expect(screen.getByTestId('error').textContent).toBe('Invalid input');
+
+// ✅ GOOD: Testing behavior and functional state
+expect(screen.getByTestId('title')).toBeDefined();
+expect(screen.getByTestId('status').getAttribute('data-state')).toBe('connected');
+expect(screen.getByTestId('error').getAttribute('data-severity')).toBe('high');
+```
+
+### **NEVER Test Style/Layout Attributes**
+
+Style attributes are implementation details that should not affect functionality tests. Only test attributes that affect **behavior**.
+
+```typescript
+// ❌ BAD: Testing style/layout attributes
+expect(element.getAttribute('data-height')).toBe('100%');
+expect(element.getAttribute('data-size')).toBe('xl');
+expect(element.getAttribute('data-padding')).toBe('md');
+expect(element.getAttribute('data-justify')).toBe('apart');
+expect(element.getAttribute('data-order')).toBe('3');
+
+// ✅ GOOD: Testing functional attributes only
+expect(element.getAttribute('data-color')).toBe('green');      // Affects visual behavior
+expect(element.getAttribute('data-variant')).toBe('light');    // Affects component state
+expect(element.getAttribute('data-state')).toBe('active');     // Affects functionality
+expect(element.getAttribute('data-disabled')).toBe('false');   // Affects behavior
+```
+
+### **Why These Rules Matter**
+
+- **🛡️ Maintainability**: Tests won't break when content or styles change
+- **⚡ Reliability**: Focus on what actually matters for functionality
+- **🎯 Purpose**: Unit tests should validate behavior, not presentation
+- **📈 Scalability**: Easier to update tests when requirements evolve
+
+---
+
+## 📊 **4. Test Organization**
 
 ### **Logical Grouping by Function Responsibility**
 
@@ -168,7 +219,7 @@ describe('Component Name', () => {
 
 ---
 
-## 🎯 **4. Testing Patterns**
+## 🎯 **5. Testing Patterns**
 
 ### **Required Test Structure (AAA Pattern)**
 
@@ -232,7 +283,7 @@ expect(screen.getByTestId('submit-button')).toBeInTheDocument();
 
 ---
 
-## 🎭 **5. Mocking Strategies & Test Doubles**
+## 🎭 **6. Mocking Strategies & Test Doubles**
 
 ### **Types of Test Doubles**
 
@@ -327,7 +378,7 @@ vi.mock('@mantine/notifications', () => ({
 
 ---
 
-## 📈 **6. Coverage Requirements**
+## 📈 **7. Coverage Requirements**
 
 ### **Minimum Coverage Targets**
 - **Statement Coverage:** ≥95%
@@ -358,7 +409,7 @@ npm run test:watch
 
 ---
 
-## ⚡ **7. Code Quality Standards**
+## ⚡ **8. Code Quality Standards**
 
 ### **Test Performance**
 
@@ -402,7 +453,7 @@ const mockResponse: ProcessResponse = {
 
 ---
 
-## 🌟 **8. Industry Best Practices**
+## 🌟 **9. Industry Best Practices**
 
 ### **Test Independence**
 - Each test MUST be completely independent
@@ -413,6 +464,12 @@ const mockResponse: ProcessResponse = {
 - One test = One behavior
 - Clear, descriptive test names
 - Focused assertions
+
+### **Content and Style Independence**
+- **NEVER** test text content - it changes and breaks tests
+- **NEVER** test styling attributes (height, size, padding, etc.)
+- **ONLY** test functional attributes that affect behavior (color, variant)
+- Focus on **behavior**, not **implementation** or **presentation**
 
 ### **Test Data Management**
 ```typescript
@@ -445,7 +502,7 @@ it('functionName() - should handle API errors gracefully', async () => {
 
 ---
 
-## 🚫 **9. Common Pitfalls to Avoid**
+## 🚫 **10. Common Pitfalls to Avoid**
 
 ### **❌ DON'T: Vague Test Names**
 ```typescript
@@ -460,6 +517,25 @@ expect(component.state.isLoading).toBe(true); // Internal state
 ### **❌ DON'T: Using getByText for UI Elements**
 ```typescript
 expect(screen.getByText('Submit')).toBeInTheDocument(); // Fragile
+```
+
+### **❌ DON'T: Validating Text Content**
+```typescript
+expect(element.textContent).toBe('Expected Text'); // Brittle - text may change
+expect(titleElement.textContent).toBe('App Title'); // Will fail if content updates
+```
+
+### **❌ DON'T: Testing Style-Related Data Attributes**
+```typescript
+// BAD: Testing layout/styling attributes
+expect(element.getAttribute('data-height')).toBe('100%');
+expect(element.getAttribute('data-size')).toBe('xl');
+expect(element.getAttribute('data-padding')).toBe('md');
+expect(element.getAttribute('data-justify')).toBe('apart');
+
+// GOOD: Testing functional attributes only
+expect(element.getAttribute('data-color')).toBe('green'); // Affects behavior
+expect(element.getAttribute('data-variant')).toBe('light'); // Affects behavior
 ```
 
 ### **❌ DON'T: Forgetting Async/Await**
@@ -536,7 +612,7 @@ vi.useRealTimers();
 
 ---
 
-## 📝 **11. Test Template**
+## 📝 **12. Test Template**
 
 Use this template for all new component tests:
 
@@ -591,16 +667,42 @@ describe('Component Name', () => {
       
       // ASSERT
       await waitFor(() => {
-        expect(screen.getByTestId('result')).toBeInTheDocument();
+        expect(screen.getByTestId('result')).toBeDefined();
       });
     });
     
     it('functionName() - should handle error cases gracefully', async () => {
-      // Test error scenarios
+      // ARRANGE
+      const mockError = new Error('Test error');
+      vi.mocked(apiCall).mockRejectedValueOnce(mockError);
+      
+      // ACT
+      await act(async () => {
+        render(<Component />);
+      });
+      
+      // ASSERT - Test behavior, not content
+      await waitFor(() => {
+        expect(screen.getByTestId('error-indicator')).toBeDefined();
+        // ✅ Good: Test functional state
+        expect(screen.getByTestId('status').getAttribute('data-state')).toBe('error');
+        // ❌ Bad: Don't test text content
+        // expect(screen.getByTestId('error-message').textContent).toBe('Error occurred');
+      });
     });
     
     it('functionName() - should handle edge cases', async () => {
-      // Test boundary conditions
+      // ARRANGE & ACT
+      await act(async () => {
+        render(<Component value={null} />);
+      });
+      
+      // ASSERT - Focus on behavior
+      expect(screen.getByTestId('component')).toBeDefined();
+      // ✅ Good: Test functional attributes
+      expect(screen.getByTestId('status').getAttribute('data-variant')).toBe('disabled');
+      // ❌ Bad: Don't test styling attributes
+      // expect(screen.getByTestId('wrapper').getAttribute('data-height')).toBe('auto');
     });
   });
 });
@@ -608,7 +710,7 @@ describe('Component Name', () => {
 
 ---
 
-## 🎯 **12. Success Criteria**
+## 🎯 **13. Success Criteria**
 
 A test suite is considered **high-quality** when it meets ALL these criteria:
 
@@ -621,10 +723,12 @@ A test suite is considered **high-quality** when it meets ALL these criteria:
 ✅ **Performance:** Test suite completes in <10 seconds  
 ✅ **Maintainability:** Clear naming and structure for easy updates  
 ✅ **Documentation:** Self-documenting through descriptive test names  
+✅ **Content Independence:** No text content validation - tests focus on behavior  
+✅ **Style Independence:** No styling attribute testing - only functional attributes  
 
 ---
 
-## 🔧 **12. npm Scripts**
+## 🔧 **14. npm Scripts**
 
 Ensure these scripts are available:
 
@@ -641,7 +745,7 @@ Ensure these scripts are available:
 
 ---
 
-## 🎯 **13. Test-Driven Development (TDD) Principles**
+## 🎯 **15. Test-Driven Development (TDD) Principles**
 
 While not mandatory, following TDD principles improves code quality:
 
@@ -675,7 +779,7 @@ function calculateTotal(items, taxRate) {
 
 ---
 
-## ⚖️ **14. Testing Confidence vs Speed Balance**
+## ⚖️ **16. Testing Confidence vs Speed Balance**
 
 **Golden Rule:** Optimize for confidence first, then speed.
 
@@ -708,7 +812,7 @@ it('user can complete checkout flow', () => {
 
 ---
 
-## 📚 **15. Additional Resources**
+## 📚 **17. Additional Resources**
 
 - **React Testing Library Docs:** https://testing-library.com/docs/react-testing-library/intro
 - **Vitest Documentation:** https://vitest.dev/
@@ -719,4 +823,12 @@ it('user can complete checkout flow', () => {
 
 ---
 
-**Remember:** These rules exist to ensure **consistent, maintainable, and reliable** tests. Always prioritize **clarity** and **function coverage** over clever test implementations. **Test behavior, not implementation.**
+**Remember:** These rules exist to ensure **consistent, maintainable, and reliable** tests. Always prioritize **clarity** and **function coverage** over clever test implementations. 
+
+## 🎯 **Golden Rules Summary**
+1. **Test behavior, not implementation or presentation**
+2. **NEVER validate text content** - it changes frequently  
+3. **NEVER test styling attributes** - focus on functionality
+4. **ONLY test functional attributes** that affect behavior
+5. **Use `data-testid` exclusively** - never `getByText()`
+6. **Follow AAA pattern** - Arrange, Act, Assert
