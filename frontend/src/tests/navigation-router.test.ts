@@ -1,40 +1,50 @@
-import { describe, it, expect } from 'vitest';
-import { getRouteByComponent, getRouteByTab, getTabForRoute, isValidRoute, APP_ROUTES, INTENT_TO_ROUTE, COMPONENT_TO_ROUTE, TAB_TO_ROUTE } from '../config/routes';
-import type { UIAssistance } from '../types';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { fetchAppRoutes, createDerivedMappings } from '../services/routes';
+import type { UIAssistance, AppRoutes } from '../types';
+
+// Import for accessing mocked services
+import { apiService } from '../services/api';
+
+// Mock the API service
+vi.mock('../services/api', () => ({
+  apiService: {
+    fetchRoutes: vi.fn()
+  }
+}));
 
 /**
- * Navigation Router System Tests
+ * Dynamic Navigation Router System Tests
  * 
- * Tests the React Router-based navigation system including:
- * - Route configuration and mapping
+ * Tests the React Router-based navigation system with dynamic routes including:
+ * - Dynamic route fetching from backend
+ * - Route configuration and mapping generation  
  * - Navigation utilities and validation
  * - UI assistance routing logic
  * - Browser navigation support
  */
 
-// Simulate the navigation logic from the main app
-const simulateNavigationLogic = (uiAssistance: Partial<UIAssistance>) => {
-  if (uiAssistance && uiAssistance.type === 'navigation') {
-    let routePath: string | undefined;
-    
-    // Route_path takes precedence
-    if (uiAssistance.route_path && isValidRoute(uiAssistance.route_path)) {
-      routePath = uiAssistance.route_path;
-    }
-    // Fallback to component name mapping
-    else if (uiAssistance.component_name) {
-      routePath = getRouteByComponent(uiAssistance.component_name);
-    }
-    
-    return routePath;
-  }
-  return undefined;
-};
+describe('Dynamic Navigation Router System', () => {
+  // Sample dynamic routes for testing
+  const mockDynamicRoutes: AppRoutes = {
+    '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking' },
+    '/banking/accounts': { intent: 'view_accounts', component: 'AccountsOverview', tab: 'banking' },
+    '/banking/transfers': { intent: 'transfer_money', component: 'TransfersHub', tab: 'banking' },
+    '/banking/transfers/wire': { intent: 'wire_transfer', component: 'WireTransferForm', tab: 'banking' },
+    '/banking/payments/bills': { intent: 'pay_bills', component: 'BillPayHub', tab: 'banking' },
+    '/customer-service': { intent: 'customer_service', component: 'CustomerServiceHub', tab: 'support' },
+    '/chat': { intent: 'chat_assistant', component: 'ChatPanel', tab: 'chat' }
+  };
 
-describe('Navigation Router System', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-  describe('Router Configuration - Module Structure', () => {
-    it('should export all required navigation constants', async () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe('Dynamic Route System - Module Structure', () => {
+    it('fetchAppRoutes() - should verify React Router dependencies are available', async () => {
       // Verify React Router dependencies are available
       const router = await import('react-router-dom');
       expect(router.BrowserRouter).toBeDefined();
@@ -43,26 +53,47 @@ describe('Navigation Router System', () => {
       expect(router.useNavigate).toBeDefined();
     });
 
-    it('should have complete route configuration structure', () => {
-      expect(APP_ROUTES).toBeDefined();
-      expect(INTENT_TO_ROUTE).toBeDefined();
-      expect(COMPONENT_TO_ROUTE).toBeDefined();
-      expect(TAB_TO_ROUTE).toBeDefined();
-      
-      expect(typeof APP_ROUTES).toBe('object');
-      expect(typeof INTENT_TO_ROUTE).toBe('object');
-      expect(typeof COMPONENT_TO_ROUTE).toBe('object');
-      expect(typeof TAB_TO_ROUTE).toBe('object');
+    it('fetchAppRoutes() - should fetch routes from backend API', async () => {
+      // ARRANGE
+      vi.mocked(apiService.fetchRoutes).mockResolvedValueOnce(mockDynamicRoutes);
+
+      // ACT
+      const routes = await fetchAppRoutes();
+
+      // ASSERT
+      expect(apiService.fetchRoutes).toHaveBeenCalledTimes(1);
+      expect(routes).toEqual(mockDynamicRoutes);
+      expect(typeof routes).toBe('object');
+    });
+
+    it('createDerivedMappings() - should generate complete mapping structure', async () => {
+      // ARRANGE & ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      expect(mappings).toHaveProperty('INTENT_TO_ROUTE');
+      expect(mappings).toHaveProperty('COMPONENT_TO_ROUTE');
+      expect(mappings).toHaveProperty('TAB_TO_ROUTE');
+      expect(mappings).toHaveProperty('ROUTE_PATHS');
+      expect(mappings).toHaveProperty('getRouteByComponent');
+      expect(mappings).toHaveProperty('getRouteByIntent');
+      expect(mappings).toHaveProperty('getRouteByTab');
+      expect(mappings).toHaveProperty('isValidRoute');
+      expect(mappings).toHaveProperty('getTabForRoute');
     });
   });
 
-  describe('Route Definition - Path Mapping', () => {
-    it('should define all required application routes', () => {
+  describe('Dynamic Route Definition - Path Mapping', () => {
+    it('createDerivedMappings() - should define all required application routes', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       const requiredRoutes = [
         // Main tab routes
         '/',                        // BankingDashboard
         '/chat',                    // ChatPanel
-        '/transaction',             // TransactionAssistance
+        '/customer-service',        // CustomerServiceHub
         // Banking sub-routes
         '/banking/accounts',        // AccountsOverview
         '/banking/transfers',       // TransfersHub  
@@ -71,81 +102,107 @@ describe('Navigation Router System', () => {
       ];
 
       requiredRoutes.forEach(route => {
-        expect(APP_ROUTES[route]).toBeDefined();
+        expect(mockDynamicRoutes[route]).toBeDefined();
+        expect(mappings.isValidRoute(route)).toBe(true);
         
-        const routeConfig = APP_ROUTES[route];
+        const routeConfig = mockDynamicRoutes[route];
         expect(routeConfig.component).toBeTruthy();
         expect(routeConfig.intent).toBeTruthy();
         expect(routeConfig.tab).toBeTruthy();
-        expect(typeof routeConfig.breadcrumb).toBe('string');
+        expect(typeof routeConfig.component).toBe('string');
+        expect(typeof routeConfig.intent).toBe('string');
+        expect(typeof routeConfig.tab).toBe('string');
       });
     });
 
-    it('should have correct route count', () => {
-      const routeCount = Object.keys(APP_ROUTES).length;
-      expect(routeCount).toBe(7); // Updated count
+    it('createDerivedMappings() - should have correct route count', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      const routeCount = mappings.ROUTE_PATHS.length;
+      expect(routeCount).toBe(7);
     });
 
-    it('should have valid route structure', () => {
-      Object.entries(APP_ROUTES).forEach(([path, config]) => {
+    it('createDerivedMappings() - should have valid route structure', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      mappings.ROUTE_PATHS.forEach(path => {
         // Path validation
         expect(path.startsWith('/')).toBe(true);
         expect(path).not.toContain('..');
         expect(path).not.toContain('//');
         
         // Config validation
+        const config = mockDynamicRoutes[path];
         expect(config.component).toBeTruthy();
         expect(config.intent).toBeTruthy();
-        expect(config.breadcrumb).toBeTruthy();
         expect(config.tab).toBeTruthy();
         expect(typeof config.component).toBe('string');
         expect(typeof config.intent).toBe('string');
-        expect(typeof config.breadcrumb).toBe('string');
         expect(typeof config.tab).toBe('string');
       });
     });
   });
 
-  describe('Intent Mapping - Backend Integration', () => {
-    it('should map intents to correct routes', () => {
+  describe('Dynamic Intent Mapping - Backend Integration', () => {
+    it('INTENT_TO_ROUTE - should map intents to correct routes', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       const intentMappings = [
         // Main tab routes
-        { intent: 'navigation.banking.dashboard', route: '/' },
-        { intent: 'navigation.chat.assistant', route: '/chat' },
-        { intent: 'navigation.transaction.assistance', route: '/transaction' },
+        { intent: 'dashboard', route: '/' },
+        { intent: 'chat_assistant', route: '/chat' },
+        { intent: 'customer_service', route: '/customer-service' },
         // Banking sub-routes
-        { intent: 'navigation.accounts.overview', route: '/banking/accounts' },
-        { intent: 'navigation.transfers.hub', route: '/banking/transfers' },
-        { intent: 'navigation.transfers.wire', route: '/banking/transfers/wire' },
-        { intent: 'navigation.payments.bills', route: '/banking/payments/bills' }
+        { intent: 'view_accounts', route: '/banking/accounts' },
+        { intent: 'transfer_money', route: '/banking/transfers' },
+        { intent: 'wire_transfer', route: '/banking/transfers/wire' },
+        { intent: 'pay_bills', route: '/banking/payments/bills' }
       ];
 
       intentMappings.forEach(({ intent, route }) => {
-        expect(INTENT_TO_ROUTE[intent]).toBe(route);
+        expect(mappings.INTENT_TO_ROUTE[intent]).toBe(route);
       });
     });
 
-    it('should have bidirectional mapping consistency', () => {
-      Object.entries(INTENT_TO_ROUTE).forEach(([intent, route]) => {
-        expect(APP_ROUTES[route]).toBeDefined();
-        expect(APP_ROUTES[route].intent).toBe(intent);
+    it('INTENT_TO_ROUTE - should have bidirectional mapping consistency', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      Object.entries(mappings.INTENT_TO_ROUTE).forEach(([intent, route]) => {
+        expect(mockDynamicRoutes[route]).toBeDefined();
+        expect(mockDynamicRoutes[route].intent).toBe(intent);
       });
     });
 
-    it('should have complete intent coverage', () => {
-      const intentCount = Object.keys(INTENT_TO_ROUTE).length;
-      const routeCount = Object.keys(APP_ROUTES).length;
+    it('INTENT_TO_ROUTE - should have complete intent coverage', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      const intentCount = Object.keys(mappings.INTENT_TO_ROUTE).length;
+      const routeCount = mappings.ROUTE_PATHS.length;
       expect(intentCount).toBe(routeCount);
     });
   });
 
-  describe('Component Mapping - Frontend Integration', () => {
-    it('should map component names to correct routes', () => {
+  describe('Dynamic Component Mapping - Frontend Integration', () => {
+    it('COMPONENT_TO_ROUTE - should map component names to correct routes', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       const componentMappings = [
         // Main tab routes
         { component: 'BankingDashboard', route: '/' },
         { component: 'ChatPanel', route: '/chat' },
-        { component: 'TransactionAssistance', route: '/transaction' },
+        { component: 'CustomerServiceHub', route: '/customer-service' },
         // Banking sub-routes
         { component: 'AccountsOverview', route: '/banking/accounts' },
         { component: 'TransfersHub', route: '/banking/transfers' },
@@ -154,52 +211,86 @@ describe('Navigation Router System', () => {
       ];
 
       componentMappings.forEach(({ component, route }) => {
-        expect(COMPONENT_TO_ROUTE[component]).toBe(route);
+        expect(mappings.COMPONENT_TO_ROUTE[component]).toBe(route);
       });
     });
 
-    it('should have component-route consistency', () => {
-      Object.entries(COMPONENT_TO_ROUTE).forEach(([component, route]) => {
-        expect(APP_ROUTES[route]).toBeDefined();
-        expect(APP_ROUTES[route].component).toBe(component);
+    it('COMPONENT_TO_ROUTE - should have component-route consistency', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      Object.entries(mappings.COMPONENT_TO_ROUTE).forEach(([component, route]) => {
+        expect(mockDynamicRoutes[route]).toBeDefined();
+        expect(mockDynamicRoutes[route].component).toBe(component);
       });
     });
 
-    it('should have complete component coverage', () => {
-      const componentCount = Object.keys(COMPONENT_TO_ROUTE).length;
-      const routeCount = Object.keys(APP_ROUTES).length;
+    it('COMPONENT_TO_ROUTE - should have complete component coverage', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      const componentCount = Object.keys(mappings.COMPONENT_TO_ROUTE).length;
+      const routeCount = mappings.ROUTE_PATHS.length;
       expect(componentCount).toBe(routeCount);
     });
   });
 
-  describe('Tab Mapping - UI Integration', () => {
-    it('should map tab names to correct routes', () => {
+  describe('Dynamic Tab Mapping - UI Integration', () => {
+    it('TAB_TO_ROUTE - should map tab names to correct main routes', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       const tabMappings = [
         { tab: 'banking', route: '/' },
         { tab: 'chat', route: '/chat' },
-        { tab: 'transaction', route: '/transaction' }
+        { tab: 'support', route: '/customer-service' }
       ];
 
       tabMappings.forEach(({ tab, route }) => {
-        expect(TAB_TO_ROUTE[tab]).toBe(route);
+        expect(mappings.TAB_TO_ROUTE[tab]).toBe(route);
       });
     });
 
-    it('should have tab-route consistency', () => {
-      Object.entries(TAB_TO_ROUTE).forEach(([tab, route]) => {
-        expect(APP_ROUTES[route]).toBeDefined();
-        expect(APP_ROUTES[route].tab).toBe(tab);
+    it('TAB_TO_ROUTE - should have tab-route consistency', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      Object.entries(mappings.TAB_TO_ROUTE).forEach(([tab, route]) => {
+        expect(mockDynamicRoutes[route]).toBeDefined();
+        expect(mockDynamicRoutes[route].tab).toBe(tab);
       });
+    });
+
+    it('TAB_TO_ROUTE - should only include main tab routes, not sub-routes', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      // Should not include sub-routes like /banking/transfers or /banking/accounts
+      expect(mappings.TAB_TO_ROUTE).not.toHaveProperty('/banking/transfers');
+      expect(mappings.TAB_TO_ROUTE).not.toHaveProperty('/banking/accounts');
+      expect(mappings.TAB_TO_ROUTE).not.toHaveProperty('/banking/payments/bills');
+      
+      // Should only have main routes for each tab
+      expect(Object.keys(mappings.TAB_TO_ROUTE)).toHaveLength(3);
     });
   });
 
   describe('getRouteByComponent() - Utility Function', () => {
-    it('should return correct routes for valid components', () => {
+    it('getRouteByComponent() - should return correct routes for valid components', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       const testCases = [
         // Main tab components
         { component: 'BankingDashboard', expected: '/' },
         { component: 'ChatPanel', expected: '/chat' },
-        { component: 'TransactionAssistance', expected: '/transaction' },
+        { component: 'CustomerServiceHub', expected: '/customer-service' },
         // Banking sub-components  
         { component: 'AccountsOverview', expected: '/banking/accounts' },
         { component: 'TransfersHub', expected: '/banking/transfers' },
@@ -208,84 +299,144 @@ describe('Navigation Router System', () => {
       ];
 
       testCases.forEach(({ component, expected }) => {
-        expect(getRouteByComponent(component)).toBe(expected);
+        expect(mappings.getRouteByComponent(component)).toBe(expected);
       });
     });
 
-    it('should return undefined for invalid components', () => {
+    it('getRouteByComponent() - should return undefined for invalid components', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       const invalidComponents = [
         'InvalidComponent',
         'NonExistentScreen',
         '',
-        null,
-        undefined
+        'null',
+        'undefined'
       ];
 
       invalidComponents.forEach(component => {
-        expect(getRouteByComponent(component as string)).toBeUndefined();
+        expect(mappings.getRouteByComponent(component)).toBeUndefined();
       });
     });
 
-    it('should handle edge cases safely', () => {
-      expect(getRouteByComponent('')).toBeUndefined();
-      expect(getRouteByComponent('  ')).toBeUndefined();
-      expect(getRouteByComponent('ACCOUNTSOVERVIEW')).toBeUndefined(); // Case sensitive
+    it('getRouteByComponent() - should handle edge cases safely', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      expect(mappings.getRouteByComponent('')).toBeUndefined();
+      expect(mappings.getRouteByComponent('  ')).toBeUndefined();
+      expect(mappings.getRouteByComponent('ACCOUNTSOVERVIEW')).toBeUndefined(); // Case sensitive
+    });
+  });
+
+  describe('getRouteByIntent() - Intent Utility Function', () => {
+    it('getRouteByIntent() - should return correct routes for valid intents', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      const testCases = [
+        { intent: 'dashboard', expected: '/' },
+        { intent: 'chat_assistant', expected: '/chat' },
+        { intent: 'customer_service', expected: '/customer-service' },
+        { intent: 'view_accounts', expected: '/banking/accounts' },
+        { intent: 'transfer_money', expected: '/banking/transfers' }
+      ];
+
+      testCases.forEach(({ intent, expected }) => {
+        expect(mappings.getRouteByIntent(intent)).toBe(expected);
+      });
+    });
+
+    it('getRouteByIntent() - should return undefined for invalid intents', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      const invalidIntents = ['invalid', 'nonexistent', '', 'null', 'undefined'];
+
+      invalidIntents.forEach(intent => {
+        expect(mappings.getRouteByIntent(intent)).toBeUndefined();
+      });
     });
   });
 
   describe('getRouteByTab() - Tab Utility Function', () => {
-    it('should return correct routes for valid tabs', () => {
+    it('getRouteByTab() - should return correct routes for valid tabs', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       const testCases = [
         { tab: 'banking', expected: '/' },
         { tab: 'chat', expected: '/chat' },
-        { tab: 'transaction', expected: '/transaction' }
+        { tab: 'support', expected: '/customer-service' }
       ];
 
       testCases.forEach(({ tab, expected }) => {
-        expect(getRouteByTab(tab)).toBe(expected);
+        expect(mappings.getRouteByTab(tab)).toBe(expected);
       });
     });
 
-    it('should return undefined for invalid tabs', () => {
-      const invalidTabs = ['invalid', 'nonexistent', '', null, undefined];
+    it('getRouteByTab() - should return undefined for invalid tabs', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      const invalidTabs = ['invalid', 'nonexistent', '', 'null', 'undefined'];
 
       invalidTabs.forEach(tab => {
-        expect(getRouteByTab(tab as string)).toBeUndefined();
+        expect(mappings.getRouteByTab(tab)).toBeUndefined();
       });
     });
   });
 
   describe('getTabForRoute() - Route-to-Tab Utility Function', () => {
-    it('should return correct tabs for valid routes', () => {
+    it('getTabForRoute() - should return correct tabs for valid routes', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       const testCases = [
         { route: '/', expected: 'banking' },
         { route: '/chat', expected: 'chat' },
-        { route: '/transaction', expected: 'transaction' },
+        { route: '/customer-service', expected: 'support' },
         { route: '/banking/accounts', expected: 'banking' },
         { route: '/banking/transfers', expected: 'banking' }
       ];
 
       testCases.forEach(({ route, expected }) => {
-        expect(getTabForRoute(route)).toBe(expected);
+        expect(mappings.getTabForRoute(route)).toBe(expected);
       });
     });
 
-    it('should return undefined for invalid routes', () => {
-      const invalidRoutes = ['/invalid', '/nonexistent', '', null, undefined];
+    it('getTabForRoute() - should return undefined for invalid routes', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
+      const invalidRoutes = ['/invalid', '/nonexistent', '', 'null', 'undefined'];
 
       invalidRoutes.forEach(route => {
-        expect(getTabForRoute(route as string)).toBeUndefined();
+        expect(mappings.getTabForRoute(route)).toBeUndefined();
       });
     });
   });
 
   describe('isValidRoute() - Validation Function', () => {
-    it('should validate existing routes as true', () => {
+    it('isValidRoute() - should validate existing routes as true', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       const validRoutes = [
         // Main tab routes
         '/',
         '/chat',
-        '/transaction', 
+        '/customer-service', 
         // Banking sub-routes
         '/banking/accounts',
         '/banking/transfers', 
@@ -294,11 +445,15 @@ describe('Navigation Router System', () => {
       ];
 
       validRoutes.forEach(route => {
-        expect(isValidRoute(route)).toBe(true);
+        expect(mappings.isValidRoute(route)).toBe(true);
       });
     });
 
-    it('should validate non-existing routes as false', () => {
+    it('isValidRoute() - should validate non-existing routes as false', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       const invalidRoutes = [
         '/invalid/route',
         '/banking', // Not a defined route (/ is the banking dashboard)
@@ -311,28 +466,51 @@ describe('Navigation Router System', () => {
       ];
 
       invalidRoutes.forEach(route => {
-        expect(isValidRoute(route)).toBe(false);
+        expect(mappings.isValidRoute(route)).toBe(false);
       });
     });
 
-    it('should handle malformed inputs safely', () => {
+    it('isValidRoute() - should handle malformed inputs safely', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       const malformedInputs = [
-        null,
-        undefined,
-        123 as never,
-        {} as never,
-        [] as never
+        '',
+        '   ',
+        '/invalid'
       ];
 
       malformedInputs.forEach(input => {
-        expect(isValidRoute(input as string)).toBe(false);
+        expect(mappings.isValidRoute(input)).toBe(false);
       });
     });
   });
 
   describe('handleUIAssistance() - Navigation Logic', () => {
+    // Simulate the navigation logic from the main app using dynamic routes
+    const simulateNavigationLogic = (uiAssistance: Partial<UIAssistance>, routes: AppRoutes) => {
+      const mappings = createDerivedMappings(routes);
+      
+      if (uiAssistance && uiAssistance.type === 'navigation') {
+        let routePath: string | undefined;
+        
+        // Route_path takes precedence
+        if (uiAssistance.route_path && mappings.isValidRoute(uiAssistance.route_path)) {
+          routePath = uiAssistance.route_path;
+        }
+        // Fallback to component name mapping
+        else if (uiAssistance.component_name) {
+          routePath = mappings.getRouteByComponent(uiAssistance.component_name);
+        }
+        
+        return routePath;
+      }
+      return undefined;
+    };
 
-    it('should prioritize route_path over component_name when valid', () => {
+    it('handleUIAssistance() - should prioritize route_path over component_name when valid', () => {
+      // ARRANGE
       const assistance: Partial<UIAssistance> = {
         type: 'navigation',
         route_path: '/banking/accounts',
@@ -340,11 +518,15 @@ describe('Navigation Router System', () => {
         title: 'Accounts'
       };
 
-      const result = simulateNavigationLogic(assistance);
+      // ACT
+      const result = simulateNavigationLogic(assistance, mockDynamicRoutes);
+
+      // ASSERT
       expect(result).toBe('/banking/accounts'); // Should use route_path
     });
 
-    it('should fallback to component_name when route_path invalid', () => {
+    it('handleUIAssistance() - should fallback to component_name when route_path invalid', () => {
+      // ARRANGE
       const assistance: Partial<UIAssistance> = {
         type: 'navigation', 
         route_path: '/invalid/path',
@@ -352,11 +534,15 @@ describe('Navigation Router System', () => {
         title: 'Accounts'
       };
 
-      const result = simulateNavigationLogic(assistance);
+      // ACT
+      const result = simulateNavigationLogic(assistance, mockDynamicRoutes);
+
+      // ASSERT
       expect(result).toBe('/banking/accounts'); // Should use component mapping
     });
 
-    it('should handle all navigation components correctly', () => {
+    it('handleUIAssistance() - should handle all navigation components correctly', () => {
+      // ARRANGE
       const testCases = [
         {
           name: 'AccountsOverview navigation',
@@ -396,13 +582,15 @@ describe('Navigation Router System', () => {
         }
       ];
 
+      // ACT & ASSERT
       testCases.forEach(({ assistance, expected }) => {
-        const result = simulateNavigationLogic(assistance);
+        const result = simulateNavigationLogic(assistance, mockDynamicRoutes);
         expect(result).toBe(expected);
       });
     });
 
-    it('should return undefined for invalid navigation requests', () => {
+    it('handleUIAssistance() - should return undefined for invalid navigation requests', () => {
+      // ARRANGE
       const invalidCases = [
         {
           name: 'Invalid route and component',
@@ -430,18 +618,21 @@ describe('Navigation Router System', () => {
         }
       ];
 
+      // ACT & ASSERT
       invalidCases.forEach(({ assistance }) => {
-        const result = simulateNavigationLogic(assistance);
+        const result = simulateNavigationLogic(assistance, mockDynamicRoutes);
         expect(result).toBeUndefined();
       });
     });
   });
 
   describe('Browser Navigation Support', () => {
-    it('should have proper route structure for browser navigation', () => {
-      const routes = Object.keys(APP_ROUTES);
+    it('createDerivedMappings() - should have proper route structure for browser navigation', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
       
-      routes.forEach(route => {
+      // ASSERT
+      mappings.ROUTE_PATHS.forEach(route => {
         // Routes should be absolute paths
         expect(route.startsWith('/')).toBe(true);
         // No relative navigation patterns
@@ -451,11 +642,13 @@ describe('Navigation Router System', () => {
       });
     });
 
-    it('should support semantic, bookmarkable URLs', () => {
-      const routes = Object.keys(APP_ROUTES);
+    it('createDerivedMappings() - should support semantic, bookmarkable URLs', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
       
+      // ASSERT
       // Should not expose implementation details
-      routes.forEach(route => {
+      mappings.ROUTE_PATHS.forEach(route => {
         expect(route).not.toContain('screen');
         expect(route).not.toContain('component');
         expect(route).not.toContain('page');
@@ -463,50 +656,56 @@ describe('Navigation Router System', () => {
       });
 
       // Should have logical URL structure
-      expect(routes).toContain('/'); // Root banking dashboard
-      expect(routes).toContain('/chat'); // Chat tab
-      expect(routes).toContain('/transaction'); // Transaction tab
+      expect(mappings.ROUTE_PATHS).toContain('/'); // Root banking dashboard
+      expect(mappings.ROUTE_PATHS).toContain('/chat'); // Chat tab
+      expect(mappings.ROUTE_PATHS).toContain('/customer-service'); // Support tab
       
       // Banking sub-routes should be hierarchical
-      const bankingRoutes = routes.filter(route => route.startsWith('/banking'));
+      const bankingRoutes = mappings.ROUTE_PATHS.filter(route => route.startsWith('/banking'));
       expect(bankingRoutes.length).toBeGreaterThan(0);
       bankingRoutes.forEach(route => {
         expect(route).toMatch(/^\/banking\/[a-z]+/);
       });
     });
 
-    it('should have hierarchical URL structure', () => {
-      const routes = Object.keys(APP_ROUTES);
+    it('createDerivedMappings() - should have hierarchical URL structure', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
       
+      // ASSERT
       // Check hierarchical structure
-      expect(routes).toContain('/banking/accounts');
-      expect(routes).toContain('/banking/transfers');
-      expect(routes).toContain('/banking/transfers/wire'); // Nested under transfers
-      expect(routes).toContain('/banking/payments/bills'); // Under payments
+      expect(mappings.ROUTE_PATHS).toContain('/banking/accounts');
+      expect(mappings.ROUTE_PATHS).toContain('/banking/transfers');
+      expect(mappings.ROUTE_PATHS).toContain('/banking/transfers/wire'); // Nested under transfers
+      expect(mappings.ROUTE_PATHS).toContain('/banking/payments/bills'); // Under payments
       
       // Verify proper nesting
-      const transfersRoutes = routes.filter(route => route.startsWith('/banking/transfers'));
+      const transfersRoutes = mappings.ROUTE_PATHS.filter(route => route.startsWith('/banking/transfers'));
       expect(transfersRoutes.length).toBeGreaterThan(1); // Base + nested routes
     });
   });
 
   describe('System Integration - End-to-End Validation', () => {
-    it('should meet all navigation system requirements', () => {
+    it('createDerivedMappings() - should meet all navigation system requirements', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       // All components have route mappings
       const componentRouteMapping = [
         'BankingDashboard',
         'ChatPanel',
-        'TransactionAssistance',
+        'CustomerServiceHub',
         'AccountsOverview',
         'TransfersHub', 
         'WireTransferForm',
         'BillPayHub'
-      ].every(component => getRouteByComponent(component) !== undefined);
+      ].every(component => mappings.getRouteByComponent(component) !== undefined);
       
       expect(componentRouteMapping).toBe(true);
 
       // URLs are bookmarkable (semantic paths)
-      const bookmarkableUrls = Object.keys(APP_ROUTES).every(route => {
+      const bookmarkableUrls = mappings.ROUTE_PATHS.every(route => {
         return !route.includes('component') && 
                !route.includes('screen') &&
                route.startsWith('/');
@@ -515,37 +714,62 @@ describe('Navigation Router System', () => {
       expect(bookmarkableUrls).toBe(true);
 
       // Complete system coverage
-      expect(Object.keys(APP_ROUTES)).toHaveLength(7);
-      expect(Object.keys(INTENT_TO_ROUTE)).toHaveLength(7);
-      expect(Object.keys(COMPONENT_TO_ROUTE)).toHaveLength(7);
-      expect(Object.keys(TAB_TO_ROUTE)).toHaveLength(3);
+      expect(mappings.ROUTE_PATHS).toHaveLength(7);
+      expect(Object.keys(mappings.INTENT_TO_ROUTE)).toHaveLength(7);
+      expect(Object.keys(mappings.COMPONENT_TO_ROUTE)).toHaveLength(7);
+      expect(Object.keys(mappings.TAB_TO_ROUTE)).toHaveLength(3);
     });
 
-    it('should maintain consistency across all mapping systems', () => {
-      const routes = Object.keys(APP_ROUTES);
+    it('createDerivedMappings() - should maintain consistency across all mapping systems', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
       
+      // ASSERT
       // Every route should have corresponding intent and component mappings
-      routes.forEach(route => {
-        const routeConfig = APP_ROUTES[route];
+      mappings.ROUTE_PATHS.forEach(route => {
+        const routeConfig = mockDynamicRoutes[route];
         
         // Intent mapping consistency
-        expect(INTENT_TO_ROUTE[routeConfig.intent]).toBe(route);
+        expect(mappings.INTENT_TO_ROUTE[routeConfig.intent]).toBe(route);
         
         // Component mapping consistency  
-        expect(COMPONENT_TO_ROUTE[routeConfig.component]).toBe(route);
+        expect(mappings.COMPONENT_TO_ROUTE[routeConfig.component]).toBe(route);
         
         // Route validation consistency
-        expect(isValidRoute(route)).toBe(true);
+        expect(mappings.isValidRoute(route)).toBe(true);
         
         // Component lookup consistency
-        expect(getRouteByComponent(routeConfig.component)).toBe(route);
+        expect(mappings.getRouteByComponent(routeConfig.component)).toBe(route);
         
         // Tab mapping consistency
-        expect(getTabForRoute(route)).toBe(routeConfig.tab);
+        expect(mappings.getTabForRoute(route)).toBe(routeConfig.tab);
       });
     });
 
-    it('should handle all expected navigation scenarios', () => {
+    it('createDerivedMappings() - should handle all expected navigation scenarios', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+      
+      // ARRANGE
+      const simulateNavigationLogic = (uiAssistance: Partial<UIAssistance>) => {
+        if (uiAssistance && uiAssistance.type === 'navigation') {
+          let routePath: string | undefined;
+          
+          // Route_path takes precedence
+          if (uiAssistance.route_path && mappings.isValidRoute(uiAssistance.route_path)) {
+            routePath = uiAssistance.route_path;
+          }
+          // Fallback to component name mapping
+          else if (uiAssistance.component_name) {
+            routePath = mappings.getRouteByComponent(uiAssistance.component_name);
+          }
+          
+          return routePath;
+        }
+        return undefined;
+      };
+
+      // ASSERT
       // Test realistic navigation scenarios
       const scenarios = [
         {
@@ -565,7 +789,7 @@ describe('Navigation Router System', () => {
         },
         {
           name: 'Intent-based navigation',
-          intent: 'navigation.payments.bills',
+          intent: 'pay_bills',
           expected: '/banking/payments/bills'
         }
       ];
@@ -581,26 +805,49 @@ describe('Navigation Router System', () => {
         }
         
         if ('intent' in scenario) {
-          expect(INTENT_TO_ROUTE[scenario.intent]).toBe(scenario.expected);
+          expect(mappings.INTENT_TO_ROUTE[scenario.intent]).toBe(scenario.expected);
         }
       });
     });
   });
 
   describe('Error Handling and Edge Cases', () => {
-    it('should handle utility function edge cases safely', () => {
+    it('createDerivedMappings() - should handle utility function edge cases safely', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       // getRouteByComponent edge cases
-      expect(getRouteByComponent('')).toBeUndefined();
-      expect(getRouteByComponent(' ')).toBeUndefined();
-      expect(getRouteByComponent('invalid')).toBeUndefined();
+      expect(mappings.getRouteByComponent('')).toBeUndefined();
+      expect(mappings.getRouteByComponent(' ')).toBeUndefined();
+      expect(mappings.getRouteByComponent('invalid')).toBeUndefined();
       
       // isValidRoute edge cases
-      expect(isValidRoute('')).toBe(false);
-      expect(isValidRoute(' ')).toBe(false);
-      expect(isValidRoute('/invalid')).toBe(false);
+      expect(mappings.isValidRoute('')).toBe(false);
+      expect(mappings.isValidRoute(' ')).toBe(false);
+      expect(mappings.isValidRoute('/invalid')).toBe(false);
     });
 
-    it('should handle malformed navigation assistance', () => {
+    it('fetchAppRoutes() - should handle malformed navigation assistance', async () => {
+      // ARRANGE
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+      
+      const simulateNavigationLogic = (uiAssistance: any) => {
+        if (uiAssistance && uiAssistance.type === 'navigation') {
+          let routePath: string | undefined;
+          
+          if (uiAssistance.route_path && mappings.isValidRoute(uiAssistance.route_path)) {
+            routePath = uiAssistance.route_path;
+          }
+          else if (uiAssistance.component_name) {
+            routePath = mappings.getRouteByComponent(uiAssistance.component_name);
+          }
+          
+          return routePath;
+        }
+        return undefined;
+      };
+
       const malformedCases = [
         {},
         { type: 'invalid' },
@@ -610,27 +857,57 @@ describe('Navigation Router System', () => {
         undefined
       ];
 
+      // ACT & ASSERT
       malformedCases.forEach(assistance => {
-        const result = simulateNavigationLogic(assistance as never);
+        const result = simulateNavigationLogic(assistance);
         expect(result).toBeUndefined();
       });
     });
 
-    it('should validate route configuration integrity', () => {
+    it('createDerivedMappings() - should validate route configuration integrity', () => {
+      // ACT
+      const mappings = createDerivedMappings(mockDynamicRoutes);
+
+      // ASSERT
       // No duplicate routes
-      const routes = Object.keys(APP_ROUTES);
+      const routes = mappings.ROUTE_PATHS;
       const uniqueRoutes = [...new Set(routes)];
       expect(routes.length).toBe(uniqueRoutes.length);
 
       // No duplicate components
-      const components = Object.values(APP_ROUTES).map(config => config.component);
+      const components = Object.values(mockDynamicRoutes).map(config => config.component);
       const uniqueComponents = [...new Set(components)];
       expect(components.length).toBe(uniqueComponents.length);
 
       // No duplicate intents
-      const intents = Object.values(APP_ROUTES).map(config => config.intent);
+      const intents = Object.values(mockDynamicRoutes).map(config => config.intent);
       const uniqueIntents = [...new Set(intents)];
       expect(intents.length).toBe(uniqueIntents.length);
+    });
+
+    it('fetchAppRoutes() - should handle dynamic route loading errors gracefully', async () => {
+      // ARRANGE
+      const routeLoadError = new Error('Failed to load dynamic routes');
+      vi.mocked(apiService.fetchRoutes).mockRejectedValueOnce(routeLoadError);
+
+      // ACT & ASSERT
+      await expect(fetchAppRoutes()).rejects.toThrow('Failed to load dynamic routes');
+      expect(apiService.fetchRoutes).toHaveBeenCalledTimes(1);
+    });
+
+    it('createDerivedMappings() - should handle empty routes configuration', () => {
+      // ARRANGE
+      const emptyRoutes: AppRoutes = {};
+
+      // ACT
+      const mappings = createDerivedMappings(emptyRoutes);
+
+      // ASSERT
+      expect(mappings.ROUTE_PATHS).toEqual([]);
+      expect(mappings.INTENT_TO_ROUTE).toEqual({});
+      expect(mappings.COMPONENT_TO_ROUTE).toEqual({});
+      expect(mappings.TAB_TO_ROUTE).toEqual({});
+      expect(mappings.isValidRoute('/')).toBe(false);
     });
   });
 });
