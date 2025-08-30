@@ -11,7 +11,8 @@ import {
   Card,
   Title,
   SimpleGrid,
-
+  LoadingOverlay,
+  Alert,
   ActionIcon,
   Affix,
   Transition
@@ -19,14 +20,14 @@ import {
 import { useForm } from '@mantine/form';
 import { Notifications, notifications } from '@mantine/notifications';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, Account } from './types';
+import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, Account, AppRoutes } from './types';
 import { BankingScreens } from './components/BankingScreens';
 import { DynamicForm } from './components/DynamicForm';
 import { ChatPanel } from './components/ChatPanel';
 import { Header } from './components/Header';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
-import { APP_ROUTES, getRouteByComponent, getTabForRoute, isValidRoute } from './config/routes';
+import { fetchAppRoutes, createDerivedMappings } from './services/routes';
 
 export const MainApp: React.FC = () => {
   const navigate = useNavigate();
@@ -37,9 +38,15 @@ export const MainApp: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [dynamicForm, setDynamicForm] = useState<DynamicFormConfig | null>(null);
   const [showNavigationAssistant, setShowNavigationAssistant] = useState<boolean>(false);
+  
+  // API-driven routes state
+  const [appRoutes, setAppRoutes] = useState<AppRoutes | null>(null);
+  const [routesLoading, setRoutesLoading] = useState(true);
+  const [routesError, setRoutesError] = useState<string | null>(null);
+  const [routeMappings, setRouteMappings] = useState<ReturnType<typeof createDerivedMappings> | null>(null);
 
-  // Derive active tab from URL - single source of truth
-  const activeTab = getTabForRoute(location.pathname) || 'banking';
+  // Derive active tab from URL using API-loaded routes
+  const activeTab = routeMappings?.getTabForRoute(location.pathname) || 'banking';
 
   const form = useForm({
     initialValues: {
@@ -128,12 +135,12 @@ export const MainApp: React.FC = () => {
         let routePath: string | undefined;
         
         // Try to use route_path from backend response first
-        if (uiAssistance.route_path && isValidRoute(uiAssistance.route_path)) {
+        if (uiAssistance.route_path && routeMappings?.isValidRoute(uiAssistance.route_path)) {
           routePath = uiAssistance.route_path;
         }
         // Fallback to component name mapping
         else if (uiAssistance.component_name) {
-          routePath = getRouteByComponent(uiAssistance.component_name);
+          routePath = routeMappings?.getRouteByComponent(uiAssistance.component_name);
         }
         
         if (routePath) {
@@ -399,17 +406,85 @@ export const MainApp: React.FC = () => {
     }
   };
 
+  // Load routes from API
+  const loadRoutes = async () => {
+    try {
+      setRoutesLoading(true);
+      setRoutesError(null);
+      
+      const routes = await fetchAppRoutes();
+      const mappings = createDerivedMappings(routes);
+      
+      setAppRoutes(routes);
+      setRouteMappings(mappings);
+      
+      console.log('Routes loaded successfully:', routes);
+    } catch (error) {
+      const errorMessage = 'Failed to load application routes';
+      setRoutesError(errorMessage);
+      console.error('Route loading error:', error);
+    } finally {
+      setRoutesLoading(false);
+    }
+  };
+
+  // Load routes on app startup
+  useEffect(() => {
+    loadRoutes();
+  }, []);
+
   // useEffect needs to be after all function declarations to avoid hoisting issues  
   useEffect(() => {
-    initializeSession();
-    loadAccounts();
-    connectWebSocket();
+    // Only initialize after routes are loaded
+    if (!routesLoading && !routesError) {
+      initializeSession();
+      loadAccounts();
+      connectWebSocket();
+    }
 
     return () => {
       websocketService.disconnect(ws);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [routesLoading, routesError]);
+
+  // Loading state
+  if (routesLoading) {
+    return (
+      <MantineProvider>
+        <div data-testid="app">
+          <LoadingOverlay 
+            visible={true} 
+            overlayProps={{ radius: "sm", blur: 2 }} 
+            loaderProps={{ color: 'blue', type: 'dots', size: 'md' }}
+          />
+        </div>
+      </MantineProvider>
+    );
+  }
+
+  // Error state
+  if (routesError || !appRoutes || !routeMappings) {
+    return (
+      <MantineProvider>
+        <div data-testid="app">
+          <Container size="sm" style={{ textAlign: 'center', marginTop: '2rem' }}>
+            <Alert variant="light" color="red" title="Loading Error">
+              {routesError || 'Failed to load application'}
+              <Button 
+                variant="light" 
+                color="blue" 
+                onClick={loadRoutes}
+                style={{ marginTop: '1rem' }}
+              >
+                Retry
+              </Button>
+            </Alert>
+          </Container>
+        </div>
+      </MantineProvider>
+    );
+  }
 
   return (
     <MantineProvider>
@@ -418,15 +493,15 @@ export const MainApp: React.FC = () => {
           header={{ height: 56 }}
           padding="md"
         >
-          <Header isConnected={isConnected} />
+          <Header isConnected={isConnected} appRoutes={appRoutes} />
 
           <AppShell.Main>
             <Container size="xl">
               {/* Main Content Area - Configuration-driven Routes */}
               <Container size="xl" pt="md">
                 <Routes>
-                  {/* Generate routes from APP_ROUTES configuration */}
-                  {Object.entries(APP_ROUTES).map(([routePath, config]) => (
+                  {/* Generate routes from API-loaded routes configuration */}
+                  {Object.entries(appRoutes).map(([routePath, config]) => (
                     <Route 
                       key={routePath}
                       path={routePath} 

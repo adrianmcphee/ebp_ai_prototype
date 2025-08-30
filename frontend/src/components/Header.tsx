@@ -14,11 +14,12 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { IconChevronDown } from '@tabler/icons-react';
-import { APP_ROUTES } from '../config/routes';
 import classes from './Header.module.css';
+import type { AppRoutes } from '../types';
 
 interface HeaderProps {
   isConnected: boolean;
+  appRoutes: AppRoutes;
 }
 
 interface NavigationLink {
@@ -33,14 +34,17 @@ interface NavigationGroup {
 
 type NavigationItem = NavigationLink | NavigationGroup;
 
-// Transform APP_ROUTES into navigation structure
-const createNavigationLinks = (): NavigationItem[] => {
-  const routes = Object.entries(APP_ROUTES);
+// Transform routes into navigation structure
+const createNavigationLinks = (appRoutes: AppRoutes): NavigationItem[] => {
+  const routes = Object.entries(appRoutes);
+  
+  // Filter out routes with parameters (e.g., {account_id})
+  const navigableRoutes = routes.filter(([path]) => !path.includes('{') && !path.includes('}'));
   
   // Group routes by tab and create navigation structure
-  const bankingRoutes = routes.filter(([, config]) => config.tab === 'banking');
-  const transactionRoutes = routes.filter(([, config]) => config.tab === 'transaction');
-  const chatRoutes = routes.filter(([, config]) => config.tab === 'chat');
+  const bankingRoutes = navigableRoutes.filter(([, config]) => config.tab === 'banking');
+  const transactionRoutes = navigableRoutes.filter(([, config]) => config.tab === 'transaction');
+  const chatRoutes = navigableRoutes.filter(([, config]) => config.tab === 'chat');
 
   return [
     {
@@ -63,13 +67,13 @@ const createNavigationLinks = (): NavigationItem[] => {
 
 
 
-export const Header: React.FC<HeaderProps> = ({ isConnected }) => {
+export const Header: React.FC<HeaderProps> = ({ isConnected, appRoutes }) => {
   const [drawerOpened, { toggle: toggleDrawer, close: closeDrawer }] = useDisclosure(false);
   const [bankingLinksOpened, { toggle: toggleBankingLinks }] = useDisclosure(false);
   const navigate = useNavigate();
   const location = useLocation();
   
-  const navigationLinks = createNavigationLinks();
+  const navigationLinks = createNavigationLinks(appRoutes);
 
   const isActiveRoute = (link: string) => {
     if (link === '/') {

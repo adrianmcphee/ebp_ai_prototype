@@ -61,3 +61,15 @@ export interface Account {
   type: string;
   balance: number;
 }
+
+// Route types (avoiding circular import)
+export interface RouteConfig {
+  component: string;
+  intent: string;
+  breadcrumb: string;
+  tab: string;
+}
+
+export interface AppRoutes {
+  [path: string]: RouteConfig;
+}
