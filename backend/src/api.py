@@ -63,6 +63,31 @@ class HealthResponse(BaseModel):
     services: dict[str, str]
 
 
+class RouteConfig(BaseModel):
+    """Configuration for a single application route"""
+    path: str = Field(..., description="The route path (e.g., '/banking/dashboard')")
+    component: str = Field(..., description="The React component name to render")
+    intent: Optional[str] = Field(None, description="Associated intent ID for this route")
+    breadcrumb: str = Field(..., description="Display name for breadcrumb navigation")
+    tab: str = Field(..., description="Tab category this route belongs to")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "path": "/banking/dashboard",
+                "component": "BankingDashboard", 
+                "intent": "navigation.banking.dashboard",
+                "breadcrumb": "Dashboard",
+                "tab": "banking"
+            }
+        }
+
+
+class RoutesResponse(BaseModel):
+    """Response containing all application routes"""
+    routes: list[RouteConfig] = Field(..., description="List of application route configurations")
+
+
 # Global instances
 db: Optional[Database] = None
 cache: Optional[RedisCache] = None
@@ -501,13 +526,17 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             del websocket_connections[session_id]
 
 
-@app.get("/api/routes")
-async def get_application_routes():
-    """Get application routes assembled from intent catalog and UI screens"""
+@app.get("/api/routes", response_model=RoutesResponse)
+async def get_application_routes() -> RoutesResponse:
+    """Get application routes assembled from intent catalog and UI screens
+    
+    Returns a list of route configurations that can support future features
+    like variable matching and route parameters.
+    """
     from .ui_screen_catalog import ui_screen_catalog, ScreenType
     from .intent_catalog import intent_catalog
     
-    routes = {}
+    routes_list = []
     
     # Get all PRE_BUILT screens (navigation screens)
     navigation_screens = [
@@ -522,14 +551,16 @@ async def get_application_routes():
         # Derive tab from route path
         tab = _derive_tab_from_route(screen.route_path)
         
-        routes[screen.route_path] = {
-            "component": screen.component_name,
-            "intent": primary_intent_id,
-            "breadcrumb": screen.name,
-            "tab": tab # @FIXME: This should not be here...
-        }
+        route_config = RouteConfig(
+            path=screen.route_path,
+            component=screen.component_name,
+            intent=primary_intent_id,
+            breadcrumb=screen.name,
+            tab=tab
+        )
+        routes_list.append(route_config)
     
-    return routes
+    return RoutesResponse(routes=routes_list)
 
 
 def _derive_tab_from_route(route_path: str) -> str:
