@@ -368,6 +368,92 @@ class TestWebSocket:
             assert data["type"] == "disambiguation_resolved"
 
 
+class TestRoutesEndpoint:
+
+    @pytest.mark.asyncio()
+    async def test_get_routes_basic_functionality(self, client):
+        """Test basic routes endpoint functionality"""
+        response = await client.get("/api/routes")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert "routes" in data
+        assert isinstance(data["routes"], list)
+
+    @pytest.mark.asyncio()
+    async def test_routes_response_structure(self, client):
+        """Test routes response follows RoutesResponse schema"""
+        response = await client.get("/api/routes")
+        assert response.status_code == 200
+
+        data = response.json()
+        
+        # Validate top-level structure
+        assert "routes" in data
+        routes = data["routes"]
+        assert isinstance(routes, list)
+
+        # If routes exist, validate their structure
+        if len(routes) > 0:
+            route = routes[0]
+            required_fields = ["path", "component", "breadcrumb", "tab"]
+            for field in required_fields:
+                assert field in route, f"Route missing required field: {field}"
+            
+            # intent can be null, so just check it exists
+            assert "intent" in route
+            
+            # Validate field types
+            assert isinstance(route["path"], str)
+            assert isinstance(route["component"], str)
+            assert isinstance(route["breadcrumb"], str)
+            assert isinstance(route["tab"], str)
+            assert route["intent"] is None or isinstance(route["intent"], str)
+
+    @pytest.mark.asyncio()
+    async def test_routes_unique_paths(self, client):
+        """Test that all route paths are unique"""
+        response = await client.get("/api/routes")
+        assert response.status_code == 200
+
+        data = response.json()
+        routes = data["routes"]
+
+        paths = [route["path"] for route in routes]
+        unique_paths = set(paths)
+        
+        # All paths should be unique
+        assert len(paths) == len(unique_paths), "Duplicate routes found"
+
+    @pytest.mark.asyncio()
+    async def test_routes_openapi_schema_compliance(self, client):
+        """Test that the response complies with OpenAPI schema"""
+        response = await client.get("/api/routes")
+        assert response.status_code == 200
+
+        # Check content type
+        assert response.headers.get("content-type") == "application/json"
+
+        data = response.json()
+        
+        # Validate against RoutesResponse schema structure
+        assert "routes" in data
+        assert isinstance(data["routes"], list)
+
+        # Each route should match RouteConfig schema
+        for route in data["routes"]:
+            required_fields = ["path", "component", "intent", "breadcrumb", "tab"]
+            for field in required_fields:
+                assert field in route
+
+            # Type validation according to schema
+            assert isinstance(route["path"], str)
+            assert isinstance(route["component"], str)
+            assert route["intent"] is None or isinstance(route["intent"], str)
+            assert isinstance(route["breadcrumb"], str)
+            assert isinstance(route["tab"], str)
+
+
 class TestDemoEndpoints:
 
     @pytest.mark.asyncio()
