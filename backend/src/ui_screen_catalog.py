@@ -146,7 +146,7 @@ class UIScreenCatalog:
             name="Account Details",
             screen_type=ScreenType.PRE_BUILT,
             category="accounts",
-            route_path="/banking/accounts/{account_id}",
+            route_path="/banking/accounts/:accountId",
             component_name="AccountDetails",
             description="Detailed view of a specific account with transactions",
             related_intents=["navigation.accounts.details", "accounts.transactions.history"],
