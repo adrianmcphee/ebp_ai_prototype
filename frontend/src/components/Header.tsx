@@ -38,8 +38,8 @@ type NavigationItem = NavigationLink | NavigationGroup;
 const createNavigationLinks = (appRoutes: AppRoutes): NavigationItem[] => {
   const routes = Object.entries(appRoutes);
   
-  // Filter out routes with parameters (e.g., {account_id})
-  const navigableRoutes = routes.filter(([path]) => !path.includes('{') && !path.includes('}'));
+  // Filter out routes with parameters (e.g., :accountId, :id, etc.)
+  const navigableRoutes = routes.filter(([path]) => !path.includes(':'));
   
   // Group routes by tab and create navigation structure
   const bankingRoutes = navigableRoutes.filter(([, config]) => config.tab === 'banking');

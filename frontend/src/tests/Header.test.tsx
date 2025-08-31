@@ -536,6 +536,103 @@ describe('Header Component', () => {
       const menuDropdowns = screen.getAllByTestId('menu-dropdown');
       expect(menuDropdowns.length).toBeGreaterThan(0);
     });
+
+    it('createNavigationLinks() - should exclude routes with parameters from navigation', async () => {
+      // ARRANGE - Mock routes including ones with parameters
+      const routesWithParameters: AppRoutes = {
+        ...mockAppRoutes,
+        '/banking/accounts/:accountId': { 
+          intent: 'view_account_details', 
+          component: 'AccountDetails', 
+          tab: 'banking', 
+          breadcrumb: 'Account Details' 
+        },
+        '/banking/transactions/:transactionId': { 
+          intent: 'view_transaction_details', 
+          component: 'TransactionDetails', 
+          tab: 'banking', 
+          breadcrumb: 'Transaction Details' 
+        },
+        '/user/:userId/profile': { 
+          intent: 'view_user_profile', 
+          component: 'UserProfile', 
+          tab: 'support', 
+          breadcrumb: 'User Profile' 
+        }
+      };
+
+      // ACT
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <Header isConnected={true} appRoutes={routesWithParameters} />
+          </TestWrapper>
+        );
+      });
+
+      // ASSERT - Should not render menu items for parameterized routes
+      const menuItems = screen.getAllByTestId('menu-item');
+      
+      // Convert menu items to text content for easier assertion
+      const menuTexts = menuItems.map(item => item.textContent);
+      
+      // These parameterized routes should NOT appear in navigation
+      expect(menuTexts).not.toContain('Account Details');
+      expect(menuTexts).not.toContain('Transaction Details'); 
+      expect(menuTexts).not.toContain('User Profile');
+      
+      // These regular routes should still appear
+      expect(menuTexts).toContain('Accounts');
+      expect(menuTexts).toContain('Transfers');
+      expect(menuTexts).toContain('Bill Pay');
+    });
+
+    it('createNavigationLinks() - should handle various parameter formats', async () => {
+      // ARRANGE - Mock routes with different parameter patterns
+      const routesWithDifferentParams: AppRoutes = {
+        ...mockAppRoutes,
+        '/banking/accounts/:id': { 
+          intent: 'view_account', 
+          component: 'AccountView', 
+          tab: 'banking', 
+          breadcrumb: 'Account View' 
+        },
+        '/banking/transfers/:fromId/:toId': { 
+          intent: 'view_transfer', 
+          component: 'TransferView', 
+          tab: 'banking', 
+          breadcrumb: 'Transfer View' 
+        },
+        '/banking/cards/:cardId/settings': { 
+          intent: 'card_settings', 
+          component: 'CardSettings', 
+          tab: 'banking', 
+          breadcrumb: 'Card Settings' 
+        }
+      };
+
+      // ACT
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <Header isConnected={true} appRoutes={routesWithDifferentParams} />
+          </TestWrapper>
+        );
+      });
+
+      // ASSERT - None of the parameterized routes should appear
+      const menuItems = screen.getAllByTestId('menu-item');
+      const menuTexts = menuItems.map(item => item.textContent);
+      
+      // All parameterized routes should be filtered out
+      expect(menuTexts).not.toContain('Account View');
+      expect(menuTexts).not.toContain('Transfer View');
+      expect(menuTexts).not.toContain('Card Settings');
+      
+      // Regular routes should still be present
+      expect(menuTexts).toContain('Accounts');
+      expect(menuTexts).toContain('Transfers');
+    });
   });
 
   describe('Edge Cases - Error Handling and Resilience', () => {
