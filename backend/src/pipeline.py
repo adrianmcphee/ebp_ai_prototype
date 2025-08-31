@@ -4,7 +4,8 @@ Combines enhanced intent classification, entity extraction, and context-aware re
 
 import re
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, Dict, List, Tuple
+from abc import ABC, abstractmethod
 
 from .context_aware_responses import ContextAwareResponseGenerator, ResponseType
 from .entity_extractor import EntityExtractor
@@ -15,6 +16,75 @@ from .state_manager import ConversationStateManager
 from .validator import EntityValidator
 from .banking_operations import BankingOperationsCatalog, OperationStatus
 from .ui_screen_catalog import ui_screen_catalog, ScreenType
+
+
+class ParameterResolver(ABC):
+    """Abstract base class for route parameter resolvers"""
+    
+    @abstractmethod
+    def resolve(self, entities: Dict[str, Any]) -> Optional[str]:
+        """Resolve parameter value from extracted entities"""
+        pass
+
+
+class AccountParameterResolver(ParameterResolver):
+    """Resolves :accountId parameters from entities"""
+    
+    def __init__(self, banking_service):
+        self.banking = banking_service
+    
+    def resolve(self, entities: Dict[str, Any]) -> Optional[str]:
+        """Resolve account ID from entities"""
+        accounts = self.banking.accounts
+        
+        # Try account_id entity first (most direct)
+        if "account_id" in entities:
+            account_id = entities["account_id"]["value"]
+            if account_id in accounts:
+                return account_id
+        
+        # Try account_name entity
+        if "account_name" in entities:
+            account_name = entities["account_name"]["value"].lower()
+            
+            # Find accounts matching this name
+            for acc_id, account in accounts.items():
+                if account.name.lower() == account_name:
+                    return acc_id
+        
+        # Try account_type entity 
+        if "account_type" in entities:
+            account_type = entities["account_type"]["value"].lower()
+            
+            # Find accounts matching this type
+            matching_accounts = []
+            for acc_id, account in accounts.items():
+                if account.type.lower() == account_type:
+                    matching_accounts.append(acc_id)
+            
+            # If only one match, return it
+            if len(matching_accounts) == 1:
+                return matching_accounts[0]
+        
+        return None
+
+class ParameterResolverRegistry:
+    """Registry for parameter resolvers - supports Open-Closed Principle"""
+    
+    def __init__(self):
+        self._resolvers: Dict[str, ParameterResolver] = {}
+    
+    def register(self, param_name: str, resolver: ParameterResolver) -> None:
+        """Register a resolver for a parameter type"""
+        self._resolvers[param_name] = resolver
+    
+    def get_resolver(self, param_name: str) -> Optional[ParameterResolver]:
+        """Get resolver for a parameter type"""
+        return self._resolvers.get(param_name)
+    
+    def get_registered_params(self) -> List[str]:
+        """Get list of registered parameter names"""
+        return list(self._resolvers.keys())
 
 
 class IntentPipeline:
@@ -36,6 +106,80 @@ class IntentPipeline:
         self.banking = banking_service
         self.legacy_validator = legacy_validator
         self.operations_catalog = BankingOperationsCatalog(banking_service)
+        
+        # Initialize parameter resolver registry
+        self.parameter_registry = ParameterResolverRegistry()
+        self._register_default_resolvers()
+
+    def _register_default_resolvers(self) -> None:
+        """Register default parameter resolvers - can be extended without modifying this class"""
+        # Register account parameter resolver
+        account_resolver = AccountParameterResolver(self.banking)
+        self.parameter_registry.register("account_id", account_resolver)
+        
+        # Register transaction parameter resolver (if needed in future)
+        # transaction_resolver = TransactionParameterResolver(self.banking)
+        # self.parameter_registry.register("transaction_id", transaction_resolver)
+        
+        # Future resolvers can be registered here or via plugin system
+
+    def _add_route_params(self, ui_assistance: Dict[str, Any], entities: Dict[str, Any]) -> None:
+        """Add route parameters to UI assistance based on extracted entities
+        
+        This method follows the Open-Closed Principle - it's open for extension
+        (new parameter types via registry) but closed for modification.
+        """
+        route_path = ui_assistance.get("route_path", "")
+        
+        # Find all parameters in the route (e.g., :accountId, :transactionId)
+        import re
+        parameters = re.findall(r':(\w+)', route_path)
+        
+        for param in parameters:
+            # Convert route parameter to snake_case to match resolver keys
+            resolver_key = self._camel_to_snake(param)
+            resolver = self.parameter_registry.get_resolver(resolver_key)
+            if resolver:
+                value = resolver.resolve(entities)
+                if value:
+                    ui_assistance["route_path"] = route_path.replace(f":{param}", value)
+                    # Add resolved value to response
+                    ui_assistance[resolver_key] = value
+                    
+    def _camel_to_snake(self, camel_str: str) -> str:
+        """Convert camelCase to snake_case (accountId -> account_id)"""
+        import re
+        return re.sub(r'(?<!^)(?=[A-Z])', '_', camel_str).lower()
+
+    def _resolve_required_parameters(self, entities: Dict[str, Any], required_entities: List[str]) -> None:
+        """Resolve missing required entities from available entities using parameter resolvers
+        
+        This allows account_type -> account_id resolution to happen BEFORE validation.
+        """
+        available_entities = entities.get("entities", {})
+        missing_required = entities.get("missing_required", [])
+        
+        # Try to resolve each missing required entity directly
+        newly_resolved = {}
+        for missing_entity in missing_required.copy():
+            resolver = self.parameter_registry.get_resolver(missing_entity)
+            
+            if resolver:
+                resolved_value = resolver.resolve(available_entities)
+                if resolved_value:
+                    # Add resolved entity to available entities
+                    newly_resolved[missing_entity] = {
+                        "value": resolved_value,
+                        "raw": resolved_value,
+                        "confidence": 0.95,
+                        "source": "parameter_resolution"
+                    }
+                    missing_required.remove(missing_entity)
+        
+        # Update entities dict with resolved values
+        if newly_resolved:
+            entities["entities"].update(newly_resolved)
+            entities["missing_required"] = missing_required
 
     async def process(
         self,
@@ -95,6 +239,10 @@ class IntentPipeline:
                 required_entities,
                 context,
             )
+
+            # Resolve parameters BEFORE validation (e.g., account_type -> account_id)
+            # @FIXME: This is a hack to resolve parameters before validation. Need to find a better way to do this.
+            self._resolve_required_parameters(entities, required_entities)
 
             # Generate context-aware response
             response = await self.response_gen.generate_response(
@@ -257,12 +405,12 @@ class IntentPipeline:
                 execution_result = await self._execute_banking_operation(
                     classification, entities.get("entities", {}), user_profile
                 )
-                return self._format_success_response(
-                    response, classification, entities, execution_result, ui_context
+                return await self._format_success_response(
+                    response, classification, entities, execution_result, ui_context, resolved_query
                 )
             else:
                 # Information query, no execution needed
-                return self._format_success_response(response, classification, entities, None, ui_context)
+                return await self._format_success_response(response, classification, entities, None, ui_context, resolved_query)
 
         elif response.response_type == ResponseType.MISSING_INFO:
             # Store pending clarification
@@ -447,13 +595,14 @@ class IntentPipeline:
             ],
         }
 
-    def _format_success_response(
+    async def _format_success_response(
         self,
         response,
         classification: dict[str, Any],
         entities: dict[str, Any],
         execution_result: Optional[dict[str, Any]] = None,
         ui_context: Optional[str] = None,
+        query: str = "",
     ) -> dict[str, Any]:
         """Format a successful operation response"""
         result = {
@@ -469,7 +618,7 @@ class IntentPipeline:
         }
 
         # Add UI assistance (navigation or transaction forms)
-        ui_assistance = self._generate_ui_assistance(classification, entities, ui_context)
+        ui_assistance = await self._generate_ui_assistance(classification, entities, ui_context, query)
         if ui_assistance:
             result["ui_assistance"] = ui_assistance
 
@@ -481,8 +630,8 @@ class IntentPipeline:
 
         return result
 
-    def _generate_ui_assistance(
-        self, classification: dict[str, Any], entities: dict[str, Any], ui_context: Optional[str] = None
+    async def _generate_ui_assistance(
+        self, classification: dict[str, Any], entities: dict[str, Any], ui_context: Optional[str] = None, query: str = ""
     ) -> Optional[dict[str, Any]]:
         """Generate UI assistance based on intent and UI context"""
         intent_id = classification.get("intent_id", "")
@@ -495,7 +644,7 @@ class IntentPipeline:
         # Banking (Navigation) context: Route to pre-built screens
         if ui_context == "banking":
             if screen.screen_type in [ScreenType.PRE_BUILT, ScreenType.DYNAMIC_FORM]:
-                return {
+                ui_assistance = {
                     "type": "navigation",
                     "action": "route_to_screen", 
                     "screen_id": screen.screen_id,
@@ -504,6 +653,13 @@ class IntentPipeline:
                     "title": screen.title_template,
                     "description": screen.description
                 }
+                
+                # Add route parameters based on extracted entities (generic approach)
+                self._add_route_params(ui_assistance, entities.get("entities", {}))
+                
+                return ui_assistance
+            else:
+                return None
         
         # Transaction context: Create dynamic forms
         elif ui_context == "transaction":

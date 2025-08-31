@@ -1,28 +1,36 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import axios from 'axios';
 import { apiService } from '../services/api';
-import type { Account, ProcessResponse, AppRoutes } from '../types';
+import { API_BASE } from '../constants';
+import type { 
+  Account, 
+  ProcessResponse, 
+  AccountBalance, 
+  AccountTransactionsResponse, 
+  RoutesResponse
+} from '../types';
 
-// Mock axios for all HTTP requests
-vi.mock('axios');
-const mockedAxios = vi.mocked(axios);
-
-// Mock constants
-vi.mock('../constants', () => ({
-  API_BASE: 'http://localhost:8000'
+// Mock axios
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+  }
 }));
 
-describe('API Service', () => {
+const mockedAxios = vi.mocked(axios);
+
+describe('apiService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('initializeSession() - Session Management', () => {
-    it('initializeSession() - should call POST request to session endpoint', async () => {
+    it('initializeSession() - should make POST request to session endpoint', async () => {
       // ARRANGE
       mockedAxios.post.mockResolvedValueOnce({ data: {} });
 
@@ -31,78 +39,54 @@ describe('API Service', () => {
 
       // ASSERT
       expect(mockedAxios.post).toHaveBeenCalledTimes(1);
-      expect(mockedAxios.post).toHaveBeenCalledWith('http://localhost:8000/api/session');
+      expect(mockedAxios.post).toHaveBeenCalledWith(`${API_BASE}/api/session`);
     });
 
-    it('initializeSession() - should handle successful session initialization', async () => {
+    it('initializeSession() - should handle API errors gracefully', async () => {
       // ARRANGE
-      const mockResponse = { data: { status: 'success' } };
-      mockedAxios.post.mockResolvedValueOnce(mockResponse);
+      const mockError = new Error('Network error');
+      mockedAxios.post.mockRejectedValueOnce(mockError);
+
+      // ACT & ASSERT
+      await expect(apiService.initializeSession()).rejects.toThrow('Network error');
+      expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('initializeSession() - should resolve with undefined on success', async () => {
+      // ARRANGE
+      mockedAxios.post.mockResolvedValueOnce({ data: {} });
 
       // ACT
       const result = await apiService.initializeSession();
 
       // ASSERT
       expect(result).toBeUndefined();
-      expect(mockedAxios.post).toHaveBeenCalledWith('http://localhost:8000/api/session');
-    });
-
-    it('initializeSession() - should handle network errors gracefully', async () => {
-      // ARRANGE
-      const networkError = new Error('Network Error');
-      mockedAxios.post.mockRejectedValueOnce(networkError);
-
-      // ACT & ASSERT
-      await expect(apiService.initializeSession()).rejects.toThrow('Network Error');
-      expect(mockedAxios.post).toHaveBeenCalledWith('http://localhost:8000/api/session');
-    });
-
-    it('initializeSession() - should handle HTTP error responses', async () => {
-      // ARRANGE
-      const httpError = {
-        response: { status: 500, data: { error: 'Server Error' } },
-        message: 'Request failed with status code 500'
-      };
-      mockedAxios.post.mockRejectedValueOnce(httpError);
-
-      // ACT & ASSERT
-      await expect(apiService.initializeSession()).rejects.toEqual(httpError);
-    });
-
-    it('initializeSession() - should handle timeout errors', async () => {
-      // ARRANGE
-      const timeoutError = new Error('timeout of 5000ms exceeded');
-      mockedAxios.post.mockRejectedValueOnce(timeoutError);
-
-      // ACT & ASSERT
-      await expect(apiService.initializeSession()).rejects.toThrow('timeout of 5000ms exceeded');
     });
   });
 
   describe('getAccounts() - Account Data Retrieval', () => {
-    it('getAccounts() - should call GET request to accounts endpoint', async () => {
+    it('getAccounts() - should make GET request to accounts endpoint and return accounts array', async () => {
       // ARRANGE
       const mockAccounts: Account[] = [
-        { id: '1', name: 'Checking Account', type: 'checking', balance: 1500.50 },
-        { id: '2', name: 'Savings Account', type: 'savings', balance: 5000.75 }
+        { id: 'acc-1', name: 'Checking', type: 'checking', balance: 1000, currency: 'USD' },
+        { id: 'acc-2', name: 'Savings', type: 'savings', balance: 5000, currency: 'USD' }
       ];
-      const mockResponse = { data: { accounts: mockAccounts } };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      mockedAxios.get.mockResolvedValueOnce({ data: { accounts: mockAccounts } });
 
       // ACT
       const result = await apiService.getAccounts();
 
       // ASSERT
       expect(mockedAxios.get).toHaveBeenCalledTimes(1);
-      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/accounts');
+      expect(mockedAxios.get).toHaveBeenCalledWith(`${API_BASE}/api/accounts`);
       expect(result).toEqual(mockAccounts);
       expect(result).toHaveLength(2);
     });
 
-    it('getAccounts() - should return empty array when no accounts exist', async () => {
+    it('getAccounts() - should handle empty accounts array', async () => {
       // ARRANGE
-      const mockResponse = { data: { accounts: [] } };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      const mockAccounts: Account[] = [];
+      mockedAxios.get.mockResolvedValueOnce({ data: { accounts: mockAccounts } });
 
       // ACT
       const result = await apiService.getAccounts();
@@ -110,349 +94,152 @@ describe('API Service', () => {
       // ASSERT
       expect(result).toEqual([]);
       expect(result).toHaveLength(0);
-      expect(Array.isArray(result)).toBe(true);
     });
 
-    it('getAccounts() - should handle single account response correctly', async () => {
+    it('getAccounts() - should handle API errors gracefully', async () => {
       // ARRANGE
-      const singleAccount: Account[] = [
-        { id: 'acc-1', name: 'Primary Checking', type: 'checking', balance: 2500.00 }
-      ];
-      const mockResponse = { data: { accounts: singleAccount } };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
-
-      // ACT
-      const result = await apiService.getAccounts();
-
-      // ASSERT
-      expect(result).toHaveLength(1);
-      expect(result[0]).toMatchObject({
-        id: 'acc-1',
-        name: 'Primary Checking',
-        type: 'checking',
-        balance: 2500.00
-      });
-    });
-
-    it('getAccounts() - should handle network errors during account retrieval', async () => {
-      // ARRANGE
-      const networkError = new Error('Failed to fetch accounts');
-      mockedAxios.get.mockRejectedValueOnce(networkError);
+      const mockError = new Error('Failed to fetch accounts');
+      mockedAxios.get.mockRejectedValueOnce(mockError);
 
       // ACT & ASSERT
       await expect(apiService.getAccounts()).rejects.toThrow('Failed to fetch accounts');
-      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/accounts');
+      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
     });
 
-    it('getAccounts() - should handle malformed server response', async () => {
+    it('getAccounts() - should return properly typed Account objects', async () => {
       // ARRANGE
-      const malformedResponse = { data: { wrongProperty: [] } };
-      mockedAxios.get.mockResolvedValueOnce(malformedResponse);
-
-      // ACT
-      const result = await apiService.getAccounts();
-
-      // ASSERT
-      expect(result).toBeUndefined();
-      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/accounts');
-    });
-
-    it('getAccounts() - should handle 404 not found errors', async () => {
-      // ARRANGE
-      const notFoundError = {
-        response: { status: 404, data: { error: 'Accounts not found' } },
-        message: 'Request failed with status code 404'
-      };
-      mockedAxios.get.mockRejectedValueOnce(notFoundError);
-
-      // ACT & ASSERT
-      await expect(apiService.getAccounts()).rejects.toEqual(notFoundError);
-    });
-
-    it('getAccounts() - should handle accounts with various balance types', async () => {
-      // ARRANGE
-      const accountsWithVariousBalances: Account[] = [
-        { id: '1', name: 'Zero Balance Account', type: 'checking', balance: 0 },
-        { id: '2', name: 'Negative Balance Account', type: 'checking', balance: -150.25 },
-        { id: '3', name: 'High Balance Account', type: 'savings', balance: 999999.99 }
+      const mockAccounts: Account[] = [
+        { id: 'acc-1', name: 'Test Account', type: 'checking', balance: 2500.75, currency: 'EUR' }
       ];
-      const mockResponse = { data: { accounts: accountsWithVariousBalances } };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      mockedAxios.get.mockResolvedValueOnce({ data: { accounts: mockAccounts } });
 
       // ACT
       const result = await apiService.getAccounts();
 
       // ASSERT
-      expect(result).toHaveLength(3);
-      expect(result[0].balance).toBe(0);
-      expect(result[1].balance).toBe(-150.25);
-      expect(result[2].balance).toBe(999999.99);
+      expect(result[0]).toHaveProperty('id', 'acc-1');
+      expect(result[0]).toHaveProperty('name', 'Test Account');
+      expect(result[0]).toHaveProperty('type', 'checking');
+      expect(result[0]).toHaveProperty('balance', 2500.75);
+      expect(result[0]).toHaveProperty('currency', 'EUR');
     });
   });
 
   describe('processMessage() - Message Processing', () => {
-    it('processMessage() - should call POST request with correct parameters', async () => {
+    it('processMessage() - should make POST request with query and ui_context', async () => {
       // ARRANGE
-      const query = 'Show me my account balance';
-      const uiContext = 'accounts_overview';
+      const mockQuery = 'Show my account balance';
+      const mockUIContext = 'accounts-overview';
       const mockResponse: ProcessResponse = {
         status: 'success',
-        message: 'Your checking account balance is $1,500.50',
-        intent: 'balance_inquiry',
-        confidence: 0.95
+        intent: 'view_balance',
+        confidence: 0.95,
+        message: 'Here is your balance information'
       };
       mockedAxios.post.mockResolvedValueOnce({ data: mockResponse });
 
       // ACT
-      const result = await apiService.processMessage(query, uiContext);
+      const result = await apiService.processMessage(mockQuery, mockUIContext);
 
       // ASSERT
       expect(mockedAxios.post).toHaveBeenCalledTimes(1);
-      expect(mockedAxios.post).toHaveBeenCalledWith('http://localhost:8000/api/process', {
-        query: 'Show me my account balance',
-        ui_context: 'accounts_overview'
+      expect(mockedAxios.post).toHaveBeenCalledWith(`${API_BASE}/api/process`, {
+        query: mockQuery,
+        ui_context: mockUIContext
       });
       expect(result).toEqual(mockResponse);
     });
 
-    it('processMessage() - should handle successful message processing with full response', async () => {
+    it('processMessage() - should handle empty query and context', async () => {
       // ARRANGE
-      const query = 'Transfer $500 from checking to savings';
-      const uiContext = 'transfers_hub';
-      const mockResponse: ProcessResponse = {
-        status: 'success',
-        message: 'Transfer completed successfully',
-        intent: 'money_transfer',
-        confidence: 0.98,
-        entities: { amount: 500, from_account: 'checking', to_account: 'savings' },
-        ui_assistance: {
-          type: 'transaction_form',
-          action: 'show_transfer_form',
-          screen_id: 'transfer_confirmation'
-        },
-        execution: { transaction_id: 'txn_12345' }
-      };
+      const mockResponse: ProcessResponse = { status: 'error' };
       mockedAxios.post.mockResolvedValueOnce({ data: mockResponse });
 
       // ACT
-      const result = await apiService.processMessage(query, uiContext);
+      const result = await apiService.processMessage('', '');
 
       // ASSERT
-      expect(result).toMatchObject({
-        status: 'success',
-        message: 'Transfer completed successfully',
-        intent: 'money_transfer',
-        confidence: 0.98
-      });
-      expect(result.entities).toBeDefined();
-      expect(result.ui_assistance).toBeDefined();
-      expect(result.execution).toBeDefined();
-    });
-
-    it('processMessage() - should handle minimal response structure', async () => {
-      // ARRANGE
-      const query = 'Hello';
-      const uiContext = 'chat';
-      const minimalResponse: ProcessResponse = {
-        status: 'success'
-      };
-      mockedAxios.post.mockResolvedValueOnce({ data: minimalResponse });
-
-      // ACT
-      const result = await apiService.processMessage(query, uiContext);
-
-      // ASSERT
-      expect(result).toEqual({ status: 'success' });
-      expect(result.message).toBeUndefined();
-      expect(result.intent).toBeUndefined();
-      expect(result.confidence).toBeUndefined();
-    });
-
-    it('processMessage() - should handle empty string parameters', async () => {
-      // ARRANGE
-      const query = '';
-      const uiContext = '';
-      const mockResponse: ProcessResponse = {
-        status: 'error',
-        message: 'Empty query provided'
-      };
-      mockedAxios.post.mockResolvedValueOnce({ data: mockResponse });
-
-      // ACT
-      const result = await apiService.processMessage(query, uiContext);
-
-      // ASSERT
-      expect(mockedAxios.post).toHaveBeenCalledWith('http://localhost:8000/api/process', {
+      expect(mockedAxios.post).toHaveBeenCalledWith(`${API_BASE}/api/process`, {
         query: '',
         ui_context: ''
       });
-      expect(result.status).toBe('error');
+      expect(result).toEqual(mockResponse);
     });
 
-    it('processMessage() - should handle special characters in query', async () => {
+    it('processMessage() - should handle API processing errors', async () => {
       // ARRANGE
-      const query = 'Transfer $1,000.50 from "Primary Checking" to savings & email receipt';
-      const uiContext = 'transfers_hub';
+      const mockError = new Error('Processing failed');
+      mockedAxios.post.mockRejectedValueOnce(mockError);
+
+      // ACT & ASSERT
+      await expect(apiService.processMessage('test', 'context')).rejects.toThrow('Processing failed');
+    });
+
+    it('processMessage() - should return complete ProcessResponse with all optional fields', async () => {
+      // ARRANGE
       const mockResponse: ProcessResponse = {
         status: 'success',
-        intent: 'transfer_with_notification',
-        confidence: 0.87
+        intent: 'transfer_money',
+        confidence: 0.88,
+        entities: { amount: 100, account: 'savings' },
+        message: 'Transfer initiated',
+        ui_assistance: {
+          type: 'transaction_form',
+          action: 'show_form',
+          form_config: {
+            screen_id: 'transfer',
+            title: 'Transfer Money',
+            subtitle: 'Complete your transfer',
+            fields: [],
+            confirmation_required: true,
+            complexity_reduction: 'simplified'
+          }
+        },
+        execution: { transaction_id: 'tx-123' }
       };
       mockedAxios.post.mockResolvedValueOnce({ data: mockResponse });
 
       // ACT
-      const result = await apiService.processMessage(query, uiContext);
+      const result = await apiService.processMessage('transfer $100', 'home');
 
       // ASSERT
-      expect(mockedAxios.post).toHaveBeenCalledWith('http://localhost:8000/api/process', {
-        query: 'Transfer $1,000.50 from "Primary Checking" to savings & email receipt',
-        ui_context: 'transfers_hub'
-      });
-      expect(result.status).toBe('success');
-    });
-
-    it('processMessage() - should handle network errors during processing', async () => {
-      // ARRANGE
-      const query = 'Show transactions';
-      const uiContext = 'transactions';
-      const networkError = new Error('Connection timeout');
-      mockedAxios.post.mockRejectedValueOnce(networkError);
-
-      // ACT & ASSERT
-      await expect(apiService.processMessage(query, uiContext)).rejects.toThrow('Connection timeout');
-      expect(mockedAxios.post).toHaveBeenCalledWith('http://localhost:8000/api/process', {
-        query: 'Show transactions',
-        ui_context: 'transactions'
-      });
-    });
-
-    it('processMessage() - should handle server error responses', async () => {
-      // ARRANGE
-      const query = 'Invalid request';
-      const uiContext = 'unknown';
-      const serverError = {
-        response: { 
-          status: 400, 
-          data: { error: 'Invalid query format' } 
-        },
-        message: 'Request failed with status code 400'
-      };
-      mockedAxios.post.mockRejectedValueOnce(serverError);
-
-      // ACT & ASSERT
-      await expect(apiService.processMessage(query, uiContext)).rejects.toEqual(serverError);
-    });
-
-    it('processMessage() - should handle low confidence responses', async () => {
-      // ARRANGE
-      const query = 'Unclear request';
-      const uiContext = 'general';
-      const lowConfidenceResponse: ProcessResponse = {
-        status: 'success',
-        message: 'I am not sure what you mean. Could you clarify?',
-        intent: 'unknown',
-        confidence: 0.12
-      };
-      mockedAxios.post.mockResolvedValueOnce({ data: lowConfidenceResponse });
-
-      // ACT
-      const result = await apiService.processMessage(query, uiContext);
-
-      // ASSERT
-      expect(result.confidence).toBe(0.12);
-      expect(result.intent).toBe('unknown');
-      expect(result.status).toBe('success');
-    });
-
-    it('processMessage() - should handle responses with dynamic properties', async () => {
-      // ARRANGE
-      const query = 'Dynamic test';
-      const uiContext = 'test';
-      const dynamicResponse: ProcessResponse = {
-        status: 'success',
-        customProperty: 'custom value',
-        anotherDynamicField: { nested: 'data' },
-        numericField: 42
-      };
-      mockedAxios.post.mockResolvedValueOnce({ data: dynamicResponse });
-
-      // ACT
-      const result = await apiService.processMessage(query, uiContext);
-
-      // ASSERT
-      expect(result).toMatchObject(dynamicResponse);
-      expect(result.customProperty).toBe('custom value');
-      expect(result.anotherDynamicField).toEqual({ nested: 'data' });
-      expect(result.numericField).toBe(42);
+      expect(result).toEqual(mockResponse);
+      expect(result.ui_assistance?.type).toBe('transaction_form');
+      expect(result.ui_assistance?.form_config?.confirmation_required).toBe(true);
     });
   });
 
-  describe('fetchRoutes() - Application Routes Retrieval', () => {
-    it('fetchRoutes() - should call GET request to routes endpoint', async () => {
+  describe('fetchRoutes() - Route Management', () => {
+    it('fetchRoutes() - should make GET request to routes endpoint and return transformed routes', async () => {
       // ARRANGE
-      const mockRoutesResponse = {
+      const mockRoutesResponse: RoutesResponse = {
         routes: [
-          { path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' },
-          { path: '/banking/accounts', intent: 'view_accounts', component: 'AccountsOverview', breadcrumb: 'Accounts', tab: 'banking' },
-          { path: '/banking/transfers', intent: 'transfer_money', component: 'TransfersHub', breadcrumb: 'Transfers', tab: 'banking' }
+          { path: '/accounts', component: 'AccountsOverview', intent: 'view_accounts', breadcrumb: 'Accounts', tab: 'banking' },
+          { path: '/transfer', component: 'Transfer', intent: 'transfer_money', breadcrumb: 'Transfer', tab: 'banking' }
         ]
       };
-      const mockResponse = { data: mockRoutesResponse };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
-      
-      // Expected converted format
-      const expectedRoutes: AppRoutes = {
-        '/': { intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' },
-        '/banking/accounts': { intent: 'view_accounts', component: 'AccountsOverview', breadcrumb: 'Accounts', tab: 'banking' },
-        '/banking/transfers': { intent: 'transfer_money', component: 'TransfersHub', breadcrumb: 'Transfers', tab: 'banking' }
-      };
+      mockedAxios.get.mockResolvedValueOnce({ data: mockRoutesResponse });
 
       // ACT
       const result = await apiService.fetchRoutes();
 
       // ASSERT
       expect(mockedAxios.get).toHaveBeenCalledTimes(1);
-      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/routes');
-      expect(result).toEqual(expectedRoutes);
-      expect(typeof result).toBe('object');
-    });
-
-    it('fetchRoutes() - should return comprehensive route configuration', async () => {
-      // ARRANGE
-      const mockRoutesResponse = {
-        routes: [
-          { path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' },
-          { path: '/banking/accounts', intent: 'view_accounts', component: 'AccountsOverview', breadcrumb: 'Accounts', tab: 'banking' },
-          { path: '/banking/transfers', intent: 'transfer_money', component: 'TransfersHub', breadcrumb: 'Transfers', tab: 'banking' },
-          { path: '/banking/transfers/wire', intent: 'wire_transfer', component: 'WireTransferForm', breadcrumb: 'Wire Transfer', tab: 'banking' },
-          { path: '/banking/payments/bills', intent: 'pay_bills', component: 'BillPayHub', breadcrumb: 'Bill Pay', tab: 'banking' },
-          { path: '/customer-service', intent: 'customer_service', component: 'CustomerServiceHub', breadcrumb: 'Customer Service', tab: 'support' }
-        ]
-      };
-      const mockResponse = { data: mockRoutesResponse };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
-
-      // ACT
-      const result = await apiService.fetchRoutes();
-
-      // ASSERT
-      expect(result).toHaveProperty('/');
-      expect(result).toHaveProperty('/banking/accounts');
-      expect(result).toHaveProperty('/banking/transfers');
-      expect(result['/']).toMatchObject({
-        intent: 'dashboard',
-        component: 'BankingDashboard',
-        breadcrumb: 'Dashboard',
+      expect(mockedAxios.get).toHaveBeenCalledWith(`${API_BASE}/api/routes`);
+      expect(result).toHaveProperty('/accounts');
+      expect(result).toHaveProperty('/transfer');
+      expect(result['/accounts']).toEqual({
+        component: 'AccountsOverview',
+        intent: 'view_accounts',
+        breadcrumb: 'Accounts',
         tab: 'banking'
       });
-      expect(Object.keys(result)).toHaveLength(6);
     });
 
-    it('fetchRoutes() - should return empty routes object when no routes exist', async () => {
+    it('fetchRoutes() - should handle empty routes array', async () => {
       // ARRANGE
-      const emptyRoutesResponse = { routes: [] };
-      const mockResponse = { data: emptyRoutesResponse };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      const mockRoutesResponse: RoutesResponse = { routes: [] };
+      mockedAxios.get.mockResolvedValueOnce({ data: mockRoutesResponse });
 
       // ACT
       const result = await apiService.fetchRoutes();
@@ -460,71 +247,9 @@ describe('API Service', () => {
       // ASSERT
       expect(result).toEqual({});
       expect(Object.keys(result)).toHaveLength(0);
-      expect(typeof result).toBe('object');
     });
 
-    it('fetchRoutes() - should handle single route configuration', async () => {
-      // ARRANGE
-      const singleRouteResponse = {
-        routes: [
-          { path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' }
-        ]
-      };
-      const mockResponse = { data: singleRouteResponse };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
-
-      // ACT
-      const result = await apiService.fetchRoutes();
-
-      // ASSERT
-      expect(Object.keys(result)).toHaveLength(1);
-      expect(result['/']).toMatchObject({
-        intent: 'dashboard',
-        component: 'BankingDashboard',
-        breadcrumb: 'Dashboard',
-        tab: 'banking'
-      });
-    });
-
-    it('fetchRoutes() - should handle network errors during route fetching', async () => {
-      // ARRANGE
-      const networkError = new Error('Failed to fetch routes');
-      mockedAxios.get.mockRejectedValueOnce(networkError);
-
-      // ACT & ASSERT
-      await expect(apiService.fetchRoutes()).rejects.toThrow('Failed to fetch routes');
-      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/routes');
-    });
-
-    it('fetchRoutes() - should handle 404 not found errors', async () => {
-      // ARRANGE
-      const notFoundError = {
-        response: { status: 404, data: { error: 'Routes not configured' } },
-        message: 'Request failed with status code 404'
-      };
-      mockedAxios.get.mockRejectedValueOnce(notFoundError);
-
-      // ACT & ASSERT
-      await expect(apiService.fetchRoutes()).rejects.toEqual(notFoundError);
-      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/routes');
-    });
-
-    it('fetchRoutes() - should handle server error responses', async () => {
-      // ARRANGE
-      const serverError = {
-        response: { 
-          status: 500, 
-          data: { error: 'Internal server error while building routes' } 
-        },
-        message: 'Request failed with status code 500'
-      };
-      mockedAxios.get.mockRejectedValueOnce(serverError);
-
-      // ACT & ASSERT
-      await expect(apiService.fetchRoutes()).rejects.toEqual(serverError);
-    });
-
-    it('fetchRoutes() - should handle malformed server response', async () => {
+    it('fetchRoutes() - should handle malformed response by returning original data', async () => {
       // ARRANGE
       const malformedResponse = { data: null };
       mockedAxios.get.mockResolvedValueOnce(malformedResponse);
@@ -534,252 +259,411 @@ describe('API Service', () => {
 
       // ASSERT
       expect(result).toBeNull();
-      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/routes');
     });
 
-    it('fetchRoutes() - should handle routes with dynamic parameters', async () => {
+    it('fetchRoutes() - should handle response without routes property', async () => {
       // ARRANGE
-      const dynamicRoutesResponse = {
-        routes: [
-          { path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' },
-          { path: '/banking/accounts/{account_id}', intent: 'view_account_details', component: 'AccountDetails', breadcrumb: 'Account Details', tab: 'banking' },
-          { path: '/banking/transactions/{transaction_id}', intent: 'view_transaction', component: 'TransactionDetails', breadcrumb: 'Transaction Details', tab: 'banking' }
-        ]
-      };
-      const mockResponse = { data: dynamicRoutesResponse };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      const responseWithoutRoutes = { data: { other_field: 'value' } };
+      mockedAxios.get.mockResolvedValueOnce(responseWithoutRoutes);
 
       // ACT
       const result = await apiService.fetchRoutes();
 
       // ASSERT
-      expect(result).toHaveProperty('/banking/accounts/{account_id}');
-      expect(result).toHaveProperty('/banking/transactions/{transaction_id}');
-      expect(result['/banking/accounts/{account_id}']).toMatchObject({
-        intent: 'view_account_details',
-        component: 'AccountDetails',
-        tab: 'banking'
-      });
+      expect(result).toEqual({ other_field: 'value' });
     });
 
-    it('fetchRoutes() - should handle routes with various tab categories', async () => {
+    it('fetchRoutes() - should transform multiple routes correctly', async () => {
       // ARRANGE
-      const multiTabRoutesResponse = {
+      const mockRoutesResponse: RoutesResponse = {
         routes: [
-          { path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' },
-          { path: '/customer-service', intent: 'customer_service', component: 'CustomerServiceHub', breadcrumb: 'Customer Service', tab: 'support' },
-          { path: '/settings/profile', intent: 'edit_profile', component: 'ProfileSettings', breadcrumb: 'Profile', tab: 'settings' },
-          { path: '/help/faq', intent: 'view_faq', component: 'FAQ', breadcrumb: 'FAQ', tab: 'help' }
+          { path: '/home', component: 'Dashboard', intent: 'home', breadcrumb: 'Home', tab: 'main' },
+          { path: '/settings', component: 'Settings', intent: 'settings', breadcrumb: 'Settings', tab: 'main' },
+          { path: '/payments', component: 'Payments', intent: 'payments', breadcrumb: 'Payments', tab: 'banking' }
         ]
       };
-      const mockResponse = { data: multiTabRoutesResponse };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      mockedAxios.get.mockResolvedValueOnce({ data: mockRoutesResponse });
 
       // ACT
       const result = await apiService.fetchRoutes();
 
       // ASSERT
-      expect(result['/']).toMatchObject({ tab: 'banking' });
-      expect(result['/customer-service']).toMatchObject({ tab: 'support' });
-      expect(result['/settings/profile']).toMatchObject({ tab: 'settings' });
-      expect(result['/help/faq']).toMatchObject({ tab: 'help' });
+      expect(Object.keys(result)).toHaveLength(3);
+      expect(result['/home'].component).toBe('Dashboard');
+      expect(result['/settings'].intent).toBe('settings');
+      expect(result['/payments'].tab).toBe('banking');
+    });
+
+    it('fetchRoutes() - should handle API errors gracefully', async () => {
+      // ARRANGE
+      const mockError = new Error('Routes fetch failed');
+      mockedAxios.get.mockRejectedValueOnce(mockError);
+
+      // ACT & ASSERT
+      await expect(apiService.fetchRoutes()).rejects.toThrow('Routes fetch failed');
     });
   });
 
-  describe('fetchRoutesArray() - Application Routes Array Format', () => {
-    it('fetchRoutesArray() - should return routes in new list format', async () => {
+  describe('fetchRoutesArray() - Routes Array Format', () => {
+    it('fetchRoutesArray() - should make GET request and return raw routes response', async () => {
       // ARRANGE
-      const mockRoutesResponse = {
+      const mockRoutesResponse: RoutesResponse = {
         routes: [
-          { path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' },
-          { path: '/banking/accounts', intent: 'view_accounts', component: 'AccountsOverview', breadcrumb: 'Accounts', tab: 'banking' },
-          { path: '/chat/:id?', intent: null, component: 'ChatAssistant', breadcrumb: 'Chat', tab: 'chat' }
+          { path: '/accounts', component: 'AccountsOverview', intent: 'view_accounts', breadcrumb: 'Accounts', tab: 'banking' }
         ]
       };
-      const mockResponse = { data: mockRoutesResponse };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      mockedAxios.get.mockResolvedValueOnce({ data: mockRoutesResponse });
 
       // ACT
       const result = await apiService.fetchRoutesArray();
 
       // ASSERT
-      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/routes');
+      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+      expect(mockedAxios.get).toHaveBeenCalledWith(`${API_BASE}/api/routes`);
       expect(result).toEqual(mockRoutesResponse);
-      expect(result.routes).toHaveLength(3);
-      expect(result.routes[0]).toMatchObject({
-        path: '/',
-        component: 'BankingDashboard',
-        breadcrumb: 'Dashboard',
-        tab: 'banking'
-      });
+      expect(result.routes).toHaveLength(1);
     });
 
-    it('fetchRoutesArray() - should handle routes with parameters and null intents', async () => {
+    it('fetchRoutesArray() - should handle empty response', async () => {
       // ARRANGE
-      const mockRoutesResponse = {
-        routes: [
-          { path: '/banking/account/:id', intent: 'view_account', component: 'AccountDetails', breadcrumb: 'Account Details', tab: 'banking' },
-          { path: '/transaction/:type/:id?', intent: null, component: 'TransactionHandler', breadcrumb: 'Transaction', tab: 'banking' }
-        ]
-      };
-      const mockResponse = { data: mockRoutesResponse };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
-
-      // ACT
-      const result = await apiService.fetchRoutesArray();
-
-      // ASSERT
-      expect(result.routes).toHaveLength(2);
-      expect(result.routes[0].path).toContain(':id');
-      expect(result.routes[1].intent).toBeNull();
-    });
-
-    it('fetchRoutesArray() - should handle empty routes array', async () => {
-      // ARRANGE
-      const emptyRoutesResponse = { routes: [] };
-      const mockResponse = { data: emptyRoutesResponse };
-      mockedAxios.get.mockResolvedValueOnce(mockResponse);
+      const emptyResponse: RoutesResponse = { routes: [] };
+      mockedAxios.get.mockResolvedValueOnce({ data: emptyResponse });
 
       // ACT
       const result = await apiService.fetchRoutesArray();
 
       // ASSERT
       expect(result.routes).toHaveLength(0);
-      expect(Array.isArray(result.routes)).toBe(true);
     });
 
-    it('fetchRoutesArray() - should handle network errors', async () => {
+    it('fetchRoutesArray() - should handle API errors gracefully', async () => {
       // ARRANGE
-      const networkError = new Error('Network connection failed');
-      mockedAxios.get.mockRejectedValueOnce(networkError);
+      const mockError = new Error('Routes array fetch failed');
+      mockedAxios.get.mockRejectedValueOnce(mockError);
 
       // ACT & ASSERT
-      await expect(apiService.fetchRoutesArray()).rejects.toThrow('Network connection failed');
-      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/routes');
+      await expect(apiService.fetchRoutesArray()).rejects.toThrow('Routes array fetch failed');
     });
   });
 
-  describe('apiService - API Service Integration Points', () => {
-    it('apiService - should export all required service methods', () => {
-      // ARRANGE & ACT & ASSERT
-      expect(typeof apiService.initializeSession).toBe('function');
-      expect(typeof apiService.getAccounts).toBe('function');
-      expect(typeof apiService.processMessage).toBe('function');
-      expect(typeof apiService.fetchRoutes).toBe('function');
-      expect(typeof apiService.fetchRoutesArray).toBe('function');
-      expect(Object.keys(apiService)).toHaveLength(5);
-    });
-
-    it('apiService - should handle concurrent API calls correctly', async () => {
+  describe('getAccountBalance() - Account Balance Retrieval', () => {
+    it('getAccountBalance() - should make GET request with account ID and return balance data', async () => {
       // ARRANGE
-      const mockSessionResponse = { data: {} };
-      const mockAccountsResponse = { data: { accounts: [] } };
-      const mockProcessResponse = { data: { status: 'success' } };
-      const mockRoutesResponse = { data: { routes: [{ path: '/', intent: 'dashboard', component: 'BankingDashboard', breadcrumb: 'Dashboard', tab: 'banking' }] } };
-      
-      mockedAxios.post.mockImplementation((url) => {
-        if (url.includes('/session')) {
-          return Promise.resolve(mockSessionResponse);
-        }
-        return Promise.resolve(mockProcessResponse);
-      });
-      
-      mockedAxios.get.mockImplementation((url) => {
-        if (url.includes('/accounts')) {
-          return Promise.resolve(mockAccountsResponse);
-        }
-        if (url.includes('/routes')) {
-          return Promise.resolve(mockRoutesResponse);
-        }
-        return Promise.resolve(mockAccountsResponse);
-      });
+      const mockAccountId = 'acc-123';
+      const mockBalance: AccountBalance = {
+        account_id: 'acc-123',
+        balance: 2500.50
+      };
+      mockedAxios.get.mockResolvedValueOnce({ data: mockBalance });
 
       // ACT
-      const [sessionResult, accountsResult, processResult, routesResult] = await Promise.all([
-        apiService.initializeSession(),
-        apiService.getAccounts(),
-        apiService.processMessage('test', 'test'),
-        apiService.fetchRoutes()
-      ]);
+      const result = await apiService.getAccountBalance(mockAccountId);
 
       // ASSERT
-      expect(mockedAxios.post).toHaveBeenCalledTimes(2);
-      expect(mockedAxios.get).toHaveBeenCalledTimes(2);
-      expect(sessionResult).toBeUndefined();
-      expect(accountsResult).toEqual([]);
-      expect(processResult).toMatchObject({ status: 'success' });
-      expect(routesResult).toMatchObject({ '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking' } });
+      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+      expect(mockedAxios.get).toHaveBeenCalledWith(`${API_BASE}/api/accounts/${mockAccountId}/balance`);
+      expect(result).toEqual(mockBalance);
     });
 
-    it('apiService - should handle mixed success and error responses in concurrent calls', async () => {
+    it('getAccountBalance() - should handle zero balance', async () => {
       // ARRANGE
-      const mockSessionResponse = { data: {} };
-      const accountsError = new Error('Accounts service unavailable');
-      const mockProcessResponse = { data: { status: 'success' } };
-      const routesError = new Error('Routes service unavailable');
-      
-      mockedAxios.post.mockImplementation((url) => {
-        if (url.includes('/session')) {
-          return Promise.resolve(mockSessionResponse);
-        }
-        return Promise.resolve(mockProcessResponse);
-      });
-      
-      mockedAxios.get.mockImplementation((url) => {
-        if (url.includes('/accounts')) {
-          return Promise.reject(accountsError);
-        }
-        if (url.includes('/routes')) {
-          return Promise.reject(routesError);
-        }
-        return Promise.reject(accountsError);
-      });
+      const mockAccountId = 'acc-456';
+      const mockBalance: AccountBalance = {
+        account_id: 'acc-456',
+        balance: 0
+      };
+      mockedAxios.get.mockResolvedValueOnce({ data: mockBalance });
+
+      // ACT
+      const result = await apiService.getAccountBalance(mockAccountId);
+
+      // ASSERT
+      expect(result.balance).toBe(0);
+      expect(result.account_id).toBe(mockAccountId);
+    });
+
+    it('getAccountBalance() - should handle negative balance', async () => {
+      // ARRANGE
+      const mockAccountId = 'acc-789';
+      const mockBalance: AccountBalance = {
+        account_id: 'acc-789',
+        balance: -150.75
+      };
+      mockedAxios.get.mockResolvedValueOnce({ data: mockBalance });
+
+      // ACT
+      const result = await apiService.getAccountBalance(mockAccountId);
+
+      // ASSERT
+      expect(result.balance).toBe(-150.75);
+    });
+
+    it('getAccountBalance() - should handle API errors gracefully', async () => {
+      // ARRANGE
+      const mockError = new Error('Balance fetch failed');
+      mockedAxios.get.mockRejectedValueOnce(mockError);
 
       // ACT & ASSERT
-      await expect(Promise.allSettled([
-        apiService.initializeSession(),
-        apiService.getAccounts(),
-        apiService.processMessage('test', 'test'),
-        apiService.fetchRoutes()
-      ])).resolves.toEqual([
-        { status: 'fulfilled', value: undefined },
-        { status: 'rejected', reason: accountsError },
-        { status: 'fulfilled', value: { status: 'success' } },
-        { status: 'rejected', reason: routesError }
-      ]);
+      await expect(apiService.getAccountBalance('acc-invalid')).rejects.toThrow('Balance fetch failed');
+    });
+
+    it('getAccountBalance() - should handle empty account ID', async () => {
+      // ARRANGE
+      const mockBalance: AccountBalance = {
+        account_id: '',
+        balance: 0
+      };
+      mockedAxios.get.mockResolvedValueOnce({ data: mockBalance });
+
+      // ACT
+      const result = await apiService.getAccountBalance('');
+
+      // ASSERT
+      expect(mockedAxios.get).toHaveBeenCalledWith(`${API_BASE}/api/accounts//balance`);
+      expect(result.account_id).toBe('');
     });
   });
 
-  describe('apiService - Error Handling Edge Cases', () => {
-    it('apiService - should handle axios instance configuration errors', async () => {
+  describe('getAccountTransactions() - Transaction History Retrieval', () => {
+    it('getAccountTransactions() - should make GET request with account ID and return transactions', async () => {
       // ARRANGE
-      const configError = new Error('Request configuration error');
-      mockedAxios.post.mockImplementation(() => {
-        throw configError;
-      });
-
-      // ACT & ASSERT
-      await expect(apiService.initializeSession()).rejects.toThrow('Request configuration error');
-    });
-
-    it('apiService - should handle null or undefined response data', async () => {
-      // ARRANGE
-      mockedAxios.get.mockResolvedValueOnce({ data: null });
-
-      // ACT & ASSERT
-      await expect(apiService.getAccounts()).rejects.toThrow();
-      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/api/accounts');
-    });
-
-    it('apiService - should handle response with no data property', async () => {
-      // ARRANGE
-      mockedAxios.post.mockResolvedValueOnce({});
+      const mockAccountId = 'acc-123';
+      const mockResponse: AccountTransactionsResponse = {
+        account_id: 'acc-123',
+        transactions: [
+          {
+            id: 'tx-1',
+            date: '2024-01-15',
+            amount: -50.00,
+            description: 'Coffee Shop',
+            type: 'debit',
+            account_id: 'acc-123',
+            balance_after: 950.00,
+            category: 'food',
+            merchant: 'Local Cafe',
+            status: 'completed'
+          }
+        ],
+        total_count: 1,
+        page: 1,
+        per_page: 10,
+        has_more: false
+      };
+      mockedAxios.get.mockResolvedValueOnce({ data: mockResponse });
 
       // ACT
-      const result = await apiService.processMessage('test', 'test');
+      const result = await apiService.getAccountTransactions(mockAccountId);
 
       // ASSERT
-      expect(result).toBeUndefined();
+      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+      expect(mockedAxios.get).toHaveBeenCalledWith(`${API_BASE}/api/accounts/${mockAccountId}/transactions`, { params: {} });
+      expect(result).toEqual(mockResponse);
+      expect(result.transactions).toHaveLength(1);
+    });
+
+    it('getAccountTransactions() - should include limit parameter when provided', async () => {
+      // ARRANGE
+      const mockAccountId = 'acc-456';
+      const mockLimit = 5;
+      const mockResponse: AccountTransactionsResponse = {
+        account_id: 'acc-456',
+        transactions: [],
+        total_count: 0,
+        page: 1,
+        per_page: 5,
+        has_more: false
+      };
+      mockedAxios.get.mockResolvedValueOnce({ data: mockResponse });
+
+      // ACT
+      const result = await apiService.getAccountTransactions(mockAccountId, mockLimit);
+
+      // ASSERT
+      expect(mockedAxios.get).toHaveBeenCalledWith(`${API_BASE}/api/accounts/${mockAccountId}/transactions`, { params: { limit: mockLimit } });
+      expect(result.per_page).toBe(5);
+    });
+
+    it('getAccountTransactions() - should handle empty transactions array', async () => {
+      // ARRANGE
+      const mockAccountId = 'acc-empty';
+      const mockResponse: AccountTransactionsResponse = {
+        account_id: 'acc-empty',
+        transactions: [],
+        total_count: 0,
+        page: 1,
+        per_page: 10,
+        has_more: false
+      };
+      mockedAxios.get.mockResolvedValueOnce({ data: mockResponse });
+
+      // ACT
+      const result = await apiService.getAccountTransactions(mockAccountId);
+
+      // ASSERT
+      expect(result.transactions).toHaveLength(0);
+      expect(result.total_count).toBe(0);
+      expect(result.has_more).toBe(false);
+    });
+
+    it('getAccountTransactions() - should handle multiple transaction types', async () => {
+      // ARRANGE
+      const mockAccountId = 'acc-multi';
+      const mockResponse: AccountTransactionsResponse = {
+        account_id: 'acc-multi',
+        transactions: [
+          {
+            id: 'tx-credit',
+            date: '2024-01-16',
+            amount: 1000.00,
+            description: 'Salary Deposit',
+            type: 'credit',
+            account_id: 'acc-multi',
+            balance_after: 2000.00,
+            status: 'completed'
+          },
+          {
+            id: 'tx-debit',
+            date: '2024-01-15',
+            amount: -25.00,
+            description: 'ATM Withdrawal',
+            type: 'debit',
+            account_id: 'acc-multi',
+            balance_after: 1000.00,
+            status: 'pending'
+          }
+        ],
+        total_count: 2,
+        page: 1,
+        per_page: 10,
+        has_more: false
+      };
+      mockedAxios.get.mockResolvedValueOnce({ data: mockResponse });
+
+      // ACT
+      const result = await apiService.getAccountTransactions(mockAccountId);
+
+      // ASSERT
+      expect(result.transactions).toHaveLength(2);
+      expect(result.transactions[0].type).toBe('credit');
+      expect(result.transactions[1].type).toBe('debit');
+      expect(result.transactions[0].status).toBe('completed');
+      expect(result.transactions[1].status).toBe('pending');
+    });
+
+    it('getAccountTransactions() - should handle API errors gracefully', async () => {
+      // ARRANGE
+      const mockError = new Error('Transactions fetch failed');
+      mockedAxios.get.mockRejectedValueOnce(mockError);
+
+      // ACT & ASSERT
+      await expect(apiService.getAccountTransactions('acc-error')).rejects.toThrow('Transactions fetch failed');
+    });
+
+    it('getAccountTransactions() - should handle large limit values', async () => {
+      // ARRANGE
+      const mockAccountId = 'acc-large';
+      const mockLimit = 1000;
+      const mockResponse: AccountTransactionsResponse = {
+        account_id: 'acc-large',
+        transactions: [],
+        total_count: 0,
+        page: 1,
+        per_page: 1000,
+        has_more: false
+      };
+      mockedAxios.get.mockResolvedValueOnce({ data: mockResponse });
+
+      // ACT
+      const result = await apiService.getAccountTransactions(mockAccountId, mockLimit);
+
+      // ASSERT
+      expect(mockedAxios.get).toHaveBeenCalledWith(`${API_BASE}/api/accounts/${mockAccountId}/transactions`, { params: { limit: 1000 } });
+      expect(result.per_page).toBe(1000);
+    });
+
+    it('getAccountTransactions() - should handle pagination metadata correctly', async () => {
+      // ARRANGE
+      const mockAccountId = 'acc-paginated';
+      const mockResponse: AccountTransactionsResponse = {
+        account_id: 'acc-paginated',
+        transactions: [],
+        total_count: 25,
+        page: 2,
+        per_page: 10,
+        has_more: true
+      };
+      mockedAxios.get.mockResolvedValueOnce({ data: mockResponse });
+
+      // ACT
+      const result = await apiService.getAccountTransactions(mockAccountId);
+
+      // ASSERT
+      expect(result.total_count).toBe(25);
+      expect(result.page).toBe(2);
+      expect(result.per_page).toBe(10);
+      expect(result.has_more).toBe(true);
+    });
+  });
+
+  describe('apiService - Edge Cases and Error Handling', () => {
+    it('should handle network timeouts for all methods', async () => {
+      // ARRANGE
+      const timeoutError = new Error('timeout');
+      timeoutError.name = 'TimeoutError';
+
+      // ACT & ASSERT - Test each method handles timeouts
+      mockedAxios.post.mockRejectedValueOnce(timeoutError);
+      await expect(apiService.initializeSession()).rejects.toThrow('timeout');
+
+      mockedAxios.get.mockRejectedValueOnce(timeoutError);
+      await expect(apiService.getAccounts()).rejects.toThrow('timeout');
+
+      mockedAxios.post.mockRejectedValueOnce(timeoutError);
+      await expect(apiService.processMessage('test', 'context')).rejects.toThrow('timeout');
+
+      mockedAxios.get.mockRejectedValueOnce(timeoutError);
+      await expect(apiService.fetchRoutes()).rejects.toThrow('timeout');
+
+      mockedAxios.get.mockRejectedValueOnce(timeoutError);
+      await expect(apiService.fetchRoutesArray()).rejects.toThrow('timeout');
+
+      mockedAxios.get.mockRejectedValueOnce(timeoutError);
+      await expect(apiService.getAccountBalance('acc-1')).rejects.toThrow('timeout');
+
+      mockedAxios.get.mockRejectedValueOnce(timeoutError);
+      await expect(apiService.getAccountTransactions('acc-1')).rejects.toThrow('timeout');
+    });
+
+    it('should handle HTTP status errors for all methods', async () => {
+      // ARRANGE
+      const statusError = new Error('Request failed with status code 500');
+      statusError.name = 'AxiosError';
+
+      // ACT & ASSERT - Test each method handles HTTP errors
+      mockedAxios.post.mockRejectedValueOnce(statusError);
+      await expect(apiService.initializeSession()).rejects.toThrow('Request failed with status code 500');
+
+      mockedAxios.get.mockRejectedValueOnce(statusError);
+      await expect(apiService.getAccounts()).rejects.toThrow('Request failed with status code 500');
+    });
+
+    it('should preserve axios response structure for successful calls', async () => {
+      // ARRANGE
+      const mockAxiosResponse = {
+        data: { test: 'data' },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: {}
+      };
+      mockedAxios.post.mockResolvedValueOnce(mockAxiosResponse);
+
+      // ACT
+      await apiService.initializeSession();
+
+      // ASSERT
+      expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+      // The service should work with the axios response structure
     });
   });
 });

@@ -6,16 +6,12 @@ import {
   Button,
   Stack,
   Group,
-  TextInput,
   Container,
   Card,
   Title,
   SimpleGrid,
   LoadingOverlay,
-  Alert,
-  ActionIcon,
-  Affix,
-  Transition
+  Alert
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { Notifications, notifications } from '@mantine/notifications';
@@ -26,6 +22,7 @@ import { DynamicForm } from './components/DynamicForm';
 import { ChatPanel } from './components/ChatPanel';
 import { Header } from './components/Header';
 import { Breadcrumb } from './components/Breadcrumb';
+import { NavigationAssistant } from './components/NavigationAssistant';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
 import { fetchAppRoutes, createDerivedMappings } from './services/routes';
@@ -231,6 +228,25 @@ export const MainApp: React.FC = () => {
     }
   };
 
+  // Handler for Navigation Assistant form submission
+  const handleNavigationSubmit = async (values: { message: string }) => {
+    const userMessage = values.message.trim();
+    if (!userMessage) return;
+
+    // Close navigation assistant
+    setShowNavigationAssistant(false);
+
+    addUserMessage(userMessage);
+
+    try {
+      const data = await apiService.processMessage(userMessage, activeTab);
+      handleProcessResponse(data);
+    } catch (error) {
+      console.error('Error processing message:', error);
+      addAssistantMessage('Sorry, I encountered an error processing your request.');
+    }
+  };
+
   const handleDynamicFormSubmit = (formData: Record<string, unknown>) => {
     console.log('Form submitted:', formData);
     notifications.show({
@@ -422,6 +438,12 @@ export const MainApp: React.FC = () => {
             <BankingScreens.BillPayHub />
           </RouteComponent>
         );
+      case 'AccountDetails':
+        return (
+          <RouteComponent>
+            <BankingScreens.AccountDetails accounts={accounts} />
+          </RouteComponent>
+        );
       default:
         return <NotFound />;
     }
@@ -539,99 +561,13 @@ export const MainApp: React.FC = () => {
 
               {/* Floating AI Navigation Assistant - Only show on banking routes */}
               {activeTab === 'banking' && (
-                <>
-                  <Affix position={{ bottom: 20, right: 20 }}>
-                    <Transition transition="slide-up" mounted={!showNavigationAssistant}>
-                      {(transitionStyles) => (
-                        <ActionIcon
-                          size="xl"
-                          radius="xl"
-                          variant="filled"
-                          color="blue"
-                          style={{ ...transitionStyles }}
-                          onClick={() => setShowNavigationAssistant(true)}
-                          title="Navigation Assistant"
-                        >
-                          🤖
-                        </ActionIcon>
-                      )}
-                    </Transition>
-                  </Affix>
-                  
-                  {/* Navigation Assistant Modal/Overlay */}
-                  {showNavigationAssistant && (
-                    <Card 
-                      shadow="xl" 
-                      padding="lg" 
-                      radius="md" 
-                      withBorder 
-                      style={{
-                        position: 'fixed',
-                        bottom: 80,
-                        right: 20,
-                        width: 400,
-                        zIndex: 1000,
-                        background: 'white'
-                      }}
-                    >
-                      <Group justify="apart" mb="md">
-                        <Group>
-                          <Text>🤖</Text>
-                          <Text fw={500} data-testid="navigation-assistant-title">Navigation Assistant</Text>
-                        </Group>
-                        <ActionIcon 
-                          size="sm" 
-                          variant="subtle"
-                          onClick={() => setShowNavigationAssistant(false)}
-                          data-testid="navigation-assistant-close"
-                        >
-                          ✕
-                        </ActionIcon>
-                      </Group>
-                      
-                      <Text size="sm" color="dimmed" mb="md" data-testid="navigation-assistant-description">
-                        Tell me where you want to go and I'll take you there.
-                      </Text>
-                      
-                      <form onSubmit={form.onSubmit(handleSubmit)}>
-                        <Stack gap="sm">
-                          <TextInput
-                            {...form.getInputProps('message')}
-                            placeholder="Try: 'Take me to international transfers'"
-                            size="sm"
-                            data-testid="navigation-assistant-input"
-                          />
-                          <Group justify="apart">
-                            <Button 
-                              size="xs" 
-                              variant="subtle" 
-                              onClick={() => form.setFieldValue('message', 'Take me to international transfers')}
-                              data-testid="suggestion-international-transfers"
-                            >
-                              International Transfers
-                            </Button>
-                            <Button 
-                              size="xs" 
-                              variant="subtle" 
-                              onClick={() => form.setFieldValue('message', 'Show me account overview')}
-                              data-testid="suggestion-account-overview"
-                            >
-                              Account Overview
-                            </Button>
-                          </Group>
-                          <Button 
-                            type="submit" 
-                            disabled={!isConnected}
-                            size="sm"
-                            data-testid="navigation-assistant-submit"
-                          >
-                            Navigate
-                          </Button>
-                        </Stack>
-                      </form>
-                    </Card>
-                    )}
-                </>
+                <NavigationAssistant
+                  isVisible={showNavigationAssistant}
+                  isConnected={isConnected}
+                  onClose={() => setShowNavigationAssistant(false)}
+                  onOpen={() => setShowNavigationAssistant(true)}
+                  onSubmit={handleNavigationSubmit}
+                />
               )}
             </Container>
           </AppShell.Main>

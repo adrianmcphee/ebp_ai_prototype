@@ -11,26 +11,56 @@ import {
   Select,
   NumberInput
 } from '@mantine/core';
+import { useNavigate } from 'react-router-dom';
 import type { Account } from '../types';
+import { AccountDetails } from './AccountDetails';
 
 // Pre-built Banking Screens
 export const BankingScreens = {
-  AccountsOverview: ({ accounts }: { accounts: Account[] }) => (
-    <Card shadow="sm" padding="lg" radius="md" withBorder>
-      <Title order={2} mb="md">Your Accounts</Title>
-      <SimpleGrid cols={2}>
-        {accounts.map(account => (
-          <Paper key={account.id} p="md" withBorder>
-            <Text size="sm" color="dimmed">{account.type}</Text>
-            <Text fw={500}>{account.name}</Text>
-            <Text size="xl" fw={700} c="blue">
-              ${account.balance.toFixed(2)}
-            </Text>
-          </Paper>
-        ))}
-      </SimpleGrid>
-    </Card>
-  ),
+  AccountsOverview: ({ accounts }: { accounts: Account[] }) => {
+    const navigate = useNavigate();
+
+    const handleAccountClick = (accountId: string) => {
+      navigate(`/banking/accounts/${accountId}`);
+    };
+
+    return (
+      <Card shadow="sm" padding="lg" radius="md" withBorder>
+        <Title order={2} mb="md">Your Accounts</Title>
+        <SimpleGrid cols={2} data-testid="accounts-grid">
+          {accounts.map(account => (
+            <Paper 
+              key={account.id} 
+              p="md" 
+              withBorder
+              style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+              onClick={() => handleAccountClick(account.id)}
+              data-testid={`account-${account.id}`}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--mantine-color-gray-0)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '';
+                e.currentTarget.style.transform = '';
+                e.currentTarget.style.boxShadow = '';
+              }}
+            >
+              <Text size="sm" color="dimmed">{account.type}</Text>
+              <Text fw={500}>{account.name}</Text>
+              <Text size="xl" fw={700} c="blue">
+                ${account.balance.toFixed(2)}
+              </Text>
+              <Text size="xs" color="dimmed" mt="xs">
+                Click to view details
+              </Text>
+            </Paper>
+          ))}
+        </SimpleGrid>
+      </Card>
+    );
+  },
 
   TransfersHub: () => (
     <Card shadow="sm" padding="lg" radius="md" withBorder>
@@ -99,5 +129,7 @@ export const BankingScreens = {
         </Paper>
       </SimpleGrid>
     </Card>
-  )
+  ),
+
+  AccountDetails
 };
