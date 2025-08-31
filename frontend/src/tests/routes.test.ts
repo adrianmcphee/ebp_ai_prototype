@@ -29,9 +29,9 @@ describe('Routes Service', () => {
     it('fetchAppRoutes() - should fetch routes from API service', async () => {
       // ARRANGE
       const mockRoutes: AppRoutes = {
-        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking' },
-        '/banking/accounts': { intent: 'view_accounts', component: 'AccountsOverview', tab: 'banking' },
-        '/banking/transfers': { intent: 'transfer_money', component: 'TransfersHub', tab: 'banking' }
+        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking', breadcrumb: 'Dashboard' },
+        '/banking/accounts': { intent: 'view_accounts', component: 'AccountsOverview', tab: 'banking', breadcrumb: 'Accounts' },
+        '/banking/transfers': { intent: 'transfer_money', component: 'TransfersHub', tab: 'banking', breadcrumb: 'Transfers' }
       };
       vi.mocked(apiService.fetchRoutes).mockResolvedValueOnce(mockRoutes);
 
@@ -47,13 +47,13 @@ describe('Routes Service', () => {
     it('fetchAppRoutes() - should handle comprehensive route configurations', async () => {
       // ARRANGE
       const comprehensiveRoutes: AppRoutes = {
-        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking' },
-        '/banking/accounts': { intent: 'view_accounts', component: 'AccountsOverview', tab: 'banking' },
-        '/banking/accounts/{account_id}': { intent: 'view_account_details', component: 'AccountDetails', tab: 'banking' },
-        '/banking/transfers': { intent: 'transfer_money', component: 'TransfersHub', tab: 'banking' },
-        '/banking/transfers/wire': { intent: 'wire_transfer', component: 'WireTransferForm', tab: 'banking' },
-        '/banking/payments/bills': { intent: 'pay_bills', component: 'BillPayHub', tab: 'banking' },
-        '/customer-service': { intent: 'customer_service', component: 'CustomerServiceHub', tab: 'support' }
+        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking', breadcrumb: 'Dashboard' },
+        '/banking/accounts': { intent: 'view_accounts', component: 'AccountsOverview', tab: 'banking', breadcrumb: 'Accounts' },
+        '/banking/accounts/{account_id}': { intent: 'view_account_details', component: 'AccountDetails', tab: 'banking', breadcrumb: 'Account Details' },
+        '/banking/transfers': { intent: 'transfer_money', component: 'TransfersHub', tab: 'banking', breadcrumb: 'Transfers' },
+        '/banking/transfers/wire': { intent: 'wire_transfer', component: 'WireTransferForm', tab: 'banking', breadcrumb: 'Wire Transfer' },
+        '/banking/payments/bills': { intent: 'pay_bills', component: 'BillPayHub', tab: 'banking', breadcrumb: 'Pay Bills' },
+        '/customer-service': { intent: 'customer_service', component: 'CustomerServiceHub', tab: 'support', breadcrumb: 'Customer Service' }
       };
       vi.mocked(apiService.fetchRoutes).mockResolvedValueOnce(comprehensiveRoutes);
 
@@ -84,7 +84,7 @@ describe('Routes Service', () => {
     it('fetchAppRoutes() - should log fetched routes for debugging', async () => {
       // ARRANGE
       const mockRoutes: AppRoutes = {
-        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking' }
+        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking', breadcrumb: 'Dashboard' }
       };
       vi.mocked(apiService.fetchRoutes).mockResolvedValueOnce(mockRoutes);
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -132,11 +132,11 @@ describe('Routes Service', () => {
 
   describe('createDerivedMappings() - Route Mapping Generation', () => {
     const mockRoutes: AppRoutes = {
-      '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking' },
-      '/banking/accounts': { intent: 'view_accounts', component: 'AccountsOverview', tab: 'banking' },
-      '/banking/transfers': { intent: 'transfer_money', component: 'TransfersHub', tab: 'banking' },
-      '/banking/transfers/wire': { intent: 'wire_transfer', component: 'WireTransferForm', tab: 'banking' },
-      '/customer-service': { intent: 'customer_service', component: 'CustomerServiceHub', tab: 'support' }
+      '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking', breadcrumb: 'Dashboard' },
+      '/banking/accounts': { intent: 'view_accounts', component: 'AccountsOverview', tab: 'banking', breadcrumb: 'Accounts' },
+      '/banking/transfers': { intent: 'transfer_money', component: 'TransfersHub', tab: 'banking', breadcrumb: 'Transfers' },
+      '/banking/transfers/wire': { intent: 'wire_transfer', component: 'WireTransferForm', tab: 'banking', breadcrumb: 'Wire Transfer' },
+      '/customer-service': { intent: 'customer_service', component: 'CustomerServiceHub', tab: 'support', breadcrumb: 'Customer Service' }
     };
 
     it('createDerivedMappings() - should generate complete mapping objects', () => {
@@ -339,7 +339,7 @@ describe('Routes Service', () => {
     it('createDerivedMappings() - should handle single route configuration', () => {
       // ARRANGE
       const singleRoute: AppRoutes = {
-        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking' }
+        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking', breadcrumb: 'Dashboard' }
       };
 
       // ACT
@@ -358,9 +358,9 @@ describe('Routes Service', () => {
     it('createDerivedMappings() - should handle routes with dynamic parameters', () => {
       // ARRANGE
       const dynamicRoutes: AppRoutes = {
-        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking' },
-        '/banking/accounts/{account_id}': { intent: 'view_account_details', component: 'AccountDetails', tab: 'banking' },
-        '/banking/transactions/{transaction_id}': { intent: 'view_transaction', component: 'TransactionDetails', tab: 'banking' }
+        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking', breadcrumb: 'Dashboard' },
+        '/banking/accounts/{account_id}': { intent: 'view_account_details', component: 'AccountDetails', tab: 'banking', breadcrumb: 'Account Details' },
+        '/banking/transactions/{transaction_id}': { intent: 'view_transaction', component: 'TransactionDetails', tab: 'banking', breadcrumb: 'Transaction Details' }
       };
 
       // ACT
@@ -379,12 +379,12 @@ describe('Routes Service', () => {
     it('createDerivedMappings() - should properly filter main tab routes from sub-routes', () => {
       // ARRANGE
       const nestedRoutes: AppRoutes = {
-        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking' },
-        '/banking': { intent: 'banking_hub', component: 'BankingHub', tab: 'banking' },
-        '/banking/accounts': { intent: 'view_accounts', component: 'AccountsOverview', tab: 'banking' },
-        '/banking/accounts/details': { intent: 'account_details', component: 'AccountDetails', tab: 'banking' },
-        '/customer-service': { intent: 'customer_service', component: 'CustomerServiceHub', tab: 'support' },
-        '/customer-service/chat': { intent: 'live_chat', component: 'LiveChat', tab: 'support' }
+        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking', breadcrumb: 'Dashboard' },
+        '/banking': { intent: 'banking_hub', component: 'BankingHub', tab: 'banking', breadcrumb: 'Banking' },
+        '/banking/accounts': { intent: 'view_accounts', component: 'AccountsOverview', tab: 'banking', breadcrumb: 'Accounts' },
+        '/banking/accounts/details': { intent: 'account_details', component: 'AccountDetails', tab: 'banking', breadcrumb: 'Account Details' },
+        '/customer-service': { intent: 'customer_service', component: 'CustomerServiceHub', tab: 'support', breadcrumb: 'Customer Service' },
+        '/customer-service/chat': { intent: 'live_chat', component: 'LiveChat', tab: 'support', breadcrumb: 'Live Chat' }
       };
 
       // ACT
@@ -405,11 +405,11 @@ describe('Routes Service', () => {
     it('createDerivedMappings() - should handle complex route configurations with multiple tabs', () => {
       // ARRANGE
       const complexRoutes: AppRoutes = {
-        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking' },
-        '/investments': { intent: 'view_investments', component: 'InvestmentsHub', tab: 'investments' },
-        '/loans': { intent: 'view_loans', component: 'LoansHub', tab: 'loans' },
-        '/customer-service': { intent: 'customer_service', component: 'CustomerServiceHub', tab: 'support' },
-        '/settings': { intent: 'user_settings', component: 'SettingsHub', tab: 'settings' }
+        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking', breadcrumb: 'Dashboard' },
+        '/investments': { intent: 'view_investments', component: 'InvestmentsHub', tab: 'investments', breadcrumb: 'Investments' },
+        '/loans': { intent: 'view_loans', component: 'LoansHub', tab: 'loans', breadcrumb: 'Loans' },
+        '/customer-service': { intent: 'customer_service', component: 'CustomerServiceHub', tab: 'support', breadcrumb: 'Customer Service' },
+        '/settings': { intent: 'user_settings', component: 'SettingsHub', tab: 'settings', breadcrumb: 'Settings' }
       };
 
       // ACT
@@ -472,7 +472,7 @@ describe('Routes Service', () => {
     it('Route utility functions - should handle edge case inputs', () => {
       // ARRANGE
       const mappings = createDerivedMappings({
-        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking' }
+        '/': { intent: 'dashboard', component: 'BankingDashboard', tab: 'banking', breadcrumb: 'Dashboard' }
       });
 
       // ACT & ASSERT

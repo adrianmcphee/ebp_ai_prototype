@@ -832,7 +832,7 @@ describe('Dynamic Navigation Router System', () => {
       // ARRANGE
       const mappings = createDerivedMappings(mockDynamicRoutes);
       
-      const simulateNavigationLogic = (uiAssistance: any) => {
+      const simulateNavigationLogic = (uiAssistance: UIAssistance) => {
         if (uiAssistance && uiAssistance.type === 'navigation') {
           let routePath: string | undefined;
           

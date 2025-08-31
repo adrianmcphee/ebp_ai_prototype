@@ -356,10 +356,11 @@ export const MainApp: React.FC = () => {
   const RouteComponent: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
       <Container size="md" py="xl">
-        <Breadcrumb 
-          appRoutes={appRoutes!} 
-          style={{ marginBottom: 'var(--mantine-spacing-md)' }}
-        />
+        <div style={{ marginBottom: 'var(--mantine-spacing-md)' }}>
+          <Breadcrumb 
+            appRoutes={appRoutes!}
+          />
+        </div>
         {children}
       </Container>
     );
