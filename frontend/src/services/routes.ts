@@ -48,11 +48,42 @@ export const createDerivedMappings = (routes: AppRoutes) => {
   };
 
   const isValidRoute = (path: string): boolean => {
-    return path in routes;
+    // Direct exact match first
+    if (path in routes) {
+      return true;
+    }
+    
+    // Check if path matches any parameterized routes
+    for (const routePattern of Object.keys(routes)) {
+      if (matchesParameterizedRoute(path, routePattern)) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
+  const matchesParameterizedRoute = (path: string, pattern: string): boolean => {
+    // Convert route pattern to regex (e.g., "/banking/accounts/:accountId" -> "/banking/accounts/[^/]+")
+    const regexPattern = pattern.replace(/:[\w]+/g, '[^/]+');
+    const regex = new RegExp(`^${regexPattern}$`);
+    return regex.test(path);
   };
 
   const getTabForRoute = (path: string): string | undefined => {
-    return routes[path as keyof typeof routes]?.tab;
+    // Direct exact match first
+    if (path in routes) {
+      return routes[path as keyof typeof routes]?.tab;
+    }
+    
+    // Check parameterized routes
+    for (const routePattern of Object.keys(routes)) {
+      if (matchesParameterizedRoute(path, routePattern)) {
+        return routes[routePattern as keyof typeof routes]?.tab;
+      }
+    }
+    
+    return undefined;
   };
 
   return {
