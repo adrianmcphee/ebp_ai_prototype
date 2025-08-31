@@ -23,6 +23,7 @@ class EntityType(Enum):
     AMOUNT = "amount"
     CURRENCY = "currency"
     ACCOUNT_TYPE = "account_type"
+    ACCOUNT_NAME = "account_name"
     FROM_ACCOUNT = "from_account"
     TO_ACCOUNT = "to_account"
     ACCOUNT_ID = "account_id"
@@ -99,6 +100,10 @@ class EntityExtractor:
                 r"\b(checking|savings|credit|investment|loan|business)\s*(?:account)?\b",
                 re.IGNORECASE,
             ),
+            EntityType.ACCOUNT_NAME: re.compile(
+                r"\b(?:primary|business|personal|main|savings?)\s+(?:checking|account)\b|\b(?:checking|savings)\s+account\b",
+                re.IGNORECASE,
+            ),
             EntityType.DATE: re.compile(
                 r"\b(?:\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}|"
                 r"today|tomorrow|yesterday|"
@@ -140,6 +145,16 @@ class EntityExtractor:
                     "business",
                 ],
                 error_message="Invalid account type",
+            ),
+            EntityType.ACCOUNT_NAME: EntityValidationRule(
+                allowed_values=[
+                    "primary checking",
+                    "savings account", 
+                    "business checking",
+                    "main account",
+                    "personal account"
+                ],
+                error_message="Account name not recognized",
             ),
             EntityType.ROUTING_NUMBER: EntityValidationRule(
                 pattern=r"^\d{9}$",
@@ -556,6 +571,17 @@ Query: "Transfer 1000 dollars to my mom tomorrow"
                 return "savings"
             return account_type
 
+        elif entity_type == EntityType.ACCOUNT_NAME:
+            account_name = match.group(0).lower()
+            # Normalize common variations to match actual account names
+            if "primary" in account_name and "check" in account_name:
+                return "primary checking"
+            elif "business" in account_name and "check" in account_name:
+                return "business checking"
+            elif "savings" in account_name or "saving" in account_name:
+                return "savings account"
+            return account_name.strip()
+
         elif entity_type == EntityType.DATE:
             return self._parse_date(match.group(0))
 
@@ -687,6 +713,8 @@ Query: "Transfer 1000 dollars to my mom tomorrow"
             return str(value).lower().strip()
         elif entity.entity_type == EntityType.ACCOUNT_TYPE:
             return str(value).lower()
+        elif entity.entity_type == EntityType.ACCOUNT_NAME:
+            return str(value).lower().strip()
 
         return value
 
