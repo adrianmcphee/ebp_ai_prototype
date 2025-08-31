@@ -97,7 +97,7 @@ class UIScreenCatalog:
             name="Dashboard",
             screen_type=ScreenType.PRE_BUILT,
             category="dashboard",
-            route_path="/",
+            route_path="/banking",
             component_name="BankingDashboard",
             description="Main banking dashboard with account overview",
             related_intents=["navigation.banking.dashboard"],

@@ -19,12 +19,13 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { Notifications, notifications } from '@mantine/notifications';
-import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, Account, AppRoutes } from './types';
 import { BankingScreens } from './components/BankingScreens';
 import { DynamicForm } from './components/DynamicForm';
 import { ChatPanel } from './components/ChatPanel';
 import { Header } from './components/Header';
+import { Breadcrumb } from './components/Breadcrumb';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
 import { fetchAppRoutes, createDerivedMappings } from './services/routes';
@@ -351,24 +352,44 @@ export const MainApp: React.FC = () => {
     </Container>
   );
 
-  // Route component wrapper with back navigation
+  // Route component wrapper with breadcrumb navigation
   const RouteComponent: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
       <Container size="md" py="xl">
-        <Button 
-          variant="subtle" 
-          mb="md" 
-          onClick={() => navigate('/')}
-          data-testid="back-to-dashboard"
-        >
-          ← Back to Dashboard
-        </Button>
+        <div style={{ marginBottom: 'var(--mantine-spacing-md)' }}>
+          <Breadcrumb 
+            appRoutes={appRoutes!}
+          />
+        </div>
         {children}
       </Container>
     );
   };
 
+  // Default route redirect component
+  const DefaultRouteRedirect: React.FC = () => {
+    // Get the first route from the fetched routes
+    const routeKeys = Object.keys(appRoutes!);
+    const firstRoute = routeKeys[0];
+    
+    if (firstRoute && firstRoute !== '/') {
+      // Redirect to first route if it's not '/'
+      return <Navigate to={firstRoute} replace />;
+    } else if (firstRoute === '/') {
+      // If first route is '/', render its component directly
+      const firstRouteConfig = appRoutes![firstRoute];
+      return renderRouteComponent(firstRouteConfig.component);
+    }
+    
+    // Fallback to banking dashboard if no routes found
+    return <BankingDashboard />;
+  };
+
   // Component renderer based on route config
+  // @FIXME: This is a temporary solution untill we know where the source of truth is
+  // If it's on the frontend, we should just render the component directly
+  // if on the backend, we should do React.createElement(componentName).
+  // Which is already a BFF solution similar to CXP portal.
   const renderRouteComponent = (componentName: string) => {
     switch (componentName) {
       case 'BankingDashboard':
@@ -418,7 +439,6 @@ export const MainApp: React.FC = () => {
       setAppRoutes(routes);
       setRouteMappings(mappings);
       
-      console.log('Routes loaded successfully:', routes);
     } catch (error) {
       const errorMessage = 'Failed to load application routes';
       setRoutesError(errorMessage);
@@ -500,6 +520,9 @@ export const MainApp: React.FC = () => {
               {/* Main Content Area - Configuration-driven Routes */}
               <Container size="xl" pt="md">
                 <Routes>
+                  {/* Default route - redirect to first fetched route */}
+                  <Route path="/" element={<DefaultRouteRedirect />} />
+                  
                   {/* Generate routes from API-loaded routes configuration */}
                   {Object.entries(appRoutes).map(([routePath, config]) => (
                     <Route 

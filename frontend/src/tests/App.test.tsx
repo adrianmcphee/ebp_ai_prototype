@@ -149,6 +149,41 @@ vi.mock('../components/Header', () => ({
   ))
 }));
 
+vi.mock('../components/Breadcrumb', async () => {
+  const { default: React } = await import('react');
+  const { useLocation, useNavigate } = await import('react-router-dom');
+  
+  return {
+    Breadcrumb: vi.fn(() => {
+      const location = useLocation();
+      const navigate = useNavigate();
+      
+      const pathSegments = location.pathname.split('/').filter(Boolean);
+      
+      // Don't render breadcrumb on root path
+      if (location.pathname === '/' && pathSegments.length <= 1) {
+        return null;
+      }
+      
+      return React.createElement('div', { 'data-testid': 'breadcrumb-navigation' },
+        // Mock dashboard breadcrumb link for banking sub-routes
+        pathSegments.includes('banking') && React.createElement('a', {
+          'data-testid': 'breadcrumb-link-dashboard',
+          href: '/',
+          onClick: (e) => { 
+            e.preventDefault(); 
+            navigate('/');
+          }
+        }, 'Dashboard'),
+        // Mock current page breadcrumb
+        React.createElement('span', {
+          'data-testid': `breadcrumb-current-${pathSegments[pathSegments.length - 1] || 'page'}`
+        }, 'Current Page')
+      );
+    })
+  };
+});
+
 // Test helper to render MainApp with proper routing context
 const renderAppWithRouter = (initialEntries = ['/']) => {
   return render(
@@ -183,7 +218,8 @@ describe('App Component', () => {
     vi.mocked(apiService.processMessage).mockResolvedValue({
       message: 'Default test response',
       intent: 'test',
-      confidence: 0.9
+      confidence: 0.9,
+      status: ''
     });
     
     vi.mocked(apiService.initializeSession).mockResolvedValue(undefined);
@@ -431,7 +467,7 @@ describe('App Component', () => {
       await waitFor(() => {
         // Should navigate to accounts overview route
         expect(screen.getByTestId('accounts-overview')).toBeDefined();
-        expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
       });
     });
 
@@ -861,10 +897,10 @@ describe('App Component', () => {
         await user.click(screen.getByTestId('chat-send-message'));
       });
 
-      // Should navigate to accounts overview and show back button
+      // Should navigate to accounts overview and show breadcrumb navigation
       await waitFor(() => {
         expect(screen.getByTestId('accounts-overview')).toBeDefined();
-        expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
       });
     });
   });
@@ -1120,7 +1156,7 @@ describe('App Component', () => {
       renderAppWithRouter(['/banking/accounts']);
       await waitFor(() => {
         expect(screen.getByTestId('accounts-overview')).toBeDefined();
-        expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
       });
     });
 
@@ -1128,7 +1164,7 @@ describe('App Component', () => {
       renderAppWithRouter(['/banking/transfers']);
       await waitFor(() => {
         expect(screen.getByTestId('transfers-hub')).toBeDefined();
-        expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
       });
     });
 
@@ -1136,7 +1172,7 @@ describe('App Component', () => {
       renderAppWithRouter(['/banking/transfers/wire']);
       await waitFor(() => {
         expect(screen.getByTestId('wire-transfer-form')).toBeDefined();
-        expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
       });
     });
 
@@ -1144,7 +1180,7 @@ describe('App Component', () => {
       renderAppWithRouter(['/banking/payments/bills']);
       await waitFor(() => {
         expect(screen.getByTestId('bill-pay-hub')).toBeDefined();
-        expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
       });
     });
 
@@ -1184,12 +1220,12 @@ describe('App Component', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('accounts-overview')).toBeDefined();
-        expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
       });
 
-      // Navigate back to dashboard
+      // Navigate back to dashboard using breadcrumb
       await act(async () => {
-        await user.click(screen.getByTestId('back-to-dashboard'));
+        await user.click(screen.getByTestId('breadcrumb-link-dashboard'));
       });
 
       await waitFor(() => {
@@ -1203,7 +1239,7 @@ describe('App Component', () => {
 
       await waitFor(() => {
         expect(screen.getByTestId('transfers-hub')).toBeDefined();
-        expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
       });
     });
 
@@ -1272,7 +1308,7 @@ describe('App Component', () => {
       await waitFor(() => {
         // Should navigate to wire transfer form (the navigation actually works!)
         expect(screen.getByTestId('wire-transfer-form')).toBeDefined();
-        expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
       });
     });
 
@@ -1312,7 +1348,7 @@ describe('App Component', () => {
       await waitFor(() => {
         // Should navigate to accounts overview via component fallback (it works!)
         expect(screen.getByTestId('accounts-overview')).toBeDefined();
-        expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
       });
     });
 
@@ -1321,12 +1357,12 @@ describe('App Component', () => {
       renderAppWithRouter(['/banking/accounts']);
 
       await waitFor(() => {
-        expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
         expect(screen.getByTestId('accounts-overview')).toBeDefined();
       });
 
       await act(async () => {
-        await user.click(screen.getByTestId('back-to-dashboard'));
+        await user.click(screen.getByTestId('breadcrumb-link-dashboard'));
       });
 
       await waitFor(() => {
@@ -1338,12 +1374,12 @@ describe('App Component', () => {
       renderAppWithRouter(['/banking/transfers']);
 
       await waitFor(() => {
-        expect(screen.getByTestId('back-to-dashboard')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
         expect(screen.getByTestId('transfers-hub')).toBeDefined();
       });
 
       await act(async () => {
-        await user.click(screen.getByTestId('back-to-dashboard'));
+        await user.click(screen.getByTestId('breadcrumb-link-dashboard'));
       });
 
       await waitFor(() => {
