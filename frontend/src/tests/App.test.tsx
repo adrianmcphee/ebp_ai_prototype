@@ -183,7 +183,8 @@ describe('App Component', () => {
     vi.mocked(apiService.processMessage).mockResolvedValue({
       message: 'Default test response',
       intent: 'test',
-      confidence: 0.9
+      confidence: 0.9,
+      status: ''
     });
     
     vi.mocked(apiService.initializeSession).mockResolvedValue(undefined);
