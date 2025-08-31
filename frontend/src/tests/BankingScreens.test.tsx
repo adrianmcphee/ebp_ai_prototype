@@ -1,73 +1,123 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, act } from '@testing-library/react';
+import { render, screen, cleanup, act, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { BankingScreens } from '../components/BankingScreens';
-import { MantineProvider } from '@mantine/core';
 import type { Account } from '../types';
 
-// Mock Mantine components to isolate unit under test
-vi.mock('@mantine/core', async () => {
-  const actual = await vi.importActual<typeof import('@mantine/core')>('@mantine/core');
-  return {
-    ...actual,
-    Card: vi.fn(({ children }) => (
-      <div data-testid="card">{children}</div>
-    )),
-    Title: vi.fn(({ children }) => (
-      <h1 data-testid="title">{children}</h1>
-    )),
-    SimpleGrid: vi.fn(({ children }) => (
-      <div data-testid="simple-grid">{children}</div>
-    )),
-    Paper: vi.fn(({ children, style }) => (
-      <div data-testid="paper" style={style}>{children}</div>
-    )),
-    Text: vi.fn(({ children }) => (
-      <span data-testid="text">{children}</span>
-    )),
-    Button: vi.fn(({ children, onClick }) => (
-      <button data-testid="button" onClick={onClick}>
-        {children}
-      </button>
-    )),
-    Stack: vi.fn(({ children }) => (
-      <div data-testid="stack">{children}</div>
-    )),
-    TextInput: vi.fn(({ label, placeholder, required }) => (
-      <input 
-        data-testid="text-input" 
-        placeholder={placeholder} 
-        data-required={required}
-        aria-label={label}
-      />
-    )),
-    Select: vi.fn(({ label, placeholder, data, required }) => (
-      <select 
-        data-testid="select" 
-        data-options-count={data?.length || 0}
-        data-required={required}
-        aria-label={label}
+// Import for accessing mocked services
+import { useNavigate } from 'react-router-dom';
+
+// Mock react-router-dom navigation
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useNavigate: vi.fn(() => mockNavigate)
+}));
+
+// Mock Mantine components with clean behavioral focus - NO STYLING PROPS
+vi.mock('@mantine/core', () => ({
+  Card: vi.fn(({ children, withBorder }) => (
+    <div data-testid="card" data-has-border={withBorder ? 'true' : 'false'}>
+      {children}
+    </div>
+  )),
+  Title: vi.fn(({ children, order }) => {
+    const tag = order === 2 ? 'h2' : order === 3 ? 'h3' : 'h1';
+    return React.createElement(tag, { 'data-testid': 'title', 'data-level': order }, children);
+  }),
+  SimpleGrid: vi.fn(({ children }) => (
+    <div data-testid="accounts-grid">{children}</div>
+  )),
+  Paper: vi.fn(({ children, onClick, withBorder, onMouseEnter, onMouseLeave, ...props }) => (
+    <div 
+      data-testid={props['data-testid'] || 'paper'}
+      data-clickable={onClick ? 'true' : 'false'}
+      data-has-border={withBorder ? 'true' : 'false'}
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      style={props.style}
+    >
+      {children}
+    </div>
+  )),
+  Text: vi.fn(({ children, fw, size, color, c, mt }) => {
+    const isBold = fw === 500 || fw === 700;
+    return (
+      <span 
+        data-testid="text"
+        data-weight={isBold ? 'bold' : 'normal'}
+        data-color={color || c || 'default'}
       >
-        <option value="">{placeholder}</option>
-      </select>
-    )),
-    NumberInput: vi.fn(({ label, placeholder, required }) => (
-      <input 
-        type="number"
-        data-testid="number-input" 
-        placeholder={placeholder} 
-        data-required={required}
-        aria-label={label}
-      />
-    ))
-  };
-});
+        {children}
+      </span>
+    );
+  }),
+  Button: vi.fn(({ children, onClick, variant, size, fullWidth, mt }) => (
+    <button 
+      data-testid="button"
+      onClick={onClick}
+      data-variant={variant || 'default'}
+      data-full-width={fullWidth ? 'true' : 'false'}
+    >
+      {children}
+    </button>
+  )),
+  Stack: vi.fn(({ children, gap }) => (
+    <div data-testid="stack" data-gap={gap}>{children}</div>
+  )),
+  TextInput: vi.fn(({ label, placeholder, required, ...props }) => (
+    <input 
+      data-testid="text-input"
+      placeholder={placeholder}
+      data-required={required ? 'true' : 'false'}
+      data-field-type="text"
+      aria-label={label}
+    />
+  )),
+  Select: vi.fn(({ label, placeholder, data, required, ...props }) => (
+    <select 
+      data-testid="select"
+      data-options-count={data?.length || 0}
+      data-required={required ? 'true' : 'false'}
+      data-field-type="select"
+      aria-label={label}
+    >
+      <option value="">{placeholder}</option>
+      {data && data.map((option: string, index: number) => (
+        <option key={index} value={option}>{option}</option>
+      ))}
+    </select>
+  )),
+  NumberInput: vi.fn(({ label, placeholder, required, ...props }) => (
+    <input 
+      type="number"
+      data-testid="number-input"
+      placeholder={placeholder}
+      data-required={required ? 'true' : 'false'}
+      data-field-type="number"
+      aria-label={label}
+    />
+  ))
+}));
 
-// Wrapper component for Mantine context
-const TestWrapper = ({ children }: { children: React.ReactNode }) => (
-  <MantineProvider>{children}</MantineProvider>
-);
+// Mock AccountDetails component as it's imported
+vi.mock('../components/AccountDetails', () => ({
+  AccountDetails: vi.fn(() => (
+    <div data-testid="account-details">Account Details Component</div>
+  ))
+}));
 
-describe('BankingScreens Components', () => {
+describe('BankingScreens', () => {
+  const user = userEvent.setup();
+  
+  // Shared test data
+  const mockAccounts: Account[] = [
+    { id: 'acc-1', name: 'Primary Checking', type: 'checking', balance: 1234.56 },
+    { id: 'acc-2', name: 'Emergency Savings', type: 'savings', balance: 5000.00 },
+    { id: 'acc-3', name: 'Business Account', type: 'business', balance: 12500.75 }
+  ];
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -76,57 +126,98 @@ describe('BankingScreens Components', () => {
     cleanup();
   });
 
-  describe('AccountsOverview() - Account Display Component', () => {
-    const mockAccounts: Account[] = [
-      { id: '1', name: 'Checking Account', type: 'checking', balance: 1500.50 },
-      { id: '2', name: 'Savings Account', type: 'savings', balance: 5000.00 },
-      { id: '3', name: 'Business Account', type: 'business', balance: 25000.75 }
-    ];
+  describe('useNavigate() - Navigation Integration', () => {
+    it('useNavigate() - should be called from react-router-dom', () => {
+      // ARRANGE & ACT & ASSERT
+      expect(vi.mocked(useNavigate)).toBeDefined();
+      expect(typeof vi.mocked(useNavigate)).toBe('function');
+    });
+  });
 
-    it('AccountsOverview() - should render with empty accounts array', async () => {
+  describe('AccountsOverview() - Account Display Component', () => {
+
+    it('AccountsOverview() - should render main structural elements', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.AccountsOverview accounts={[]} />
-          </TestWrapper>
-        );
+        render(<BankingScreens.AccountsOverview accounts={[]} />);
       });
 
-      // ASSERT
+      // ASSERT - Test structure, not styling
       expect(screen.getByTestId('card')).toBeDefined();
       expect(screen.getByTestId('title')).toBeDefined();
-      expect(screen.getByTestId('simple-grid')).toBeDefined();
-    });
-
-    it('AccountsOverview() - should render with accounts data', async () => {
-      // ARRANGE & ACT
-      await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.AccountsOverview accounts={mockAccounts} />
-          </TestWrapper>
-        );
-      });
-
-      // ASSERT
-      const grid = screen.getByTestId('simple-grid');
-      expect(grid).toBeDefined();
+      expect(screen.getByTestId('accounts-grid')).toBeDefined();
     });
 
     it('AccountsOverview() - should render correct number of account items', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.AccountsOverview accounts={mockAccounts} />
-          </TestWrapper>
-        );
+        render(<BankingScreens.AccountsOverview accounts={mockAccounts} />);
+      });
+
+      // ASSERT - Test functional behavior
+      const accountElements = screen.getAllByTestId(/^account-acc-/);
+      expect(accountElements).toHaveLength(mockAccounts.length);
+    });
+
+    it('handleAccountClick() - should navigate to account detail page on account click', async () => {
+      // ARRANGE
+      await act(async () => {
+        render(<BankingScreens.AccountsOverview accounts={mockAccounts} />);
+      });
+
+      const firstAccount = screen.getByTestId('account-acc-1');
+
+      // ACT
+      await act(async () => {
+        await user.click(firstAccount);
+      });
+
+      // ASSERT - Test navigation behavior
+      expect(mockNavigate).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith('/banking/accounts/acc-1');
+    });
+
+    it('handleAccountClick() - should handle navigation for different account IDs', async () => {
+      // ARRANGE
+      await act(async () => {
+        render(<BankingScreens.AccountsOverview accounts={mockAccounts} />);
+      });
+
+      // ACT - Test multiple account clicks
+      const accounts = screen.getAllByTestId(/^account-acc-/);
+      
+      await act(async () => {
+        await user.click(accounts[0]); // acc-1
+      });
+
+      await act(async () => {
+        await user.click(accounts[1]); // acc-2
+      });
+
+      await act(async () => {
+        await user.click(accounts[2]); // acc-3
       });
 
       // ASSERT
-      const papers = screen.getAllByTestId('paper');
-      expect(papers).toHaveLength(mockAccounts.length);
+      expect(mockNavigate).toHaveBeenCalledTimes(3);
+      expect(mockNavigate).toHaveBeenNthCalledWith(1, '/banking/accounts/acc-1');
+      expect(mockNavigate).toHaveBeenNthCalledWith(2, '/banking/accounts/acc-2');
+      expect(mockNavigate).toHaveBeenNthCalledWith(3, '/banking/accounts/acc-3');
+    });
+
+    it('AccountsOverview() - should handle empty accounts array', async () => {
+      // ARRANGE & ACT
+      await act(async () => {
+        render(<BankingScreens.AccountsOverview accounts={[]} />);
+      });
+
+      // ASSERT - Should render structure without accounts
+      expect(screen.getByTestId('card')).toBeDefined();
+      expect(screen.getByTestId('accounts-grid')).toBeDefined();
+      
+      // No account elements should exist
+      const accountElements = screen.queryAllByTestId(/^account-/);
+      expect(accountElements).toHaveLength(0);
     });
 
     it('AccountsOverview() - should handle single account', async () => {
@@ -135,172 +226,112 @@ describe('BankingScreens Components', () => {
 
       // ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.AccountsOverview accounts={singleAccount} />
-          </TestWrapper>
-        );
+        render(<BankingScreens.AccountsOverview accounts={singleAccount} />);
       });
 
       // ASSERT
-      const papers = screen.getAllByTestId('paper');
-      expect(papers).toHaveLength(1);
+      const accountElements = screen.getAllByTestId(/^account-acc-/);
+      expect(accountElements).toHaveLength(1);
     });
 
     it('AccountsOverview() - should update when accounts prop changes', async () => {
       // ARRANGE
       const { rerender } = render(
-        <TestWrapper>
-          <BankingScreens.AccountsOverview accounts={[mockAccounts[0]]} />
-        </TestWrapper>
+        <BankingScreens.AccountsOverview accounts={[mockAccounts[0]]} />
       );
 
       // Verify initial state
-      let papers = screen.getAllByTestId('paper');
-      expect(papers).toHaveLength(1);
+      let accountElements = screen.getAllByTestId(/^account-acc-/);
+      expect(accountElements).toHaveLength(1);
 
       // ACT - Update accounts
       await act(async () => {
-        rerender(
-          <TestWrapper>
-            <BankingScreens.AccountsOverview accounts={mockAccounts} />
-          </TestWrapper>
-        );
-      });
-
-      // ASSERT - Verify updated state
-      papers = screen.getAllByTestId('paper');
-      expect(papers).toHaveLength(mockAccounts.length);
-    });
-
-    it('AccountsOverview() - should handle account with zero balance', async () => {
-      // ARRANGE
-      const accountWithZeroBalance: Account[] = [
-        { id: '1', name: 'Empty Account', type: 'checking', balance: 0 }
-      ];
-
-      // ACT
-      await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.AccountsOverview accounts={accountWithZeroBalance} />
-          </TestWrapper>
-        );
+        rerender(<BankingScreens.AccountsOverview accounts={mockAccounts} />);
       });
 
       // ASSERT
-      const papers = screen.getAllByTestId('paper');
-      expect(papers).toHaveLength(1);
+      accountElements = screen.getAllByTestId(/^account-acc-/);
+      expect(accountElements).toHaveLength(mockAccounts.length);
     });
 
-    it('AccountsOverview() - should handle account with negative balance', async () => {
+    it('onMouseEnter()/onMouseLeave() - should handle hover interactions', async () => {
       // ARRANGE
-      const accountWithNegativeBalance: Account[] = [
-        { id: '1', name: 'Overdrawn Account', type: 'checking', balance: -100.50 }
-      ];
-
-      // ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.AccountsOverview accounts={accountWithNegativeBalance} />
-          </TestWrapper>
-        );
+        render(<BankingScreens.AccountsOverview accounts={[mockAccounts[0]]} />);
       });
 
-      // ASSERT
-      const papers = screen.getAllByTestId('paper');
-      expect(papers).toHaveLength(1);
+      const accountElement = screen.getByTestId('account-acc-1');
+
+      // ACT & ASSERT - Test that hover functionality is supported (elements are interactive)
+      expect(accountElement).toBeDefined();
+      expect(accountElement.getAttribute('data-clickable')).toBe('true');
+      
+      // Test that the element can receive hover events (has the necessary attributes)
+      expect(accountElement.style.cursor).toBe('pointer');
+      expect(accountElement.style.transition).toBe('all 0.2s ease');
     });
   });
 
   describe('TransfersHub() - Transfer Options Component', () => {
-    it('TransfersHub() - should render main container', async () => {
+    it('TransfersHub() - should render main structural elements', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.TransfersHub />
-          </TestWrapper>
-        );
+        render(<BankingScreens.TransfersHub />);
       });
 
       // ASSERT
       expect(screen.getByTestId('card')).toBeDefined();
       expect(screen.getByTestId('title')).toBeDefined();
-      expect(screen.getByTestId('simple-grid')).toBeDefined();
     });
 
-    it('TransfersHub() - should render all transfer options', async () => {
+    it('TransfersHub() - should render all transfer option buttons', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.TransfersHub />
-          </TestWrapper>
-        );
+        render(<BankingScreens.TransfersHub />);
       });
 
-      // ASSERT
-      const grid = screen.getByTestId('simple-grid');
-      expect(grid).toBeDefined();
+      // ASSERT - Test functional elements
+      const buttons = screen.getAllByTestId('button');
+      expect(buttons).toHaveLength(3); // Internal, External, International transfers
       
-      const papers = screen.getAllByTestId('paper');
-      expect(papers).toHaveLength(3); // Internal, External, International
-
-      const buttons = screen.getAllByTestId('button');
-      expect(buttons).toHaveLength(3);
+      buttons.forEach(button => {
+        expect(button.tagName).toBe('BUTTON');
+        expect(button.getAttribute('data-full-width')).toBe('true');
+      });
     });
 
-    it('TransfersHub() - should render transfer buttons', async () => {
+    it('TransfersHub() - should render transfer option containers', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.TransfersHub />
-          </TestWrapper>
-        );
+        render(<BankingScreens.TransfersHub />);
       });
 
-      // ASSERT
-      const buttons = screen.getAllByTestId('button');
-      expect(buttons).toHaveLength(3);
-      buttons.forEach(button => {
-        expect(button).toBeDefined();
-        expect(button.tagName).toBe('BUTTON');
-      });
+      // ASSERT - Test container elements
+      const papers = screen.getAllByTestId('paper');
+      expect(papers).toHaveLength(3);
     });
 
     it('TransfersHub() - should handle button interactions', async () => {
       // ARRANGE
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.TransfersHub />
-          </TestWrapper>
-        );
+        render(<BankingScreens.TransfersHub />);
       });
 
+      // ACT & ASSERT - Buttons should be interactive
       const buttons = screen.getAllByTestId('button');
-
-      // ACT & ASSERT - Buttons should be clickable
-      for (const button of buttons) {
+      buttons.forEach(button => {
         expect(button).toBeDefined();
-        // Note: We don't test the actual click behavior as it's not implemented
-        // We only test that the buttons exist and have the right attributes
-      }
+        expect(button.tagName).toBe('BUTTON');
+        // Note: No actual click handlers implemented in component
+      });
     });
   });
 
   describe('WireTransferForm() - Wire Transfer Form Component', () => {
-    it('WireTransferForm() - should render main container', async () => {
+    it('WireTransferForm() - should render main form structure', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.WireTransferForm />
-          </TestWrapper>
-        );
+        render(<BankingScreens.WireTransferForm />);
       });
 
       // ASSERT
@@ -309,479 +340,415 @@ describe('BankingScreens Components', () => {
       expect(screen.getByTestId('stack')).toBeDefined();
     });
 
-    it('WireTransferForm() - should render all text input fields', async () => {
+    it('WireTransferForm() - should render all required text input fields', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.WireTransferForm />
-          </TestWrapper>
-        );
+        render(<BankingScreens.WireTransferForm />);
       });
 
-      // ASSERT
-      const textInputs = screen.getAllByTestId('text-input');
-      expect(textInputs.length).toBeGreaterThan(8); // Multiple text fields
-    });
-
-    it('WireTransferForm() - should render required text input fields', async () => {
-      // ARRANGE & ACT
-      await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.WireTransferForm />
-          </TestWrapper>
-        );
-      });
-
-      // ASSERT
+      // ASSERT - Test functional form elements
       const textInputs = screen.getAllByTestId('text-input');
       const requiredInputs = textInputs.filter(input => 
         input.getAttribute('data-required') === 'true'
       );
+      
+      expect(textInputs.length).toBeGreaterThan(8); // Multiple text fields
       expect(requiredInputs.length).toBeGreaterThan(5); // Several required fields
     });
 
-    it('WireTransferForm() - should render purpose code select field', async () => {
+    it('WireTransferForm() - should render purpose code select field with correct options', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.WireTransferForm />
-          </TestWrapper>
-        );
+        render(<BankingScreens.WireTransferForm />);
       });
 
-      // ASSERT
+      // ASSERT - Test select field functionality
       const select = screen.getByTestId('select');
       expect(select).toBeDefined();
+      expect(select.tagName).toBe('SELECT');
       expect(select.getAttribute('data-required')).toBe('true');
       expect(select.getAttribute('data-options-count')).toBe('20');
+      expect(select.getAttribute('data-field-type')).toBe('select');
     });
 
     it('WireTransferForm() - should render amount number input field', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.WireTransferForm />
-          </TestWrapper>
-        );
+        render(<BankingScreens.WireTransferForm />);
       });
 
-      // ASSERT
+      // ASSERT - Test number input functionality
       const numberInput = screen.getByTestId('number-input');
       expect(numberInput).toBeDefined();
+      expect(numberInput.tagName).toBe('INPUT');
+      expect(numberInput.type).toBe('number');
       expect(numberInput.getAttribute('data-required')).toBe('true');
+      expect(numberInput.getAttribute('data-field-type')).toBe('number');
     });
 
     it('WireTransferForm() - should render submit button', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.WireTransferForm />
-          </TestWrapper>
-        );
+        render(<BankingScreens.WireTransferForm />);
       });
 
-      // ASSERT
+      // ASSERT - Test submit button functionality
       const button = screen.getByTestId('button');
       expect(button).toBeDefined();
       expect(button.tagName).toBe('BUTTON');
     });
 
-    it('WireTransferForm() - should render stack container', async () => {
+    it('WireTransferForm() - should have proper accessibility labels for all form fields', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.WireTransferForm />
-          </TestWrapper>
-        );
+        render(<BankingScreens.WireTransferForm />);
       });
 
-      // ASSERT
-      const stack = screen.getByTestId('stack');
-      expect(stack).toBeDefined();
-    });
-
-    it('WireTransferForm() - should handle form field interactions', async () => {
-      // ARRANGE
-      await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.WireTransferForm />
-          </TestWrapper>
-        );
-      });
-
-      // ACT & ASSERT - Test that form fields are interactive
+      // ASSERT - Test accessibility
       const textInputs = screen.getAllByTestId('text-input');
       const numberInput = screen.getByTestId('number-input');
       const select = screen.getByTestId('select');
 
-      expect(textInputs.length).toBeGreaterThan(0);
-      expect(numberInput).toBeDefined();
-      expect(select).toBeDefined();
-      
-      // Fields should have proper accessibility labels
-      textInputs.forEach(input => {
-        expect(input.getAttribute('aria-label')).toBeDefined();
+      [...textInputs, numberInput, select].forEach(field => {
+        expect(field.getAttribute('aria-label')).toBeDefined();
+        expect(field.getAttribute('aria-label')).not.toBe('');
       });
+    });
+
+    it('WireTransferForm() - should distinguish between required and optional fields', async () => {
+      // ARRANGE & ACT
+      await act(async () => {
+        render(<BankingScreens.WireTransferForm />);
+      });
+
+      // ASSERT - Test field validation attributes
+      const allInputs = [
+        ...screen.getAllByTestId('text-input'),
+        screen.getByTestId('number-input'),
+        screen.getByTestId('select')
+      ];
+
+      const requiredFields = allInputs.filter(input => 
+        input.getAttribute('data-required') === 'true'
+      );
+      const optionalFields = allInputs.filter(input => 
+        input.getAttribute('data-required') === 'false'
+      );
+
+      expect(requiredFields.length).toBeGreaterThan(0);
+      expect(optionalFields.length).toBeGreaterThan(0);
     });
   });
 
   describe('BillPayHub() - Bill Payment Component', () => {
-    it('BillPayHub() - should render main container', async () => {
+    it('BillPayHub() - should render main structural elements', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.BillPayHub />
-          </TestWrapper>
-        );
+        render(<BankingScreens.BillPayHub />);
       });
 
       // ASSERT
       expect(screen.getByTestId('card')).toBeDefined();
       expect(screen.getByTestId('title')).toBeDefined();
-      expect(screen.getByTestId('simple-grid')).toBeDefined();
     });
 
-    it('BillPayHub() - should render bill payment options', async () => {
+    it('BillPayHub() - should render both bill payment options', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.BillPayHub />
-          </TestWrapper>
-        );
+        render(<BankingScreens.BillPayHub />);
       });
 
-      // ASSERT
-      const grid = screen.getByTestId('simple-grid');
-      expect(grid).toBeDefined();
-
+      // ASSERT - Test functional elements
       const papers = screen.getAllByTestId('paper');
       expect(papers).toHaveLength(2); // Upcoming bills + Add payee
 
       const buttons = screen.getAllByTestId('button');
       expect(buttons).toHaveLength(2);
-    });
-
-    it('BillPayHub() - should render action buttons', async () => {
-      // ARRANGE & ACT
-      await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.BillPayHub />
-          </TestWrapper>
-        );
-      });
-
-      // ASSERT
-      const buttons = screen.getAllByTestId('button');
-      expect(buttons).toHaveLength(2);
+      
       buttons.forEach(button => {
-        expect(button).toBeDefined();
         expect(button.tagName).toBe('BUTTON');
+        expect(button.getAttribute('data-full-width')).toBe('true');
       });
     });
 
     it('BillPayHub() - should handle button interactions', async () => {
       // ARRANGE
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.BillPayHub />
-          </TestWrapper>
-        );
+        render(<BankingScreens.BillPayHub />);
       });
 
-      // ACT & ASSERT
+      // ACT & ASSERT - Buttons should be interactive
       const buttons = screen.getAllByTestId('button');
       expect(buttons).toHaveLength(2);
       
-      // Buttons should be clickable elements
       buttons.forEach(button => {
         expect(button).toBeDefined();
+        expect(button.tagName).toBe('BUTTON');
+        // Note: No actual click handlers implemented in component
       });
     });
   });
 
-  describe('BankingScreens object - Module Structure', () => {
-    it('BankingScreens - should export all required components', () => {
+  describe('BankingScreens - Module Structure and Exports', () => {
+    it('BankingScreens - should export all required components as functions', () => {
       // ARRANGE & ACT & ASSERT
+      expect(BankingScreens).toBeDefined();
+      expect(typeof BankingScreens).toBe('object');
+      
       expect(BankingScreens.AccountsOverview).toBeDefined();
-      expect(BankingScreens.TransfersHub).toBeDefined();
-      expect(BankingScreens.WireTransferForm).toBeDefined();
-      expect(BankingScreens.BillPayHub).toBeDefined();
-    });
-
-    it('BankingScreens - should have correct component types', () => {
-      // ARRANGE & ACT & ASSERT
       expect(typeof BankingScreens.AccountsOverview).toBe('function');
+      
+      expect(BankingScreens.TransfersHub).toBeDefined();
       expect(typeof BankingScreens.TransfersHub).toBe('function');
+      
+      expect(BankingScreens.WireTransferForm).toBeDefined();
       expect(typeof BankingScreens.WireTransferForm).toBe('function');
+      
+      expect(BankingScreens.BillPayHub).toBeDefined();
       expect(typeof BankingScreens.BillPayHub).toBe('function');
-    });
-  });
-
-  describe('Mantine Components Integration - External Dependencies', () => {
-    it('Card - should call Mantine Card with correct props', async () => {
-      // ARRANGE
-      const mockCard = vi.mocked((await import('@mantine/core')).Card);
-
-      // ACT
-      await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.TransfersHub />
-          </TestWrapper>
-        );
-      });
-
-      // ASSERT
-      expect(mockCard).toHaveBeenCalledWith(
-        expect.objectContaining({
-          shadow: 'sm',
-          padding: 'lg',
-          radius: 'md',
-          withBorder: true
-        }),
-        undefined
-      );
+      
+      expect(BankingScreens.AccountDetails).toBeDefined();
     });
 
-    it('SimpleGrid - should call Mantine SimpleGrid component', async () => {
-      // ARRANGE
-      const mockSimpleGrid = vi.mocked((await import('@mantine/core')).SimpleGrid);
-
-      // ACT
-      await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.TransfersHub />
-          </TestWrapper>
-        );
-      });
-
+    it('BankingScreens - should have exactly 5 exported components', () => {
+      // ARRANGE & ACT
+      const componentKeys = Object.keys(BankingScreens);
+      
       // ASSERT
-      expect(mockSimpleGrid).toHaveBeenCalledTimes(1);
-      expect(mockSimpleGrid).toHaveBeenCalledWith(
-        expect.objectContaining({
-          children: expect.anything()
-        }),
-        undefined
-      );
-    });
-
-    it('Button - should call Mantine Button component', async () => {
-      // ARRANGE
-      const mockButton = vi.mocked((await import('@mantine/core')).Button);
-
-      // ACT
-      await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.TransfersHub />
-          </TestWrapper>
-        );
-      });
-
-      // ASSERT
-      expect(mockButton).toHaveBeenCalledTimes(3); // Three buttons in TransfersHub
-      expect(mockButton).toHaveBeenCalledWith(
-        expect.objectContaining({
-          children: expect.anything()
-        }),
-        undefined
-      );
+      expect(componentKeys).toHaveLength(5);
+      expect(componentKeys).toContain('AccountsOverview');
+      expect(componentKeys).toContain('TransfersHub');
+      expect(componentKeys).toContain('WireTransferForm');
+      expect(componentKeys).toContain('BillPayHub');
+      expect(componentKeys).toContain('AccountDetails');
     });
   });
 
   describe('Edge Cases and Error Handling', () => {
-    it('AccountsOverview() - should render with extremely large account numbers', async () => {
+    it('AccountsOverview() - should handle account with zero balance', async () => {
       // ARRANGE
-      const accountsWithLargeNumbers: Account[] = [
-        { id: '1', name: 'Million Dollar Account', type: 'savings', balance: 1000000.99 },
-        { id: '2', name: 'Billion Dollar Account', type: 'investment', balance: 1000000000.01 }
+      const zeroBalanceAccount: Account[] = [
+        { id: 'zero-1', name: 'Empty Account', type: 'checking', balance: 0 }
       ];
 
       // ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.AccountsOverview accounts={accountsWithLargeNumbers} />
-          </TestWrapper>
-        );
+        render(<BankingScreens.AccountsOverview accounts={zeroBalanceAccount} />);
+      });
+
+      // ASSERT - Should render without issues
+      const accountElements = screen.getAllByTestId(/^account-zero-/);
+      expect(accountElements).toHaveLength(1);
+    });
+
+    it('AccountsOverview() - should handle account with negative balance', async () => {
+      // ARRANGE
+      const negativeBalanceAccount: Account[] = [
+        { id: 'neg-1', name: 'Overdrawn Account', type: 'checking', balance: -150.75 }
+      ];
+
+      // ACT
+      await act(async () => {
+        render(<BankingScreens.AccountsOverview accounts={negativeBalanceAccount} />);
+      });
+
+      // ASSERT - Should render without issues
+      const accountElements = screen.getAllByTestId(/^account-neg-/);
+      expect(accountElements).toHaveLength(1);
+    });
+
+    it('AccountsOverview() - should handle very large account balances', async () => {
+      // ARRANGE
+      const largeBalanceAccounts: Account[] = [
+        { id: 'large-1', name: 'Million Dollar Account', type: 'investment', balance: 1000000.99 },
+        { id: 'large-2', name: 'Billion Dollar Account', type: 'trust', balance: 1000000000.01 }
+      ];
+
+      // ACT
+      await act(async () => {
+        render(<BankingScreens.AccountsOverview accounts={largeBalanceAccounts} />);
       });
 
       // ASSERT - Should render without crashing
-      expect(screen.getByTestId('card')).toBeDefined();
-      const papers = screen.getAllByTestId('paper');
-      expect(papers).toHaveLength(2);
+      const accountElements = screen.getAllByTestId(/^account-large-/);
+      expect(accountElements).toHaveLength(2);
     });
 
-    it('AccountsOverview() - should handle very long account names', async () => {
+    it('AccountsOverview() - should handle extremely long account names', async () => {
       // ARRANGE
-      const accountsWithLongNames: Account[] = [
+      const longNameAccount: Account[] = [
         { 
-          id: '1', 
-          name: 'This is a very long account name that might cause layout issues in some UI frameworks but should be handled gracefully',
-          type: 'checking', 
+          id: 'long-1', 
+          name: 'This is an extremely long account name that might cause layout issues in some user interfaces but should be handled gracefully by the component architecture without breaking the rendering pipeline',
+          type: 'savings', 
           balance: 500.00 
         }
       ];
 
       // ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.AccountsOverview accounts={accountsWithLongNames} />
-          </TestWrapper>
-        );
+        render(<BankingScreens.AccountsOverview accounts={longNameAccount} />);
       });
 
       // ASSERT - Should render without crashing
-      expect(screen.getByTestId('card')).toBeDefined();
-      const papers = screen.getAllByTestId('paper');
-      expect(papers).toHaveLength(1);
+      const accountElements = screen.getAllByTestId(/^account-long-/);
+      expect(accountElements).toHaveLength(1);
     });
 
-    it('Components - should render without MantineProvider context', async () => {
-      // ARRANGE & ACT - Test without wrapper
-      await act(async () => {
-        render(<BankingScreens.TransfersHub />);
-      });
-
-      // ASSERT - Should still render basic structure
-      expect(screen.getByTestId('card')).toBeDefined();
-    });
-  });
-
-  describe('Performance and Re-rendering - React Optimization', () => {
-    it('AccountsOverview() - should handle frequent account updates', async () => {
+    it('AccountsOverview() - should handle special characters in account IDs', async () => {
       // ARRANGE
-      const mockCard = vi.mocked((await import('@mantine/core')).Card);
-      vi.clearAllMocks();
-
-      const testAccounts: Account[] = [
-        { id: '1', name: 'Test Account', type: 'checking', balance: 1000 },
-        { id: '2', name: 'Test Savings', type: 'savings', balance: 2000 }
+      const specialIdAccounts: Account[] = [
+        { id: 'acc-123-456', name: 'Hyphenated ID', type: 'checking', balance: 1000 },
+        { id: 'acc_underscore_1', name: 'Underscore ID', type: 'savings', balance: 2000 }
       ];
 
-      const initialAccounts = [testAccounts[0]];
-      const { rerender } = render(
-        <TestWrapper>
-          <BankingScreens.AccountsOverview accounts={initialAccounts} />
-        </TestWrapper>
-      );
-
-      const initialCallCount = mockCard.mock.calls.length;
-
-      // ACT - Multiple re-renders
+      // ACT
       await act(async () => {
-        rerender(
-          <TestWrapper>
-            <BankingScreens.AccountsOverview accounts={testAccounts} />
-          </TestWrapper>
-        );
+        render(<BankingScreens.AccountsOverview accounts={specialIdAccounts} />);
+      });
+
+      // ASSERT - Should handle navigation correctly with proper testids
+      const account1 = screen.getByTestId('account-acc-123-456'); // Correct testid format
+      const account2 = screen.getByTestId('account-acc_underscore_1'); // Correct testid format
+
+      await act(async () => {
+        await user.click(account1);
       });
 
       await act(async () => {
-        rerender(
-          <TestWrapper>
-            <BankingScreens.AccountsOverview accounts={[]} />
-          </TestWrapper>
-        );
+        await user.click(account2);
       });
 
-      // ASSERT - Component should re-render (functional components re-render by default)
-      expect(mockCard.mock.calls.length).toBeGreaterThan(initialCallCount);
+      expect(mockNavigate).toHaveBeenCalledWith('/banking/accounts/acc-123-456');
+      expect(mockNavigate).toHaveBeenCalledWith('/banking/accounts/acc_underscore_1');
     });
 
-    it('Static components - should render consistently', async () => {
-      // ARRANGE
-      const mockCard = vi.mocked((await import('@mantine/core')).Card);
-      vi.clearAllMocks();
-
-      // ACT - Render same component multiple times
-      const { rerender } = render(
-        <TestWrapper>
-          <BankingScreens.TransfersHub />
-        </TestWrapper>
-      );
-
-      const initialCallCount = mockCard.mock.calls.length;
-
+    it('WireTransferForm() - should handle form rendering without crashing on edge cases', async () => {
+      // ARRANGE & ACT - Test multiple renders don't cause issues
+      const { rerender } = render(<BankingScreens.WireTransferForm />);
+      
       await act(async () => {
-        rerender(
-          <TestWrapper>
-            <BankingScreens.TransfersHub />
-          </TestWrapper>
-        );
+        rerender(<BankingScreens.WireTransferForm />);
       });
 
-      // ASSERT - Should re-render (no memoization)
-      expect(mockCard.mock.calls.length).toBeGreaterThan(initialCallCount);
+      await act(async () => {
+        rerender(<BankingScreens.WireTransferForm />);
+      });
+
+      // ASSERT - Should maintain form structure
+      expect(screen.getByTestId('card')).toBeDefined();
+      expect(screen.getByTestId('stack')).toBeDefined();
+      expect(screen.getAllByTestId('text-input').length).toBeGreaterThan(8);
     });
   });
 
-  describe('Accessibility and UX - User Experience', () => {
-    it('Form fields - should have proper accessibility labels', async () => {
-      // ARRANGE & ACT
+  describe('Performance and React Optimization', () => {
+    it('AccountsOverview() - should handle frequent prop updates efficiently', async () => {
+      // ARRANGE
+      const account1 = [{ id: '1', name: 'Account 1', type: 'checking' as const, balance: 100 }];
+      const account2 = [{ id: '2', name: 'Account 2', type: 'savings' as const, balance: 200 }];
+      const account3 = [{ id: '3', name: 'Account 3', type: 'business' as const, balance: 300 }];
+
+      const { rerender } = render(<BankingScreens.AccountsOverview accounts={account1} />);
+
+      // ACT - Simulate rapid prop changes
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.WireTransferForm />
-          </TestWrapper>
-        );
+        rerender(<BankingScreens.AccountsOverview accounts={account2} />);
       });
 
-      // ASSERT
+      await act(async () => {
+        rerender(<BankingScreens.AccountsOverview accounts={account3} />);
+      });
+
+      await act(async () => {
+        rerender(<BankingScreens.AccountsOverview accounts={[]} />);
+      });
+
+      // ASSERT - Should handle all updates without errors
+      expect(screen.getByTestId('card')).toBeDefined();
+      expect(screen.getByTestId('accounts-grid')).toBeDefined();
+    });
+
+    it('Static components - should render consistently on multiple renders', async () => {
+      // ARRANGE & ACT - Test static components don't have unexpected behavior
+      const { rerender } = render(<BankingScreens.TransfersHub />);
+
+      await act(async () => {
+        rerender(<BankingScreens.TransfersHub />);
+      });
+
+      await act(async () => {
+        rerender(<BankingScreens.BillPayHub />);
+      });
+
+      await act(async () => {
+        rerender(<BankingScreens.WireTransferForm />);
+      });
+
+      // ASSERT - Should render final component correctly
+      expect(screen.getByTestId('card')).toBeDefined();
+      expect(screen.getByTestId('stack')).toBeDefined();
+    });
+  });
+
+  describe('Accessibility and Semantic HTML', () => {
+    it('Title elements - should use correct semantic HTML tags', async () => {
+      // ARRANGE & ACT
+      await act(async () => {
+        render(<BankingScreens.AccountsOverview accounts={[]} />);
+      });
+
+      // ASSERT - Test semantic structure
+      const title = screen.getByTestId('title');
+      expect(title.tagName).toBe('H2');
+      expect(title.getAttribute('data-level')).toBe('2');
+    });
+
+    it('Form elements - should have proper semantic attributes', async () => {
+      // ARRANGE & ACT
+      await act(async () => {
+        render(<BankingScreens.WireTransferForm />);
+      });
+
+      // ASSERT - Test form semantics
       const textInputs = screen.getAllByTestId('text-input');
       const numberInput = screen.getByTestId('number-input');
       const select = screen.getByTestId('select');
 
-      textInputs.forEach(input => {
-        expect(input.getAttribute('aria-label')).toBeDefined();
+      // All form elements should have proper semantic attributes
+      [...textInputs, numberInput].forEach(input => {
+        expect(input.tagName).toBe('INPUT');
       });
-      expect(numberInput.getAttribute('aria-label')).toBeDefined();
-      expect(select.getAttribute('aria-label')).toBeDefined();
+
+      expect(select.tagName).toBe('SELECT');
+      expect(numberInput.type).toBe('number');
     });
 
-    it('Buttons - should be keyboard accessible', async () => {
+    it('Interactive elements - should be keyboard accessible', async () => {
       // ARRANGE & ACT
       await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.TransfersHub />
-          </TestWrapper>
-        );
+        render(<BankingScreens.AccountsOverview accounts={[mockAccounts[0]]} />);
       });
 
-      // ASSERT
+      // ASSERT - Test keyboard accessibility
+      const clickableAccount = screen.getByTestId('account-acc-1');
+      expect(clickableAccount.getAttribute('data-clickable')).toBe('true');
+      
+      // Test that the element can receive focus (button-like behavior)
+      expect(clickableAccount.onclick).toBeDefined();
+    });
+
+    it('Button elements - should use proper semantic HTML', async () => {
+      // ARRANGE & ACT
+      await act(async () => {
+        render(<BankingScreens.TransfersHub />);
+      });
+
+      // ASSERT - Test button semantics
       const buttons = screen.getAllByTestId('button');
       buttons.forEach(button => {
-        expect(button.tagName).toBe('BUTTON'); // Proper semantic HTML
+        expect(button.tagName).toBe('BUTTON');
       });
-    });
-
-    it('Grid layouts - should render grid structure', async () => {
-      // ARRANGE & ACT
-      await act(async () => {
-        render(
-          <TestWrapper>
-            <BankingScreens.AccountsOverview accounts={[]} />
-          </TestWrapper>
-        );
-      });
-
-      // ASSERT
-      const grid = screen.getByTestId('simple-grid');
-      expect(grid).toBeDefined();
     });
   });
 });

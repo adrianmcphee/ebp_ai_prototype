@@ -30,6 +30,9 @@ export interface UIAssistance {
   subtitle?: string;
   description?: string;
   success_message?: string;
+  account_id?: string; // @FIXME: Remove this field, it is so wrong to have it on many levels
+  requires_clarification?: boolean;
+  clarification_options?: string[];
 }
 
 export interface DynamicFormConfig {
@@ -60,6 +63,34 @@ export interface Account {
   name: string;
   type: string;
   balance: number;
+  currency: string;
+}
+
+export interface AccountBalance {
+  account_id: string;
+  balance: number;
+}
+
+export interface Transaction {
+  id: string;
+  date: string;
+  amount: number;
+  description: string;
+  type: 'debit' | 'credit';
+  account_id: string;
+  balance_after: number;
+  category?: string;
+  merchant?: string;
+  status?: 'pending' | 'completed' | 'failed';
+}
+
+export interface AccountTransactionsResponse {
+  account_id: string;
+  transactions: Transaction[];
+  total_count: number;
+  page: number;
+  per_page: number;
+  has_more: boolean;
 }
 
 // Route types (avoiding circular import)

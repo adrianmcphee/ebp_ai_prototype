@@ -422,6 +422,12 @@ export const MainApp: React.FC = () => {
             <BankingScreens.BillPayHub />
           </RouteComponent>
         );
+      case 'AccountDetails':
+        return (
+          <RouteComponent>
+            <BankingScreens.AccountDetails accounts={accounts} />
+          </RouteComponent>
+        );
       default:
         return <NotFound />;
     }
