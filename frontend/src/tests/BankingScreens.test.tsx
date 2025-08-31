@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, act, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BankingScreens } from '../components/BankingScreens';
 import type { Account } from '../types';
@@ -41,7 +41,7 @@ vi.mock('@mantine/core', () => ({
       {children}
     </div>
   )),
-  Text: vi.fn(({ children, fw, size, color, c, mt }) => {
+  Text: vi.fn(({ children, fw, color, c }) => {
     const isBold = fw === 500 || fw === 700;
     return (
       <span 
@@ -53,7 +53,7 @@ vi.mock('@mantine/core', () => ({
       </span>
     );
   }),
-  Button: vi.fn(({ children, onClick, variant, size, fullWidth, mt }) => (
+  Button: vi.fn(({ children, onClick, variant, fullWidth }) => (
     <button 
       data-testid="button"
       onClick={onClick}
@@ -66,7 +66,7 @@ vi.mock('@mantine/core', () => ({
   Stack: vi.fn(({ children, gap }) => (
     <div data-testid="stack" data-gap={gap}>{children}</div>
   )),
-  TextInput: vi.fn(({ label, placeholder, required, ...props }) => (
+  TextInput: vi.fn(({ label, placeholder, required }) => (
     <input 
       data-testid="text-input"
       placeholder={placeholder}
@@ -75,7 +75,7 @@ vi.mock('@mantine/core', () => ({
       aria-label={label}
     />
   )),
-  Select: vi.fn(({ label, placeholder, data, required, ...props }) => (
+  Select: vi.fn(({ label, placeholder, data, required }) => (
     <select 
       data-testid="select"
       data-options-count={data?.length || 0}
@@ -89,7 +89,7 @@ vi.mock('@mantine/core', () => ({
       ))}
     </select>
   )),
-  NumberInput: vi.fn(({ label, placeholder, required, ...props }) => (
+  NumberInput: vi.fn(({ label, placeholder, required }) => (
     <input 
       type="number"
       data-testid="number-input"
