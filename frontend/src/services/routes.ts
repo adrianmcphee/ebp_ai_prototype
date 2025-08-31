@@ -7,7 +7,6 @@ import { apiService  } from './api';
  */
 export const fetchAppRoutes = async (): Promise<AppRoutes> => {
   const routes = await apiService.fetchRoutes();
-  console.log('Fetched routes from API:', routes);
   return routes;
 };
 

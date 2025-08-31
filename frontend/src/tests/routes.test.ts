@@ -93,7 +93,6 @@ describe('Routes Service', () => {
       const result = await fetchAppRoutes();
 
       // ASSERT
-      expect(consoleSpy).toHaveBeenCalledWith('Fetched routes from API:', mockRoutes);
       expect(result).toEqual(mockRoutes);
       
       consoleSpy.mockRestore();

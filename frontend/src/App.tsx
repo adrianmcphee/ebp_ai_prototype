@@ -25,6 +25,7 @@ import { BankingScreens } from './components/BankingScreens';
 import { DynamicForm } from './components/DynamicForm';
 import { ChatPanel } from './components/ChatPanel';
 import { Header } from './components/Header';
+import { Breadcrumb } from './components/Breadcrumb';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
 import { fetchAppRoutes, createDerivedMappings } from './services/routes';
@@ -351,18 +352,14 @@ export const MainApp: React.FC = () => {
     </Container>
   );
 
-  // Route component wrapper with back navigation
+  // Route component wrapper with breadcrumb navigation
   const RouteComponent: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
       <Container size="md" py="xl">
-        <Button 
-          variant="subtle" 
-          mb="md" 
-          onClick={() => navigate('/')}
-          data-testid="back-to-dashboard"
-        >
-          ← Back to Dashboard
-        </Button>
+        <Breadcrumb 
+          appRoutes={appRoutes!} 
+          style={{ marginBottom: 'var(--mantine-spacing-md)' }}
+        />
         {children}
       </Container>
     );
@@ -441,7 +438,6 @@ export const MainApp: React.FC = () => {
       setAppRoutes(routes);
       setRouteMappings(mappings);
       
-      console.log('Routes loaded successfully:', routes);
     } catch (error) {
       const errorMessage = 'Failed to load application routes';
       setRoutesError(errorMessage);

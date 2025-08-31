@@ -66,7 +66,7 @@ export interface Account {
 export interface RouteConfig {
   path: string;
   component: string;
-  intent: string | null;
+  intent: string;
   breadcrumb: string;
   tab: string;
 }
