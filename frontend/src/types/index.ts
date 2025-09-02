@@ -110,3 +110,28 @@ export interface RoutesResponse {
 export interface AppRoutes {
   [path: string]: Omit<RouteConfig, 'path'>;
 }
+
+// Intent-Based Navigation Types
+export interface NavigationTarget {
+  /** The route path to navigate to */
+  route: string;
+  /** Optional route parameters to resolve */
+  params?: Record<string, string>;
+  /** Title to display in notifications */
+  title: string;
+  /** Description for accessibility */
+  description: string;
+  /** Whether this navigation requires specific entities */
+  requiresEntities?: string[];
+}
+
+export interface IntentNavigationResult {
+  /** Whether navigation was successful */
+  success: boolean;
+  /** The navigation target if successful */
+  target?: NavigationTarget;
+  /** Error message if navigation failed */
+  error?: string;
+  /** The resolved route path */
+  route?: string;
+}

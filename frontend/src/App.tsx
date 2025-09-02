@@ -26,6 +26,8 @@ import { NavigationAssistant } from './components/NavigationAssistant';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
 import { fetchAppRoutes, createDerivedMappings } from './services/routes';
+import { navigationService } from './services/navigation-router';
+import type { IntentNavigationResult } from './types';
 
 export const MainApp: React.FC = () => {
   const navigate = useNavigate();
@@ -126,9 +128,69 @@ export const MainApp: React.FC = () => {
     setMessages(prev => [...prev, message]);
   };
 
+  /**
+   * Handle intent-based navigation using the new navigation service
+   * This implements the Universal Schema Approach separation of concerns
+   */
+  const handleIntentBasedNavigation = (
+    intentId: string, 
+    entities: Record<string, any> = {},
+    uiContext: string = 'banking'
+  ): IntentNavigationResult => {
+    try {
+      // Use the navigation service to determine where to go
+      const target = navigationService.processNavigationRequest(intentId, entities, uiContext);
+      
+      if (!target) {
+        return {
+          success: false,
+          error: `Navigation not supported for intent: ${intentId} in context: ${uiContext}`,
+        };
+      }
+
+      // Validate route before navigation
+      if (!routeMappings?.isValidRoute(target.route)) {
+        // If the exact route doesn't exist, try to find the closest parent route
+        const parentRoute = target.route.split('/').slice(0, -1).join('/') || '/';
+        if (routeMappings?.isValidRoute(parentRoute)) {
+          target.route = parentRoute;
+        } else {
+          return {
+            success: false,
+            error: `Route not found: ${target.route}`,
+            target,
+          };
+        }
+      }
+
+      // Perform navigation
+      navigate(target.route);
+
+      // Show success notification
+      notifications.show({
+        title: 'Navigation',
+        message: `Opened ${target.title}`,
+        color: 'blue',
+      });
+
+      return {
+        success: true,
+        target,
+        route: target.route,
+      };
+
+    } catch (error) {
+      console.error('Intent-based navigation error:', error);
+      return {
+        success: false,
+        error: `Navigation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
+  };
+
   const handleUIAssistance = (uiAssistance: UIAssistance) => {
     if (uiAssistance.type === 'navigation') {
-      // Navigation Assistance - use React Router navigation
+      // Legacy navigation support - use React Router navigation
       try {
         let routePath: string | undefined;
         
@@ -180,25 +242,52 @@ export const MainApp: React.FC = () => {
   };
 
   const handleProcessResponse = (data: ProcessResponse) => {
-    // Handle UI assistance first
-    if (data.ui_assistance) {
-      handleUIAssistance(data.ui_assistance);
-    }
+    // Determine which navigation approach to use based on context and intent
+    const shouldUseIntentBasedNavigation = 
+      activeTab === 'banking' && 
+      data.intent && 
+      navigationService.supportsNavigation(data.intent, activeTab);
 
-    // Generate appropriate response message
-    let responseMessage = data.message || '';
-    
-    if (!responseMessage) {
-      if (data.ui_assistance?.type === 'navigation') {
-        responseMessage = `Opening ${data.ui_assistance.title}...`;
-      } else if (data.ui_assistance?.type === 'transaction_form') {
-        responseMessage = `I've created a streamlined form for you.`;
-      } else {
-        responseMessage = "I'm processing your request...";
+    if (shouldUseIntentBasedNavigation) {
+      // Use new intent-based navigation (Universal Schema Approach)
+      const navigationResult = handleIntentBasedNavigation(
+        data.intent!,
+        data.entities as Record<string, any> || {},
+        activeTab
+      );
+
+      // Generate response message based on navigation result
+      let responseMessage = data.message || '';
+      if (!responseMessage) {
+        if (navigationResult.success && navigationResult.target) {
+          responseMessage = `Opening ${navigationResult.target.title}...`;
+        } else {
+          responseMessage = navigationResult.error || "I'm processing your request...";
+        }
       }
-    }
 
-    addAssistantMessage(responseMessage, data);
+      addAssistantMessage(responseMessage, data);
+    } else {
+      // Fallback to legacy UI assistance approach
+      if (data.ui_assistance) {
+        handleUIAssistance(data.ui_assistance);
+      }
+
+      // Generate appropriate response message
+      let responseMessage = data.message || '';
+      
+      if (!responseMessage) {
+        if (data.ui_assistance?.type === 'navigation') {
+          responseMessage = `Opening ${data.ui_assistance.title}...`;
+        } else if (data.ui_assistance?.type === 'transaction_form') {
+          responseMessage = `I've created a streamlined form for you.`;
+        } else {
+          responseMessage = "I'm processing your request...";
+        }
+      }
+
+      addAssistantMessage(responseMessage, data);
+    }
   };
 
   const handleWebSocketMessage = (message: { type: string; data: ProcessResponse }) => {
