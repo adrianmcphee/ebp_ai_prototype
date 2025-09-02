@@ -131,7 +131,7 @@ export const NavigationAssistant: React.FC<NavigationAssistantProps> = ({
                 <Button 
                   size="xs" 
                   variant="subtle" 
-                  onClick={() => setSuggestion('Show me account overview')}
+                  onClick={() => setSuggestion('Show me my accounts')}
                   data-testid="suggestion-account-overview"
                 >
                   Account Overview

@@ -1,13 +1,13 @@
 /**
- * Clean, simple route service
- * Loads configs and provides clear APIs for navigation and breadcrumbs
+ * Route service
+ * Loads configs and provides APIs for navigation and breadcrumbs
  */
 
 import { STATIC_ROUTE_CONFIG } from '../config/static-routes.config';
 import { INTENT_ROUTE_CONFIG } from '../config/intent-routes.config';
-import type { NavigationGroup, NavigationTarget, ProcessedRoute } from '../types';
+import type { NavigationGroup, NavigationTarget } from '../types';
 
-// Simple unified route type
+// Unified route type
 type Route = {
   path: string;
   component: string;
@@ -93,7 +93,6 @@ const loadRoutes = (): Route[] => {
     parameterFallback: route.parameterFallback
   }));
 
-  // Merge: static routes first (preserving order), intent routes override same paths
   const routeMap = new Map<string, Route>();
   staticRoutes.forEach(route => routeMap.set(route.path, route));
   intentRoutes.forEach(route => routeMap.set(route.path, route));
@@ -106,10 +105,11 @@ const routes = loadRoutes();
 
 // ===== PUBLIC API =====
 
+export const getAllRoutes = () => routes;
+
 export const buildNavigationGroups = (): NavigationGroup[] => {
   const grouped: Record<string, { label: string; path: string; tab: string; }[]> = {};
   
-  // Static routes first for correct order
   const staticRoutes = routes.filter(r => r.showInNavigation && !r.intentId);
   const intentRoutes = routes.filter(r => r.showInNavigation && r.intentId);
   
@@ -198,31 +198,6 @@ export const resolveDynamicTitle = (baseTitle: string, entities?: Record<string,
   }
   
   return baseTitle;
-};
-
-// For backward compatibility - convert to legacy format
-export const generateLegacyRoutes = (): Record<string, ProcessedRoute> => {
-  const legacyRoutes: Record<string, ProcessedRoute> = {};
-  
-  routes.forEach(route => {
-    legacyRoutes[route.path] = {
-      path: route.path,
-      component: route.component,
-      breadcrumb: route.breadcrumb,
-      tab: route.tab,
-      navigationLabel: route.navigationLabel,
-      showInNavigation: route.showInNavigation,
-      source: route.intentId ? 'intent' : 'static',
-      group: route.group,
-      intent: route.intent || '',
-      redirectTo: route.redirectTo,
-      intentId: route.intentId,
-      hasParameters: route.hasParameters,
-      parameterFallback: route.parameterFallback
-    };
-  });
-  
-  return legacyRoutes;
 };
 
 // Process intent navigation (replaces NavigationOrchestrator)

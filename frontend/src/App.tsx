@@ -9,14 +9,12 @@ import {
   Container,
   Card,
   Title,
-  SimpleGrid,
-  LoadingOverlay,
-  Alert
+  SimpleGrid
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { Notifications, notifications } from '@mantine/notifications';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, Account, AppRoutes } from './types';
+import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, Account } from './types';
 import { BankingScreens } from './components/BankingScreens';
 import { DynamicForm } from './components/DynamicForm';
 import { ChatPanel } from './components/ChatPanel';
@@ -25,12 +23,12 @@ import { Breadcrumb } from './components/Breadcrumb';
 import { NavigationAssistant } from './components/NavigationAssistant';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
-import { createDerivedMappings } from './services/routes';
 import { 
   buildNavigationGroups,
   getRouteByPath,
   processIntentNavigation,
-  generateLegacyRoutes 
+  getAllRoutes,
+  isValidRoute
 } from './services/route-service';
 import type { IntentNavigationResult } from './types';
 
@@ -44,17 +42,11 @@ export const MainApp: React.FC = () => {
   const [dynamicForm, setDynamicForm] = useState<DynamicFormConfig | null>(null);
   const [showNavigationAssistant, setShowNavigationAssistant] = useState<boolean>(false);
   
-  // API-driven routes state (legacy support)
-  const [appRoutes, setAppRoutes] = useState<AppRoutes | null>(null);
-  const [routesLoading, setRoutesLoading] = useState(true);
-  const [routesError, setRoutesError] = useState<string | null>(null);
-  const [routeMappings, setRouteMappings] = useState<ReturnType<typeof createDerivedMappings> | null>(null);
-  
   // Navigation groups for header
   const [navigationGroups, setNavigationGroups] = useState(buildNavigationGroups());
 
-  // Derive active tab from URL using API-loaded routes
-  const activeTab = routeMappings?.getTabForRoute(location.pathname) || 'banking';
+  // Derive active tab from URL using modern route service
+  const activeTab = getRouteByPath(location.pathname)?.tab || 'banking';
 
   const form = useForm({
     initialValues: {
@@ -175,12 +167,13 @@ export const MainApp: React.FC = () => {
         let routePath: string | undefined;
         
         // Try to use route_path from backend response first
-        if (uiAssistance.route_path && routeMappings?.isValidRoute(uiAssistance.route_path)) {
+        if (uiAssistance.route_path && isValidRoute(uiAssistance.route_path)) {
           routePath = uiAssistance.route_path;
         }
         // Fallback to component name mapping
         else if (uiAssistance.component_name) {
-          routePath = routeMappings?.getRouteByComponent(uiAssistance.component_name);
+          const route = getAllRoutes().find(r => r.component === uiAssistance.component_name);
+          routePath = route?.path;
         }
         
         if (routePath) {
@@ -452,17 +445,16 @@ export const MainApp: React.FC = () => {
 
   // Default route redirect component
   const DefaultRouteRedirect: React.FC = () => {
-    // Get the first route from the fetched routes
-    const routeKeys = Object.keys(appRoutes!);
-    const firstRoute = routeKeys[0];
+    // Get the first route from the route service
+    const allRoutes = getAllRoutes();
+    const firstRoute = allRoutes[0];
     
-    if (firstRoute && firstRoute !== '/') {
+    if (firstRoute && firstRoute.path !== '/') {
       // Redirect to first route if it's not '/'
-      return <Navigate to={firstRoute} replace />;
-    } else if (firstRoute === '/') {
+      return <Navigate to={firstRoute.path} replace />;
+    } else if (firstRoute?.path === '/') {
       // If first route is '/', render its component directly
-      const firstRouteConfig = appRoutes![firstRoute];
-      return renderRouteComponent(firstRouteConfig.component);
+      return renderRouteComponent(firstRoute.component);
     }
     
     // Fallback to banking dashboard if no routes found
@@ -517,28 +509,7 @@ export const MainApp: React.FC = () => {
     }
   };
 
-  // Load routes using clean route service
-  const loadRoutes = () => {
-    try {
-      setRoutesLoading(true);
-      setRoutesError(null);
-      
-      // Generate legacy route mappings for backward compatibility
-      const legacyRoutes = generateLegacyRoutes();
-      const mappings = createDerivedMappings(legacyRoutes);
-      
-      setAppRoutes(legacyRoutes);
-      setRouteMappings(mappings);
-      setNavigationGroups(buildNavigationGroups());
-      
-    } catch (error) {
-      const errorMessage = 'Failed to load application routes';
-      setRoutesError(errorMessage);
-      console.error('Route loading error:', error);
-    } finally {
-      setRoutesLoading(false);
-    }
-  };
+
 
 
 
@@ -552,63 +523,17 @@ export const MainApp: React.FC = () => {
     }
   }, [location.pathname, navigate]);
 
-  // Load routes on app startup
+  // Initialize app on startup
   useEffect(() => {
-    loadRoutes();
-  }, []);
-
-  // useEffect needs to be after all function declarations to avoid hoisting issues  
-  useEffect(() => {
-    // Only initialize after routes are loaded
-    if (!routesLoading && !routesError) {
-      initializeSession();
-      loadAccounts();
-      connectWebSocket();
-    }
+    initializeSession();
+    loadAccounts();
+    connectWebSocket();
 
     return () => {
       websocketService.disconnect(ws);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routesLoading, routesError]);
-
-  // Loading state
-  if (routesLoading) {
-    return (
-      <MantineProvider>
-        <div data-testid="app">
-          <LoadingOverlay 
-            visible={true} 
-            overlayProps={{ radius: "sm", blur: 2 }} 
-            loaderProps={{ color: 'blue', type: 'dots', size: 'md' }}
-          />
-        </div>
-      </MantineProvider>
-    );
-  }
-
-  // Error state
-  if (routesError || !appRoutes || !routeMappings) {
-    return (
-      <MantineProvider>
-        <div data-testid="app">
-          <Container size="sm" style={{ textAlign: 'center', marginTop: '2rem' }}>
-            <Alert variant="light" color="red" title="Loading Error">
-              {routesError || 'Failed to load application'}
-              <Button 
-                variant="light" 
-                color="blue" 
-                onClick={loadRoutes}
-                style={{ marginTop: '1rem' }}
-              >
-                Retry
-              </Button>
-            </Alert>
-          </Container>
-        </div>
-      </MantineProvider>
-    );
-  }
+  }, []);
 
   return (
     <MantineProvider>
@@ -627,12 +552,12 @@ export const MainApp: React.FC = () => {
                   {/* Default route - redirect to first fetched route */}
                   <Route path="/" element={<DefaultRouteRedirect />} />
                   
-                  {/* Generate routes from API-loaded routes configuration */}
-                  {Object.entries(appRoutes).map(([routePath, config]) => (
+                  {/* Generate routes from modern route service */}
+                  {getAllRoutes().map((route) => (
                     <Route 
-                      key={routePath}
-                      path={routePath} 
-                      element={renderRouteComponent(config.component)} 
+                      key={route.path}
+                      path={route.path} 
+                      element={renderRouteComponent(route.component)} 
                     />
                   ))}
                   
