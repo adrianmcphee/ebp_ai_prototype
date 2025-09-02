@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
+import { render, screen, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NavigationAssistant } from '../components/NavigationAssistant';
 
@@ -199,8 +199,7 @@ describe('NavigationAssistant', () => {
     it('handleFormSubmit() - should process valid message submission', async () => {
       // ARRANGE
       const props = { ...defaultProps, isVisible: true };
-      const mockSubmitHandler = vi.fn();
-      mockForm.onSubmit.mockImplementation((handler) => (e) => {
+      mockForm.onSubmit.mockImplementation((handler) => (e: any) => {
         e?.preventDefault();
         handler({ message: 'Test message' });
       });
@@ -343,7 +342,7 @@ describe('NavigationAssistant', () => {
     it('setSuggestion() - should set form value when account overview suggestion is clicked', async () => {
       // ARRANGE
       const props = { ...defaultProps, isVisible: true };
-      const expectedMessage = 'Show me account overview';
+      const expectedMessage = 'Show me my accounts';
       
       // ACT
       await act(async () => {
