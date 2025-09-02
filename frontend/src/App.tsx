@@ -43,7 +43,7 @@ export const MainApp: React.FC = () => {
   const [showNavigationAssistant, setShowNavigationAssistant] = useState<boolean>(false);
   
   // Navigation groups for header
-  const [navigationGroups, setNavigationGroups] = useState(buildNavigationGroups());
+  const [navigationGroups] = useState(buildNavigationGroups());
 
   // Derive active tab from URL using modern route service
   const activeTab = getRouteByPath(location.pathname)?.tab || 'banking';
