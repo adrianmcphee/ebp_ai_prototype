@@ -9,14 +9,12 @@ import {
   Container,
   Card,
   Title,
-  SimpleGrid,
-  LoadingOverlay,
-  Alert
+  SimpleGrid
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { Notifications, notifications } from '@mantine/notifications';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, Account, AppRoutes } from './types';
+import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, Account } from './types';
 import { BankingScreens } from './components/BankingScreens';
 import { DynamicForm } from './components/DynamicForm';
 import { ChatPanel } from './components/ChatPanel';
@@ -25,7 +23,14 @@ import { Breadcrumb } from './components/Breadcrumb';
 import { NavigationAssistant } from './components/NavigationAssistant';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
-import { fetchAppRoutes, createDerivedMappings } from './services/routes';
+import { 
+  buildNavigationGroups,
+  getRouteByPath,
+  processIntentNavigation,
+  getAllRoutes,
+  isValidRoute
+} from './services/route-service';
+import type { IntentNavigationResult } from './types';
 
 export const MainApp: React.FC = () => {
   const navigate = useNavigate();
@@ -37,14 +42,11 @@ export const MainApp: React.FC = () => {
   const [dynamicForm, setDynamicForm] = useState<DynamicFormConfig | null>(null);
   const [showNavigationAssistant, setShowNavigationAssistant] = useState<boolean>(false);
   
-  // API-driven routes state
-  const [appRoutes, setAppRoutes] = useState<AppRoutes | null>(null);
-  const [routesLoading, setRoutesLoading] = useState(true);
-  const [routesError, setRoutesError] = useState<string | null>(null);
-  const [routeMappings, setRouteMappings] = useState<ReturnType<typeof createDerivedMappings> | null>(null);
+  // Navigation groups for header
+  const [navigationGroups] = useState(buildNavigationGroups());
 
-  // Derive active tab from URL using API-loaded routes
-  const activeTab = routeMappings?.getTabForRoute(location.pathname) || 'banking';
+  // Derive active tab from URL using modern route service
+  const activeTab = getRouteByPath(location.pathname)?.tab || 'banking';
 
   const form = useForm({
     initialValues: {
@@ -126,19 +128,52 @@ export const MainApp: React.FC = () => {
     setMessages(prev => [...prev, message]);
   };
 
+  /**
+   * Handle intent-based navigation using the navigation orchestrator
+   * Clean component logic that delegates to services
+   */
+  const handleIntentBasedNavigation = (
+    intentId: string, 
+    entities: Record<string, unknown> = {},
+    uiContext: string = 'banking'
+  ): IntentNavigationResult => {
+    // Use simple route service instead of complex orchestrator
+    const result = processIntentNavigation(intentId, entities, uiContext);
+
+    // Handle UI feedback (stays in component)
+    if (result.success && result.route) {
+      navigate(result.route);
+      
+      notifications.show({
+        title: 'Navigation',
+        message: `Opened ${result.target?.title}`,
+        color: 'blue',
+      });
+    } else {
+      notifications.show({
+        title: 'Navigation Error',
+        message: result.error || 'Unable to navigate',
+        color: 'red',
+      });
+    }
+
+    return result;
+  };
+
   const handleUIAssistance = (uiAssistance: UIAssistance) => {
     if (uiAssistance.type === 'navigation') {
-      // Navigation Assistance - use React Router navigation
+      // Legacy navigation support - use React Router navigation
       try {
         let routePath: string | undefined;
         
         // Try to use route_path from backend response first
-        if (uiAssistance.route_path && routeMappings?.isValidRoute(uiAssistance.route_path)) {
+        if (uiAssistance.route_path && isValidRoute(uiAssistance.route_path)) {
           routePath = uiAssistance.route_path;
         }
         // Fallback to component name mapping
         else if (uiAssistance.component_name) {
-          routePath = routeMappings?.getRouteByComponent(uiAssistance.component_name);
+          const route = getAllRoutes().find(r => r.component === uiAssistance.component_name);
+          routePath = route?.path;
         }
         
         if (routePath) {
@@ -180,25 +215,51 @@ export const MainApp: React.FC = () => {
   };
 
   const handleProcessResponse = (data: ProcessResponse) => {
-    // Handle UI assistance first
-    if (data.ui_assistance) {
-      handleUIAssistance(data.ui_assistance);
-    }
+    // Determine which navigation approach to use based on context and intent
+    const shouldUseIntentBasedNavigation = 
+      activeTab === 'banking' && 
+      data.intent;
 
-    // Generate appropriate response message
-    let responseMessage = data.message || '';
-    
-    if (!responseMessage) {
-      if (data.ui_assistance?.type === 'navigation') {
-        responseMessage = `Opening ${data.ui_assistance.title}...`;
-      } else if (data.ui_assistance?.type === 'transaction_form') {
-        responseMessage = `I've created a streamlined form for you.`;
-      } else {
-        responseMessage = "I'm processing your request...";
+    if (shouldUseIntentBasedNavigation) {
+      // Use new intent-based navigation (Universal Schema Approach)
+      const navigationResult = handleIntentBasedNavigation(
+        data.intent!,
+        data.entities as Record<string, unknown> || {},
+        activeTab
+      );
+
+      // Generate response message based on navigation result
+      let responseMessage = data.message || '';
+      if (!responseMessage) {
+        if (navigationResult.success && navigationResult.target) {
+          responseMessage = `Opening ${navigationResult.target.title}...`;
+        } else {
+          responseMessage = navigationResult.error || "I'm processing your request...";
+        }
       }
-    }
 
-    addAssistantMessage(responseMessage, data);
+      addAssistantMessage(responseMessage, data);
+    } else {
+      // Fallback to legacy UI assistance approach
+      if (data.ui_assistance) {
+        handleUIAssistance(data.ui_assistance);
+      }
+
+      // Generate appropriate response message
+      let responseMessage = data.message || '';
+      
+      if (!responseMessage) {
+        if (data.ui_assistance?.type === 'navigation') {
+          responseMessage = `Opening ${data.ui_assistance.title}...`;
+        } else if (data.ui_assistance?.type === 'transaction_form') {
+          responseMessage = `I've created a streamlined form for you.`;
+        } else {
+          responseMessage = "I'm processing your request...";
+        }
+      }
+
+      addAssistantMessage(responseMessage, data);
+    }
   };
 
   const handleWebSocketMessage = (message: { type: string; data: ProcessResponse }) => {
@@ -374,7 +435,7 @@ export const MainApp: React.FC = () => {
       <Container size="md" py="xl">
         <div style={{ marginBottom: 'var(--mantine-spacing-md)' }}>
           <Breadcrumb 
-            appRoutes={appRoutes!}
+            getRouteByPath={getRouteByPath}
           />
         </div>
         {children}
@@ -384,17 +445,16 @@ export const MainApp: React.FC = () => {
 
   // Default route redirect component
   const DefaultRouteRedirect: React.FC = () => {
-    // Get the first route from the fetched routes
-    const routeKeys = Object.keys(appRoutes!);
-    const firstRoute = routeKeys[0];
+    // Get the first route from the route service
+    const allRoutes = getAllRoutes();
+    const firstRoute = allRoutes[0];
     
-    if (firstRoute && firstRoute !== '/') {
+    if (firstRoute && firstRoute.path !== '/') {
       // Redirect to first route if it's not '/'
-      return <Navigate to={firstRoute} replace />;
-    } else if (firstRoute === '/') {
+      return <Navigate to={firstRoute.path} replace />;
+    } else if (firstRoute?.path === '/') {
       // If first route is '/', render its component directly
-      const firstRouteConfig = appRoutes![firstRoute];
-      return renderRouteComponent(firstRouteConfig.component);
+      return renderRouteComponent(firstRoute.component);
     }
     
     // Fallback to banking dashboard if no routes found
@@ -449,84 +509,31 @@ export const MainApp: React.FC = () => {
     }
   };
 
-  // Load routes from API
-  const loadRoutes = async () => {
-    try {
-      setRoutesLoading(true);
-      setRoutesError(null);
-      
-      const routes = await fetchAppRoutes();
-      const mappings = createDerivedMappings(routes);
-      
-      setAppRoutes(routes);
-      setRouteMappings(mappings);
-      
-    } catch (error) {
-      const errorMessage = 'Failed to load application routes';
-      setRoutesError(errorMessage);
-      console.error('Route loading error:', error);
-    } finally {
-      setRoutesLoading(false);
-    }
-  };
 
-  // Load routes on app startup
-  useEffect(() => {
-    loadRoutes();
-  }, []);
 
-  // useEffect needs to be after all function declarations to avoid hoisting issues  
+
+
+  // Handle root redirect
   useEffect(() => {
-    // Only initialize after routes are loaded
-    if (!routesLoading && !routesError) {
-      initializeSession();
-      loadAccounts();
-      connectWebSocket();
+    if (location.pathname === '/') {
+      const rootRoute = getRouteByPath('/');
+      if (rootRoute?.redirectTo) {
+        navigate(rootRoute.redirectTo, { replace: true });
+      }
     }
+  }, [location.pathname, navigate]);
+
+  // Initialize app on startup
+  useEffect(() => {
+    initializeSession();
+    loadAccounts();
+    connectWebSocket();
 
     return () => {
       websocketService.disconnect(ws);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routesLoading, routesError]);
-
-  // Loading state
-  if (routesLoading) {
-    return (
-      <MantineProvider>
-        <div data-testid="app">
-          <LoadingOverlay 
-            visible={true} 
-            overlayProps={{ radius: "sm", blur: 2 }} 
-            loaderProps={{ color: 'blue', type: 'dots', size: 'md' }}
-          />
-        </div>
-      </MantineProvider>
-    );
-  }
-
-  // Error state
-  if (routesError || !appRoutes || !routeMappings) {
-    return (
-      <MantineProvider>
-        <div data-testid="app">
-          <Container size="sm" style={{ textAlign: 'center', marginTop: '2rem' }}>
-            <Alert variant="light" color="red" title="Loading Error">
-              {routesError || 'Failed to load application'}
-              <Button 
-                variant="light" 
-                color="blue" 
-                onClick={loadRoutes}
-                style={{ marginTop: '1rem' }}
-              >
-                Retry
-              </Button>
-            </Alert>
-          </Container>
-        </div>
-      </MantineProvider>
-    );
-  }
+  }, []);
 
   return (
     <MantineProvider>
@@ -535,7 +542,7 @@ export const MainApp: React.FC = () => {
           header={{ height: 56 }}
           padding="md"
         >
-          <Header isConnected={isConnected} appRoutes={appRoutes} />
+          <Header isConnected={isConnected} navigationGroups={navigationGroups} />
 
           <AppShell.Main>
             <Container size="xl">
@@ -545,12 +552,12 @@ export const MainApp: React.FC = () => {
                   {/* Default route - redirect to first fetched route */}
                   <Route path="/" element={<DefaultRouteRedirect />} />
                   
-                  {/* Generate routes from API-loaded routes configuration */}
-                  {Object.entries(appRoutes).map(([routePath, config]) => (
+                  {/* Generate routes from modern route service */}
+                  {getAllRoutes().map((route) => (
                     <Route 
-                      key={routePath}
-                      path={routePath} 
-                      element={renderRouteComponent(config.component)} 
+                      key={route.path}
+                      path={route.path} 
+                      element={renderRouteComponent(route.component)} 
                     />
                   ))}
                   

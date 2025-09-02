@@ -1,442 +1,538 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { MantineProvider } from '@mantine/core';
+import { render, screen, cleanup, act, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { Breadcrumb } from '../components/Breadcrumb';
-import type { AppRoutes } from '../types';
+import { MantineProvider } from '@mantine/core';
 
-// Test helper to render Breadcrumb with proper routing context
-const renderBreadcrumbWithRouter = (
-  appRoutes: AppRoutes, 
-  className?: string,
-  initialEntries = ['/banking/accounts']
-) => {
-  return render(
-    <MantineProvider>
-      <MemoryRouter initialEntries={initialEntries}>
-        <Breadcrumb appRoutes={appRoutes} className={className} />
-      </MemoryRouter>
-    </MantineProvider>
-  );
-};
+// Mock React Router hooks
+const mockNavigate = vi.fn();
+let mockLocation = { pathname: '/' };
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    useLocation: () => mockLocation,
+    BrowserRouter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
+  };
+});
+
+// Mock Mantine components to isolate unit under test
+vi.mock('@mantine/core', async () => {
+  const actual = await vi.importActual<typeof import('@mantine/core')>('@mantine/core');
+  return {
+    ...actual,
+    Breadcrumbs: vi.fn(({ children, className, separator }) => (
+      <div 
+        data-testid="breadcrumb-navigation" 
+        className={className}
+        data-separator={separator}
+      >
+        {children}
+      </div>
+    )),
+    Anchor: vi.fn(({ children, href, onClick, size }) => (
+      <a 
+        data-testid={children ? `breadcrumb-link-${children.toLowerCase().replace(/\s+/g, '-')}` : 'breadcrumb-link'}
+        href={href}
+        onClick={onClick}
+        data-size={size}
+        style={{ cursor: 'pointer' }}
+      >
+        {children}
+      </a>
+    )),
+    Text: vi.fn(({ children, size, c, fw }) => (
+      <p 
+        data-testid={children ? `breadcrumb-current-${children.toLowerCase().replace(/\s+/g, '-')}` : 'breadcrumb-current'}
+        data-size={size}
+        data-color={c}
+        data-weight={fw}
+      >
+        {children}
+      </p>
+    ))
+  };
+});
+
+// Test wrapper component
+const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <MantineProvider>
+    {children}
+  </MantineProvider>
+);
 
 describe('Breadcrumb Component', () => {
+  const user = userEvent.setup();
   
-  // Test data - realistic route configurations
-  const mockAppRoutes: AppRoutes = {
-    '/': { component: 'BankingDashboard', intent: 'view_dashboard', breadcrumb: 'Dashboard', tab: 'banking' },
-    '/banking': { component: 'BankingHub', intent: 'banking_hub', breadcrumb: 'Banking', tab: 'banking' },
-    '/banking/accounts': { component: 'AccountsOverview', intent: 'view_accounts', breadcrumb: 'Accounts', tab: 'banking' },
-    '/banking/transfers': { component: 'TransfersHub', intent: 'view_transfers', breadcrumb: 'Transfers', tab: 'banking' },
-    '/banking/transfers/wire': { component: 'WireTransferForm', intent: 'wire_transfer', breadcrumb: 'Wire Transfer', tab: 'banking' },
-    '/chat': { component: 'ChatPanel', intent: 'open_chat', breadcrumb: 'Chat', tab: 'chat' }
-  };
+  // Mock route lookup function
+  const mockGetRouteByPath = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockNavigate.mockClear();
+    mockGetRouteByPath.mockClear();
+    mockLocation = { pathname: '/' };
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  describe('Breadcrumb Generation - Component Behavior', () => {
-    it('render() - should generate breadcrumbs for valid route hierarchy', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/transfers/wire']);
-      });
-      
-      await waitFor(() => {
-        // Should render all three levels: banking -> transfers -> wire transfer
-        expect(screen.getByTestId('breadcrumb-link-banking')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-link-transfers')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-wire-transfer')).toBeDefined();
-      });
-    });
+  describe('React.FC() - Component Rendering', () => {
+    it('React.FC() - should render breadcrumb navigation when valid paths exist', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/banking/accounts';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Banking', path: '/banking' })
+        .mockReturnValueOnce({ breadcrumb: 'Accounts', path: '/banking/accounts' });
 
-    it('render() - should handle single level routes', async () => {
+      // ACT
       await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/chat']);
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
       });
-      
-      await waitFor(() => {
-        // Should only render current page for single level route
-        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-chat')).toBeDefined();
-      });
-    });
 
-    it('render() - should create fallback breadcrumb for unknown routes', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/unknown-route']);
-      });
-      
-      await waitFor(() => {
-        // Should render fallback breadcrumb for unknown route
-        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-unknown-route')).toBeDefined();
-      });
-    });
-
-    it('render() - should handle multi-word route segments in fallback', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/user-profile-settings']);
-      });
-      
-      await waitFor(() => {
-        // Should render properly formatted fallback label
-        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-user-profile-settings')).toBeDefined();
-      });
-    });
-
-    it('render() - should handle partial route matches correctly', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/accounts/details']);
-      });
-      
-      await waitFor(() => {
-        // Should render known routes plus fallback for unknown segment
-        expect(screen.getByTestId('breadcrumb-link-banking')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-link-accounts')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-details')).toBeDefined();
-      });
-    });
-
-    it('render() - should handle empty routes configuration', async () => {
-      const emptyRoutes: AppRoutes = {};
-      
-      await act(async () => {
-        renderBreadcrumbWithRouter(emptyRoutes, undefined, ['/banking/accounts']);
-      });
-      
-      await waitFor(() => {
-        // Should render fallback breadcrumb when no routes match
-        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-accounts')).toBeDefined();
-      });
-    });
-
-    it('render() - should handle root path', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/']);
-      });
-      
-      // Root path should not render breadcrumbs
-      expect(screen.queryByTestId('breadcrumb-navigation')).toBeNull();
-    });
-  });
-
-  describe('render() - Component Rendering', () => {
-    it('render() - should render breadcrumb navigation structure', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes);
-      });
-      
+      // ASSERT
       await waitFor(() => {
         expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
       });
     });
 
-    it('render() - should render breadcrumb links for parent routes', async () => {
+    it('React.FC() - should not render breadcrumbs on root path with single item', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/';
+      mockGetRouteByPath.mockReturnValue(undefined);
+
+      // ACT
       await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/transfers/wire']);
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
       });
-      
+
+      // ASSERT
       await waitFor(() => {
-        expect(screen.getByTestId('breadcrumb-link-banking')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-link-transfers')).toBeDefined();
+        expect(screen.queryByTestId('breadcrumb-navigation')).toBeNull();
       });
     });
 
-    it('render() - should render current page as text element', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/accounts']);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByTestId('breadcrumb-current-accounts')).toBeDefined();
-      });
-    });
+    it('React.FC() - should apply custom className when provided', async () => {
+      // ARRANGE
+      const customClassName = 'custom-breadcrumb-class';
+      mockLocation.pathname = '/banking/accounts';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Banking', path: '/banking' })
+        .mockReturnValueOnce({ breadcrumb: 'Accounts', path: '/banking/accounts' });
 
-    it('render() - should apply custom className when provided', async () => {
+      // ACT
       await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, 'custom-breadcrumb-class');
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} className={customClassName} />
+          </TestWrapper>
+        );
       });
-      
-      await waitFor(() => {
-        const breadcrumbNavigation = screen.getByTestId('breadcrumb-navigation');
-        expect(breadcrumbNavigation.className).toContain('custom-breadcrumb-class');
-      });
-    });
 
-    it('render() - should not render on root path with single breadcrumb', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/']);
-      });
-      
-      // Root path should not render breadcrumbs
-      expect(screen.queryByTestId('breadcrumb-navigation')).toBeNull();
-    });
-
-    it('render() - should render for single breadcrumb on non-root path', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/chat']);
-      });
-      
+      // ASSERT
       await waitFor(() => {
-        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-chat')).toBeDefined();
+        const navigation = screen.getByTestId('breadcrumb-navigation');
+        expect(navigation).toBeDefined();
+        expect(navigation.className).toBe(customClassName);
       });
     });
   });
 
-  describe('handleNavigation() - Navigation Functionality', () => {
-    it('handleNavigation() - should render navigation links correctly', async () => {
+  describe('generateBreadcrumbs() - Breadcrumb Generation Logic', () => {
+    it('generateBreadcrumbs() - should create breadcrumb items from valid path segments', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/banking/accounts/details';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Banking', path: '/banking' })
+        .mockReturnValueOnce({ breadcrumb: 'Accounts', path: '/banking/accounts' })
+        .mockReturnValueOnce({ breadcrumb: 'Details', path: '/banking/accounts/details' });
+
+      // ACT
       await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/transfers/wire']);
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
       });
-      
+
+      // ASSERT
       await waitFor(() => {
-        expect(screen.getByTestId('breadcrumb-link-banking')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-link-transfers')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-wire-transfer')).toBeDefined();
+        expect(mockGetRouteByPath).toHaveBeenCalledWith('/banking');
+        expect(mockGetRouteByPath).toHaveBeenCalledWith('/banking/accounts');
+        expect(mockGetRouteByPath).toHaveBeenCalledWith('/banking/accounts/details');
+        expect(mockGetRouteByPath).toHaveBeenCalledTimes(3);
       });
     });
 
-    it('handleNavigation() - should have correct link attributes', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/accounts']);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByTestId('breadcrumb-link-banking')).toBeDefined();
-      });
-      
-      const breadcrumbLink = screen.getByTestId('breadcrumb-link-banking');
-      expect(breadcrumbLink.tagName.toLowerCase()).toBe('a');
-      expect(breadcrumbLink.getAttribute('href')).toBe('/banking');
-    });
+    it('generateBreadcrumbs() - should handle mixed valid and invalid route segments', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/banking/unknown/accounts';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Banking', path: '/banking' })
+        .mockReturnValueOnce(undefined) // unknown segment
+        .mockReturnValueOnce({ breadcrumb: 'Accounts', path: '/banking/unknown/accounts' });
 
-    it('handleNavigation() - should render multiple breadcrumb levels', async () => {
+      // ACT
       await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/transfers/wire']);
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
       });
-      
-      await waitFor(() => {
-        const breadcrumbNav = screen.getByTestId('breadcrumb-navigation');
-        const breadcrumbElements = breadcrumbNav.querySelectorAll('[data-testid*="breadcrumb-"]');
-        expect(breadcrumbElements.length).toBeGreaterThan(2);
-      });
-    });
 
-    it('handleNavigation() - should not trigger navigation for current page elements', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/accounts']);
-      });
-      
-      await waitFor(() => {
-        const currentPageElement = screen.getByTestId('breadcrumb-current-accounts');
-        expect(currentPageElement.tagName.toLowerCase()).toBe('p'); // Mantine Text renders as p
-      });
-      
-      // Current page element should not be clickable
-      const currentPageElement = screen.getByTestId('breadcrumb-current-accounts');
-      expect(currentPageElement.getAttribute('href')).toBeNull();
-    });
-  });
-
-  describe('Edge Cases and Error Handling', () => {
-    it('render() - should handle malformed appRoutes gracefully', async () => {
-      const malformedRoutes = {
-        '/banking': null,
-        '/invalid': { component: undefined, intent: '', breadcrumb: null }
-      } as unknown as AppRoutes;
-      
-      await act(async () => {
-        renderBreadcrumbWithRouter(malformedRoutes, undefined, ['/banking/accounts']);
-      });
-      
-      await waitFor(() => {
-        // Should render fallback breadcrumb when routes are malformed
-        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-accounts')).toBeDefined();
-      });
-    });
-
-    it('render() - should handle empty appRoutes', async () => {
-      const emptyRoutes: AppRoutes = {};
-      
-      await act(async () => {
-        renderBreadcrumbWithRouter(emptyRoutes, undefined, ['/unknown-path']);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-unknown-path')).toBeDefined();
-      });
-    });
-
-    it('render() - should handle different route structures', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/accounts']);
-      });
-      
+      // ASSERT
       await waitFor(() => {
         expect(screen.getByTestId('breadcrumb-link-banking')).toBeDefined();
         expect(screen.getByTestId('breadcrumb-current-accounts')).toBeDefined();
       });
     });
 
-    it('render() - should handle complex nested paths', async () => {
-      const complexRoutes: AppRoutes = {
-        '/banking': { component: 'Banking', intent: 'banking', breadcrumb: 'Banking', tab: 'banking' },
-        '/banking/transfers': { component: 'Transfers', intent: 'transfers', breadcrumb: 'Transfers', tab: 'banking' },
-        '/banking/transfers/international': { component: 'International', intent: 'international', breadcrumb: 'International', tab: 'banking' }
-      };
-      
+    it('generateBreadcrumbs() - should create fallback label when no routes match', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/unknown-page';
+      mockGetRouteByPath.mockReturnValue(undefined);
+
+      // ACT
       await act(async () => {
-        renderBreadcrumbWithRouter(complexRoutes, undefined, ['/banking/transfers/international/swift/confirmation']);
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
       });
-      
+
+      // ASSERT
       await waitFor(() => {
-        // Should render known routes plus fallback for deepest path
+        expect(screen.getByTestId('breadcrumb-current-unknown-page')).toBeDefined();
+      });
+    });
+
+    it('generateBreadcrumbs() - should handle hyphenated paths with proper capitalization', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/multi-word-route';
+      mockGetRouteByPath.mockReturnValue(undefined);
+
+      // ACT
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
+      });
+
+      // ASSERT
+      await waitFor(() => {
+        expect(screen.getByTestId('breadcrumb-current-multi-word-route')).toBeDefined();
+      });
+    });
+
+    it('generateBreadcrumbs() - should mark current page correctly in breadcrumb hierarchy', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/banking/transfers';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Banking', path: '/banking' })
+        .mockReturnValueOnce({ breadcrumb: 'Transfers', path: '/banking/transfers' });
+
+      // ACT
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
+      });
+
+      // ASSERT
+      await waitFor(() => {
+        // Non-current page should be a link
         expect(screen.getByTestId('breadcrumb-link-banking')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-link-transfers')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-link-international')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-confirmation')).toBeDefined();
-      });
-    });
-
-    it('render() - should handle special characters in route segments', async () => {
-      const specialRoutes: AppRoutes = {
-        '/special-chars_route': { component: 'Special', intent: 'special', breadcrumb: 'Special Route', tab: 'special' }
-      };
-      
-      await act(async () => {
-        renderBreadcrumbWithRouter(specialRoutes, undefined, ['/special-chars_route']);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByTestId('breadcrumb-current-special-route')).toBeDefined();
-      });
-    });
-
-    it('render() - should handle numeric path segments', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/accounts/123/details']);
-      });
-      
-      await waitFor(() => {
-        // Should render fallback breadcrumb for path with numeric segments
-        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-details')).toBeDefined();
-      });
-    });
-  });
-
-  describe('Integration with React Router', () => {
-    it('render() - should work with different routing contexts', async () => {
-      await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/transfers']);
-      });
-      
-      await waitFor(() => {
-        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
+        // Current page should be text only
         expect(screen.getByTestId('breadcrumb-current-transfers')).toBeDefined();
       });
     });
+  });
 
-    it('render() - should maintain link functionality', async () => {
+  describe('handleNavigation() - Navigation Handling', () => {
+    it('handleNavigation() - should call navigate with correct path when breadcrumb link is clicked', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/banking/accounts';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Banking', path: '/banking' })
+        .mockReturnValueOnce({ breadcrumb: 'Accounts', path: '/banking/accounts' });
+
       await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/accounts']);
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
       });
-      
+
+      // ACT
+      await act(async () => {
+        await user.click(screen.getByTestId('breadcrumb-link-banking'));
+      });
+
+      // ASSERT
       await waitFor(() => {
-        const breadcrumbLink = screen.getByTestId('breadcrumb-link-banking');
-        expect(breadcrumbLink.getAttribute('href')).toBe('/banking');
-        expect(breadcrumbLink.tagName.toLowerCase()).toBe('a');
+        expect(mockNavigate).toHaveBeenCalledWith('/banking');
+        expect(mockNavigate).toHaveBeenCalledTimes(1);
       });
     });
 
-    it('MemoryRouter - should work within routing context', async () => {
+    it('handleNavigation() - should prevent default anchor behavior on breadcrumb click', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/banking/accounts';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Banking', path: '/banking' })
+        .mockReturnValueOnce({ breadcrumb: 'Accounts', path: '/banking/accounts' });
+
       await act(async () => {
         render(
-          <MantineProvider>
-            <MemoryRouter initialEntries={['/banking/transfers/wire']}>
-              <Breadcrumb appRoutes={mockAppRoutes} />
-            </MemoryRouter>
-          </MantineProvider>
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
         );
       });
-      
+
+      // ACT & ASSERT
+      await act(async () => {
+        const breadcrumbLink = screen.getByTestId('breadcrumb-link-banking');
+        expect(breadcrumbLink.getAttribute('href')).toBe('/banking');
+        await user.click(breadcrumbLink);
+      });
+
       await waitFor(() => {
-        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-link-banking')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-link-transfers')).toBeDefined();
-        expect(screen.getByTestId('breadcrumb-current-wire-transfer')).toBeDefined();
+        expect(mockNavigate).toHaveBeenCalledWith('/banking');
+      });
+    });
+
+    it('handleNavigation() - should not be clickable for current page breadcrumb', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/banking/accounts';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Banking', path: '/banking' })
+        .mockReturnValueOnce({ breadcrumb: 'Accounts', path: '/banking/accounts' });
+
+      // ACT
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
+      });
+
+      // ASSERT
+      await waitFor(() => {
+        // Current page should be text element, not link
+        expect(screen.getByTestId('breadcrumb-current-accounts').tagName).toBe('P');
+        expect(screen.queryByTestId('breadcrumb-link-accounts')).toBeNull();
       });
     });
   });
 
-  describe('Functional Attribute Testing', () => {
-    it('render() - should set correct test IDs for navigation links', async () => {
+  describe('generateBreadcrumbs() / handleNavigation() - Edge Cases', () => {
+    it('generateBreadcrumbs() - should handle empty path segments gracefully', async () => {
+      // ARRANGE
+      mockLocation.pathname = '//banking//accounts//';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Banking', path: '/banking' })
+        .mockReturnValueOnce({ breadcrumb: 'Accounts', path: '/banking/accounts' });
+
+      // ACT
       await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/transfers/wire']);
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
       });
-      
+
+      // ASSERT
       await waitFor(() => {
-        const bankingLink = screen.getByTestId('breadcrumb-link-banking');
-        const transfersLink = screen.getByTestId('breadcrumb-link-transfers');
-        const currentPage = screen.getByTestId('breadcrumb-current-wire-transfer');
-        
-        // Test functional attributes only
-        expect(bankingLink.getAttribute('href')).toBe('/banking');
-        expect(transfersLink.getAttribute('href')).toBe('/banking/transfers');
-        expect(currentPage.getAttribute('href')).toBeNull(); // Current page is not a link
+        expect(screen.getByTestId('breadcrumb-link-banking')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-current-accounts')).toBeDefined();
       });
     });
 
-    it('render() - should have correct element types for different breadcrumb states', async () => {
+    it('generateBreadcrumbs() - should handle single level paths correctly', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/dashboard';
+      mockGetRouteByPath.mockReturnValueOnce({ breadcrumb: 'Dashboard', path: '/dashboard' });
+
+      // ACT
       await act(async () => {
-        renderBreadcrumbWithRouter(mockAppRoutes, undefined, ['/banking/accounts']);
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
       });
-      
+
+      // ASSERT
       await waitFor(() => {
-        const navigationLink = screen.getByTestId('breadcrumb-link-banking');
-        const currentPage = screen.getByTestId('breadcrumb-current-accounts');
-        
-        expect(navigationLink.tagName.toLowerCase()).toBe('a');
-        expect(currentPage.tagName.toLowerCase()).toBe('p'); // Mantine Text renders as p
+        expect(screen.getByTestId('breadcrumb-navigation')).toBeDefined();
+        expect(screen.getByTestId('breadcrumb-current-dashboard')).toBeDefined();
       });
     });
 
-    it('render() - should maintain navigation functionality across different routes', async () => {
-      const testRoutes = [
-        '/banking/accounts',
-        '/banking/transfers', 
-        '/banking/transfers/wire',
-        '/chat'
-      ];
-      
-      for (const route of testRoutes) {
-        cleanup();
-        
-        await act(async () => {
-          renderBreadcrumbWithRouter(mockAppRoutes, undefined, [route]);
-        });
-        
-        if (route !== '/chat') { // Chat has no parent breadcrumbs
-          await waitFor(() => {
-            const breadcrumbNav = screen.getByTestId('breadcrumb-navigation');
-            expect(breadcrumbNav).toBeDefined();
-            
-            // Should have at least one breadcrumb element
-            const breadcrumbElements = breadcrumbNav.querySelectorAll('[data-testid*="breadcrumb-"]');
-            expect(breadcrumbElements.length).toBeGreaterThan(0);
-          });
-        }
-      }
+    it('generateBreadcrumbs() - should handle getRouteByPath function returning undefined gracefully', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/banking/accounts';
+      mockGetRouteByPath.mockReturnValue(undefined);
+
+      // ACT
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
+      });
+
+      // ASSERT - Should still render with fallback behavior
+      await waitFor(() => {
+        expect(screen.getByTestId('breadcrumb-current-accounts')).toBeDefined();
+      });
+    });
+
+    it('handleNavigation() - should handle navigation to complex paths with multiple segments', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/level1/level2/level3/level4';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Level 1', path: '/level1' })
+        .mockReturnValueOnce({ breadcrumb: 'Level 2', path: '/level1/level2' })
+        .mockReturnValueOnce({ breadcrumb: 'Level 3', path: '/level1/level2/level3' })
+        .mockReturnValueOnce({ breadcrumb: 'Level 4', path: '/level1/level2/level3/level4' });
+
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
+      });
+
+      // ACT
+      await act(async () => {
+        await user.click(screen.getByTestId('breadcrumb-link-level-3'));
+      });
+
+      // ASSERT
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/level1/level2/level3');
+      });
+    });
+
+    it('generateBreadcrumbs() - should handle paths with special characters in fallback labels', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/special_page-name';
+      mockGetRouteByPath.mockReturnValue(undefined);
+
+      // ACT
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
+      });
+
+      // ASSERT
+      await waitFor(() => {
+        expect(screen.getByTestId('breadcrumb-current-special_page-name')).toBeDefined();
+      });
+    });
+  });
+
+  describe('React.FC() - Breadcrumb Component Structure', () => {
+    it('React.FC() - should render correct breadcrumb item count for multi-level path', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/banking/accounts/details';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Banking', path: '/banking' })
+        .mockReturnValueOnce({ breadcrumb: 'Accounts', path: '/banking/accounts' })
+        .mockReturnValueOnce({ breadcrumb: 'Details', path: '/banking/accounts/details' });
+
+      // ACT
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
+      });
+
+      // ASSERT
+      await waitFor(() => {
+        const navigation = screen.getByTestId('breadcrumb-navigation');
+        expect(navigation.children).toHaveLength(3);
+      });
+    });
+
+    it('React.FC() - should render breadcrumb items with proper semantic structure', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/banking/accounts';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Banking', path: '/banking' })
+        .mockReturnValueOnce({ breadcrumb: 'Accounts', path: '/banking/accounts' });
+
+      // ACT
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
+      });
+
+      // ASSERT
+      await waitFor(() => {
+        // Navigation container should be div element
+        expect(screen.getByTestId('breadcrumb-navigation').tagName).toBe('DIV');
+        // Non-current items should be links
+        expect(screen.getByTestId('breadcrumb-link-banking').tagName).toBe('A');
+        // Current item should be text
+        expect(screen.getByTestId('breadcrumb-current-accounts').tagName).toBe('P');
+      });
+    });
+
+    it('React.FC() - should set separator attribute correctly', async () => {
+      // ARRANGE
+      mockLocation.pathname = '/banking/accounts';
+      mockGetRouteByPath
+        .mockReturnValueOnce({ breadcrumb: 'Banking', path: '/banking' })
+        .mockReturnValueOnce({ breadcrumb: 'Accounts', path: '/banking/accounts' });
+
+      // ACT
+      await act(async () => {
+        render(
+          <TestWrapper>
+            <Breadcrumb getRouteByPath={mockGetRouteByPath} />
+          </TestWrapper>
+        );
+      });
+
+      // ASSERT
+      await waitFor(() => {
+        const navigation = screen.getByTestId('breadcrumb-navigation');
+        expect(navigation.getAttribute('data-separator')).toBe('/');
+      });
     });
   });
 });

@@ -15,65 +15,20 @@ import { useDisclosure } from '@mantine/hooks';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { IconChevronDown } from '@tabler/icons-react';
 import classes from './Header.module.css';
-import type { AppRoutes } from '../types';
+import type { NavigationGroup } from '../types';
 
 interface HeaderProps {
   isConnected: boolean;
-  appRoutes: AppRoutes;
+  navigationGroups: NavigationGroup[];
 }
 
-interface NavigationLink {
-  label: string;
-  link: string;
-}
-
-interface NavigationGroup {
-  label: string;
-  links: NavigationLink[];
-}
-
-type NavigationItem = NavigationLink | NavigationGroup;
-
-// Transform routes into navigation structure
-const createNavigationLinks = (appRoutes: AppRoutes): NavigationItem[] => {
-  const routes = Object.entries(appRoutes);
-  
-  // Filter out routes with parameters (e.g., :accountId, :id, etc.)
-  const navigableRoutes = routes.filter(([path]) => !path.includes(':'));
-  
-  // Group routes by tab and create navigation structure
-  const bankingRoutes = navigableRoutes.filter(([, config]) => config.tab === 'banking');
-  const transactionRoutes = navigableRoutes.filter(([, config]) => config.tab === 'transaction');
-  const chatRoutes = navigableRoutes.filter(([, config]) => config.tab === 'chat');
-
-  return [
-    {
-      label: 'Banking',
-      links: bankingRoutes.map(([path, config]) => ({
-        link: path,
-        label: config.breadcrumb
-      }))
-    },
-    ...transactionRoutes.map(([path, config]) => ({
-      label: config.breadcrumb,
-      link: path
-    })),
-    ...chatRoutes.map(([path, config]) => ({
-      label: config.breadcrumb,
-      link: path
-    }))
-  ];
-};
 
 
-
-export const Header: React.FC<HeaderProps> = ({ isConnected, appRoutes }) => {
+export const Header: React.FC<HeaderProps> = ({ isConnected, navigationGroups }) => {
   const [drawerOpened, { toggle: toggleDrawer, close: closeDrawer }] = useDisclosure(false);
   const [bankingLinksOpened, { toggle: toggleBankingLinks }] = useDisclosure(false);
   const navigate = useNavigate();
   const location = useLocation();
-  
-  const navigationLinks = createNavigationLinks(appRoutes);
 
   const isActiveRoute = (link: string) => {
     if (link === '/') {
@@ -88,106 +43,109 @@ export const Header: React.FC<HeaderProps> = ({ isConnected, appRoutes }) => {
   };
 
   // Desktop navigation items
-  const items = navigationLinks.map((item) => {
-    if ('links' in item) {
-      // Banking section with dropdown
-      const menuItems = item.links.map((subItem) => (
-        <Menu.Item 
-          key={subItem.link} 
-          onClick={() => handleNavigation(subItem.link)}
-          data-active={isActiveRoute(subItem.link) || undefined}
-        >
-          {subItem.label}
-        </Menu.Item>
-      ));
+  const items = navigationGroups.map((group) => {
+    const hasActiveChild = group.links.some(link => isActiveRoute(link.path));
 
-      const hasActiveChild = item.links.some(subItem => isActiveRoute(subItem.link));
-
+    // Single item = direct button, multiple items = dropdown
+    if (group.links.length === 1) {
+      const link = group.links[0];
       return (
-        <Menu key={item.label} trigger="hover" transitionProps={{ exitDuration: 0 }} withinPortal>
-          <Menu.Target>
-            <UnstyledButton 
-              className={classes.link}
-              data-active={hasActiveChild || undefined}
-              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              <span className={classes.linkLabel}>{item.label}</span>
-              <IconChevronDown size={14} stroke={1.5} />
-            </UnstyledButton>
-          </Menu.Target>
-          <Menu.Dropdown>{menuItems}</Menu.Dropdown>
-        </Menu>
+        <UnstyledButton
+          key={group.label}
+          className={classes.link}
+          onClick={() => handleNavigation(link.path)}
+          data-active={isActiveRoute(link.path) || undefined}
+        >
+          {group.label}
+        </UnstyledButton>
       );
     }
 
-    // Single navigation item
-    return (
-      <UnstyledButton
-        key={item.label}
-        className={classes.link}
-        onClick={() => handleNavigation(item.link)}
-        data-active={isActiveRoute(item.link) || undefined}
+    // Multiple items = dropdown menu
+    const menuItems = group.links.map((link) => (
+      <Menu.Item 
+        key={link.path} 
+        onClick={() => handleNavigation(link.path)}
+        data-active={isActiveRoute(link.path) || undefined}
       >
-        {item.label}
-      </UnstyledButton>
+        {link.label}
+      </Menu.Item>
+    ));
+
+    return (
+      <Menu key={group.label} trigger="hover" transitionProps={{ exitDuration: 0 }} withinPortal>
+        <Menu.Target>
+          <UnstyledButton 
+            className={classes.link}
+            data-active={hasActiveChild || undefined}
+            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+          >
+            <span className={classes.linkLabel}>{group.label}</span>
+            <IconChevronDown size={14} stroke={1.5} />
+          </UnstyledButton>
+        </Menu.Target>
+        <Menu.Dropdown>{menuItems}</Menu.Dropdown>
+      </Menu>
     );
   });
 
   // Mobile navigation
-  const mobileLinks = navigationLinks.map((item) => {
-    if ('links' in item) {
-      // Banking section with collapsible sub-links
-      const subLinks = item.links.map((subItem) => (
+  const mobileLinks = navigationGroups.map((group) => {
+    const hasActiveChild = group.links.some(link => isActiveRoute(link.path));
+
+    // Single item = direct button, multiple items = collapsible
+    if (group.links.length === 1) {
+      const link = group.links[0];
+      return (
         <UnstyledButton
-          key={subItem.link}
-          className={classes.mobileSubLink}
-          onClick={() => handleNavigation(subItem.link)}
-          data-active={isActiveRoute(subItem.link) || undefined}
+          key={group.label}
+          className={classes.mobileLink}
+          onClick={() => handleNavigation(link.path)}
+          data-active={isActiveRoute(link.path) || undefined}
         >
           <span style={{ flex: 1, textAlign: 'left' }}>
-            {subItem.label}
+            {group.label}
           </span>
         </UnstyledButton>
-      ));
-
-      const hasActiveChild = item.links.some(subItem => isActiveRoute(subItem.link));
-
-      return (
-        <div key={item.label}>
-          <UnstyledButton 
-            className={classes.mobileLink}
-            onClick={toggleBankingLinks}
-            data-active={hasActiveChild || undefined}
-          >
-            <span style={{ flex: 1, textAlign: 'left' }}>
-              {item.label}
-            </span>
-            <IconChevronDown 
-              size={16} 
-              className={bankingLinksOpened ? classes.chevronOpen : classes.chevron}
-              style={{ marginLeft: '8px', flexShrink: 0 }}
-            />
-          </UnstyledButton>
-          <Collapse in={bankingLinksOpened}>
-            <div className={classes.mobileSubLinks}>
-              {subLinks}
-            </div>
-          </Collapse>
-        </div>
       );
     }
 
-    return (
+    // Multiple items = collapsible section
+    const subLinks = group.links.map((link) => (
       <UnstyledButton
-        key={item.label}
-        className={classes.mobileLink}
-        onClick={() => handleNavigation(item.link)}
-        data-active={isActiveRoute(item.link) || undefined}
+        key={link.path}
+        className={classes.mobileSubLink}
+        onClick={() => handleNavigation(link.path)}
+        data-active={isActiveRoute(link.path) || undefined}
       >
         <span style={{ flex: 1, textAlign: 'left' }}>
-          {item.label}
+          {link.label}
         </span>
       </UnstyledButton>
+    ));
+
+    return (
+      <div key={group.label}>
+        <UnstyledButton 
+          className={classes.mobileLink}
+          onClick={toggleBankingLinks}
+          data-active={hasActiveChild || undefined}
+        >
+          <span style={{ flex: 1, textAlign: 'left' }}>
+            {group.label}
+          </span>
+          <IconChevronDown 
+            size={16} 
+            className={bankingLinksOpened ? classes.chevronOpen : classes.chevron}
+            style={{ marginLeft: '8px', flexShrink: 0 }}
+          />
+        </UnstyledButton>
+        <Collapse in={bankingLinksOpened}>
+          <div className={classes.mobileSubLinks}>
+            {subLinks}
+          </div>
+        </Collapse>
+      </div>
     );
   });
 

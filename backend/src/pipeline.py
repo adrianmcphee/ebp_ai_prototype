@@ -16,6 +16,7 @@ from .state_manager import ConversationStateManager
 from .validator import EntityValidator
 from .banking_operations import BankingOperationsCatalog, OperationStatus
 from .ui_screen_catalog import ui_screen_catalog, ScreenType
+from .entity_enricher import IntentDrivenEnricher
 
 
 class ParameterResolver(ABC):
@@ -110,6 +111,10 @@ class IntentPipeline:
         # Initialize parameter resolver registry
         self.parameter_registry = ParameterResolverRegistry()
         self._register_default_resolvers()
+        
+        # Initialize intent-driven entity enricher
+        from .intent_catalog import intent_catalog
+        self.entity_enricher = IntentDrivenEnricher(intent_catalog, banking_service)
 
     def _register_default_resolvers(self) -> None:
         """Register default parameter resolvers - can be extended without modifying this class"""
@@ -123,63 +128,45 @@ class IntentPipeline:
         
         # Future resolvers can be registered here or via plugin system
 
-    def _add_route_params(self, ui_assistance: Dict[str, Any], entities: Dict[str, Any]) -> None:
-        """Add route parameters to UI assistance based on extracted entities
-        
-        This method follows the Open-Closed Principle - it's open for extension
-        (new parameter types via registry) but closed for modification.
-        """
-        route_path = ui_assistance.get("route_path", "")
-        
-        # Find all parameters in the route (e.g., :accountId, :transactionId)
-        import re
-        parameters = re.findall(r':(\w+)', route_path)
-        
-        for param in parameters:
-            # Convert route parameter to snake_case to match resolver keys
-            resolver_key = self._camel_to_snake(param)
-            resolver = self.parameter_registry.get_resolver(resolver_key)
-            if resolver:
-                value = resolver.resolve(entities)
-                if value:
-                    ui_assistance["route_path"] = route_path.replace(f":{param}", value)
-                    # Add resolved value to response
-                    ui_assistance[resolver_key] = value
                     
     def _camel_to_snake(self, camel_str: str) -> str:
         """Convert camelCase to snake_case (accountId -> account_id)"""
         import re
         return re.sub(r'(?<!^)(?=[A-Z])', '_', camel_str).lower()
 
-    def _resolve_required_parameters(self, entities: Dict[str, Any], required_entities: List[str]) -> None:
-        """Resolve missing required entities from available entities using parameter resolvers
+    async def _apply_entity_enrichment(self, intent_id: str, entities: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply intent-driven entity enrichment following SOLID principles
         
-        This allows account_type -> account_id resolution to happen BEFORE validation.
+        This method enriches entities based on the intent's declared enrichment requirements.
+        It follows the Open-Closed Principle by using strategies that can be extended without
+        modifying this pipeline code.
         """
-        available_entities = entities.get("entities", {})
-        missing_required = entities.get("missing_required", [])
-        
-        # Try to resolve each missing required entity directly
-        newly_resolved = {}
-        for missing_entity in missing_required.copy():
-            resolver = self.parameter_registry.get_resolver(missing_entity)
+        if not intent_id:
+            return entities
             
-            if resolver:
-                resolved_value = resolver.resolve(available_entities)
-                if resolved_value:
-                    # Add resolved entity to available entities
-                    newly_resolved[missing_entity] = {
-                        "value": resolved_value,
-                        "raw": resolved_value,
-                        "confidence": 0.95,
-                        "source": "parameter_resolution"
-                    }
-                    missing_required.remove(missing_entity)
+        # Get extracted entities in the format expected by enricher
+        extracted_entities = entities.get("entities", {})
         
-        # Update entities dict with resolved values
-        if newly_resolved:
-            entities["entities"].update(newly_resolved)
-            entities["missing_required"] = missing_required
+        # Apply enrichment based on intent requirements
+        enriched_entities = self.entity_enricher.enrich(intent_id, extracted_entities)
+        
+        # Update the entities dict with enriched values
+        if enriched_entities != extracted_entities:
+            # Create updated entities dict
+            updated_entities = entities.copy()
+            updated_entities["entities"] = enriched_entities
+            
+            # Update missing_required list if entities were resolved
+            missing_required = updated_entities.get("missing_required", [])
+            newly_added_entities = set(enriched_entities.keys()) - set(extracted_entities.keys())
+            
+            # Remove newly enriched entities from missing list
+            updated_missing = [req for req in missing_required if req not in newly_added_entities]
+            updated_entities["missing_required"] = updated_missing
+            
+            return updated_entities
+            
+        return entities
 
     async def process(
         self,
@@ -240,9 +227,8 @@ class IntentPipeline:
                 context,
             )
 
-            # Resolve parameters BEFORE validation (e.g., account_type -> account_id)
-            # @FIXME: This is a hack to resolve parameters before validation. Need to find a better way to do this.
-            self._resolve_required_parameters(entities, required_entities)
+            # Apply intent-driven entity enrichment (e.g., account_type -> account_id)
+            entities = await self._apply_entity_enrichment(classification.get("intent_id"), entities)
 
             # Generate context-aware response
             response = await self.response_gen.generate_response(
@@ -633,37 +619,22 @@ class IntentPipeline:
     async def _generate_ui_assistance(
         self, classification: dict[str, Any], entities: dict[str, Any], ui_context: Optional[str] = None, query: str = ""
     ) -> Optional[dict[str, Any]]:
-        """Generate UI assistance based on intent and UI context"""
+        """Generate UI assistance based on intent and UI context
+        
+        Note: Banking context navigation is now handled by frontend intent-based navigation.
+        This method only handles transaction forms and other non-navigation UI assistance.
+        """
         intent_id = classification.get("intent_id", "")
         
-        # Context-aware routing: Same intent, different UI response based on active tab
-        screen = ui_screen_catalog.get_screen_for_intent(intent_id)
-        if not screen:
-            return None
-            
-        # Banking (Navigation) context: Route to pre-built screens
+        # Banking (Navigation) context: No longer handled by backend
+        # Frontend now uses intent-based navigation service for separation of concerns
         if ui_context == "banking":
-            if screen.screen_type in [ScreenType.PRE_BUILT, ScreenType.DYNAMIC_FORM]:
-                ui_assistance = {
-                    "type": "navigation",
-                    "action": "route_to_screen", 
-                    "screen_id": screen.screen_id,
-                    "route_path": screen.route_path,
-                    "component_name": screen.component_name,
-                    "title": screen.title_template,
-                    "description": screen.description
-                }
-                
-                # Add route parameters based on extracted entities (generic approach)
-                self._add_route_params(ui_assistance, entities.get("entities", {}))
-                
-                return ui_assistance
-            else:
-                return None
+            return None
         
         # Transaction context: Create dynamic forms
         elif ui_context == "transaction":
-            if screen.screen_type == ScreenType.DYNAMIC_FORM:
+            screen = ui_screen_catalog.get_screen_for_intent(intent_id)
+            if screen and screen.screen_type == ScreenType.DYNAMIC_FORM:
                 form_config = ui_screen_catalog.assemble_dynamic_form(
                     intent_id, entities.get("entities", {}), {}
                 )

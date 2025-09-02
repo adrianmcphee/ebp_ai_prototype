@@ -93,20 +93,84 @@ export interface AccountTransactionsResponse {
   has_more: boolean;
 }
 
-// Route types (avoiding circular import)
-export interface RouteConfig {
+
+
+// Intent-Based Navigation Types
+export interface NavigationTarget {
+  /** The route path to navigate to */
+  route: string;
+  /** Optional route parameters to resolve */
+  params?: Record<string, string>;
+  /** Title to display in notifications */
+  title: string;
+  /** Description for accessibility */
+  description: string;
+  /** Whether this navigation requires specific entities */
+  requiresEntities?: string[];
+  /** Dynamic route resolver function */
+  getDynamicRoute?: (entities: Record<string, unknown>) => string;
+  /** Dynamic title resolver function */
+  getDynamicTitle?: (entities: Record<string, unknown>) => string;
+}
+
+export interface IntentNavigationResult {
+  /** Whether navigation was successful */
+  success: boolean;
+  /** The navigation target if successful */
+  target?: NavigationTarget;
+  /** Error message if navigation failed */
+  error?: string;
+  /** The resolved route path */
+  route?: string;
+}
+
+// Route Configuration Types
+export interface StaticRouteDefinition {
   path: string;
   component: string;
-  intent: string;
   breadcrumb: string;
+  tab: string;
+  navigationLabel: string;
+  showInNavigation: boolean;
+  intent: string;
+  redirectTo?: string;
+  group?: string;
+}
+
+export interface IntentRouteDefinition {
+  intentId: string;
+  baseRoute: string;
+  breadcrumb: string;
+  navigationLabel: string;
+  hasParameters: boolean;
+  parameterFallback?: string;
+  showInNavigation: boolean;
+}
+
+export interface ProcessedRoute {
+  path: string;
+  component: string;
+  breadcrumb: string;
+  tab: string;
+  navigationLabel: string;
+  showInNavigation: boolean;
+  source: 'static' | 'intent';
+  group?: string;
+  intentId?: string;
+  hasParameters?: boolean;
+  parameterFallback?: string;
+  intent: string; // Navigation intent for backward compatibility
+  redirectTo?: string;
+}
+
+export interface NavigationLink {
+  label: string;
+  path: string;
   tab: string;
 }
 
-export interface RoutesResponse {
-  routes: RouteConfig[];
+export interface NavigationGroup {
+  label: string;
+  links: NavigationLink[];
 }
 
-// Legacy support - for compatibility during transition
-export interface AppRoutes {
-  [path: string]: Omit<RouteConfig, 'path'>;
-}
