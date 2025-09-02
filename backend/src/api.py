@@ -526,6 +526,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             del websocket_connections[session_id]
 
 
+# @FIXME: This endpoint is deprecated and should be removed
 @app.get("/api/routes", response_model=RoutesResponse)
 async def get_application_routes() -> RoutesResponse:
     """Get application routes assembled from intent catalog and UI screens
