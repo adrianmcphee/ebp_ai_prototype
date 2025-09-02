@@ -6,8 +6,7 @@ import type {
   Account, 
   ProcessResponse, 
   AccountBalance, 
-  AccountTransactionsResponse, 
-  RoutesResponse
+  AccountTransactionsResponse
 } from '../types';
 
 // Mock axios
@@ -209,142 +208,7 @@ describe('apiService', () => {
     });
   });
 
-  describe('fetchRoutes() - Route Management', () => {
-    it('fetchRoutes() - should make GET request to routes endpoint and return transformed routes', async () => {
-      // ARRANGE
-      const mockRoutesResponse: RoutesResponse = {
-        routes: [
-          { path: '/accounts', component: 'AccountsOverview', intent: 'view_accounts', breadcrumb: 'Accounts', tab: 'banking' },
-          { path: '/transfer', component: 'Transfer', intent: 'transfer_money', breadcrumb: 'Transfer', tab: 'banking' }
-        ]
-      };
-      mockedAxios.get.mockResolvedValueOnce({ data: mockRoutesResponse });
 
-      // ACT
-      const result = await apiService.fetchRoutes();
-
-      // ASSERT
-      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
-      expect(mockedAxios.get).toHaveBeenCalledWith(`${API_BASE}/api/routes`);
-      expect(result).toHaveProperty('/accounts');
-      expect(result).toHaveProperty('/transfer');
-      expect(result['/accounts']).toEqual({
-        component: 'AccountsOverview',
-        intent: 'view_accounts',
-        breadcrumb: 'Accounts',
-        tab: 'banking'
-      });
-    });
-
-    it('fetchRoutes() - should handle empty routes array', async () => {
-      // ARRANGE
-      const mockRoutesResponse: RoutesResponse = { routes: [] };
-      mockedAxios.get.mockResolvedValueOnce({ data: mockRoutesResponse });
-
-      // ACT
-      const result = await apiService.fetchRoutes();
-
-      // ASSERT
-      expect(result).toEqual({});
-      expect(Object.keys(result)).toHaveLength(0);
-    });
-
-    it('fetchRoutes() - should handle malformed response by returning original data', async () => {
-      // ARRANGE
-      const malformedResponse = { data: null };
-      mockedAxios.get.mockResolvedValueOnce(malformedResponse);
-
-      // ACT
-      const result = await apiService.fetchRoutes();
-
-      // ASSERT
-      expect(result).toBeNull();
-    });
-
-    it('fetchRoutes() - should handle response without routes property', async () => {
-      // ARRANGE
-      const responseWithoutRoutes = { data: { other_field: 'value' } };
-      mockedAxios.get.mockResolvedValueOnce(responseWithoutRoutes);
-
-      // ACT
-      const result = await apiService.fetchRoutes();
-
-      // ASSERT
-      expect(result).toEqual({ other_field: 'value' });
-    });
-
-    it('fetchRoutes() - should transform multiple routes correctly', async () => {
-      // ARRANGE
-      const mockRoutesResponse: RoutesResponse = {
-        routes: [
-          { path: '/home', component: 'Dashboard', intent: 'home', breadcrumb: 'Home', tab: 'main' },
-          { path: '/settings', component: 'Settings', intent: 'settings', breadcrumb: 'Settings', tab: 'main' },
-          { path: '/payments', component: 'Payments', intent: 'payments', breadcrumb: 'Payments', tab: 'banking' }
-        ]
-      };
-      mockedAxios.get.mockResolvedValueOnce({ data: mockRoutesResponse });
-
-      // ACT
-      const result = await apiService.fetchRoutes();
-
-      // ASSERT
-      expect(Object.keys(result)).toHaveLength(3);
-      expect(result['/home'].component).toBe('Dashboard');
-      expect(result['/settings'].intent).toBe('settings');
-      expect(result['/payments'].tab).toBe('banking');
-    });
-
-    it('fetchRoutes() - should handle API errors gracefully', async () => {
-      // ARRANGE
-      const mockError = new Error('Routes fetch failed');
-      mockedAxios.get.mockRejectedValueOnce(mockError);
-
-      // ACT & ASSERT
-      await expect(apiService.fetchRoutes()).rejects.toThrow('Routes fetch failed');
-    });
-  });
-
-  describe('fetchRoutesArray() - Routes Array Format', () => {
-    it('fetchRoutesArray() - should make GET request and return raw routes response', async () => {
-      // ARRANGE
-      const mockRoutesResponse: RoutesResponse = {
-        routes: [
-          { path: '/accounts', component: 'AccountsOverview', intent: 'view_accounts', breadcrumb: 'Accounts', tab: 'banking' }
-        ]
-      };
-      mockedAxios.get.mockResolvedValueOnce({ data: mockRoutesResponse });
-
-      // ACT
-      const result = await apiService.fetchRoutesArray();
-
-      // ASSERT
-      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
-      expect(mockedAxios.get).toHaveBeenCalledWith(`${API_BASE}/api/routes`);
-      expect(result).toEqual(mockRoutesResponse);
-      expect(result.routes).toHaveLength(1);
-    });
-
-    it('fetchRoutesArray() - should handle empty response', async () => {
-      // ARRANGE
-      const emptyResponse: RoutesResponse = { routes: [] };
-      mockedAxios.get.mockResolvedValueOnce({ data: emptyResponse });
-
-      // ACT
-      const result = await apiService.fetchRoutesArray();
-
-      // ASSERT
-      expect(result.routes).toHaveLength(0);
-    });
-
-    it('fetchRoutesArray() - should handle API errors gracefully', async () => {
-      // ARRANGE
-      const mockError = new Error('Routes array fetch failed');
-      mockedAxios.get.mockRejectedValueOnce(mockError);
-
-      // ACT & ASSERT
-      await expect(apiService.fetchRoutesArray()).rejects.toThrow('Routes array fetch failed');
-    });
-  });
 
   describe('getAccountBalance() - Account Balance Retrieval', () => {
     it('getAccountBalance() - should make GET request with account ID and return balance data', async () => {
@@ -620,12 +484,6 @@ describe('apiService', () => {
 
       mockedAxios.post.mockRejectedValueOnce(timeoutError);
       await expect(apiService.processMessage('test', 'context')).rejects.toThrow('timeout');
-
-      mockedAxios.get.mockRejectedValueOnce(timeoutError);
-      await expect(apiService.fetchRoutes()).rejects.toThrow('timeout');
-
-      mockedAxios.get.mockRejectedValueOnce(timeoutError);
-      await expect(apiService.fetchRoutesArray()).rejects.toThrow('timeout');
 
       mockedAxios.get.mockRejectedValueOnce(timeoutError);
       await expect(apiService.getAccountBalance('acc-1')).rejects.toThrow('timeout');

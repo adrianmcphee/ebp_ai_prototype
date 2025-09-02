@@ -93,23 +93,7 @@ export interface AccountTransactionsResponse {
   has_more: boolean;
 }
 
-// Route types (avoiding circular import)
-export interface RouteConfig {
-  path: string;
-  component: string;
-  intent: string;
-  breadcrumb: string;
-  tab: string;
-}
 
-export interface RoutesResponse {
-  routes: RouteConfig[];
-}
-
-// Legacy support - for compatibility during transition
-export interface AppRoutes {
-  [path: string]: Omit<RouteConfig, 'path'>;
-}
 
 // Intent-Based Navigation Types
 export interface NavigationTarget {
