@@ -1,10 +1,9 @@
 import React from 'react';
 import { Breadcrumbs, Anchor, Text } from '@mantine/core';
 import { useNavigate, useLocation } from 'react-router-dom';
-import type { AppRoutes } from '../types';
 
 interface BreadcrumbProps {
-  appRoutes: AppRoutes;
+  getRouteByPath: (path: string) => { breadcrumb: string; path: string } | undefined;
   className?: string;
 }
 
@@ -14,14 +13,14 @@ interface BreadcrumbItem {
   isCurrentPage: boolean;
 }
 
-export const Breadcrumb: React.FC<BreadcrumbProps> = ({ appRoutes, className }) => {
+export const Breadcrumb: React.FC<BreadcrumbProps> = ({ getRouteByPath, className }) => {
   const navigate = useNavigate();
   const location = useLocation();
   
   /**
-   * Generate breadcrumb items from current pathname using route hierarchy
+   * Generate breadcrumb items from current pathname using route lookup function
    */
-  const generateBreadcrumbs = (pathname: string, appRoutes: AppRoutes): BreadcrumbItem[] => {
+  const generateBreadcrumbs = (pathname: string): BreadcrumbItem[] => {
     const breadcrumbs: BreadcrumbItem[] = [];
   
     // Build breadcrumb path from route hierarchy
@@ -30,7 +29,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ appRoutes, className }) 
     
     for (let i = 0; i < pathSegments.length; i++) {
       currentPath += '/' + pathSegments[i];
-      const route = appRoutes[currentPath];
+      const route = getRouteByPath(currentPath);
       
       if (route) {
         breadcrumbs.push({
@@ -61,7 +60,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ appRoutes, className }) 
     return breadcrumbs;
   };
   
-  const breadcrumbs = generateBreadcrumbs(location.pathname, appRoutes);
+  const breadcrumbs = generateBreadcrumbs(location.pathname);
   
   // Don't show breadcrumbs on root path unless there are child routes
   if (breadcrumbs.length <= 1 && location.pathname === '/') {

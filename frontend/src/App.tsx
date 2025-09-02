@@ -25,8 +25,13 @@ import { Breadcrumb } from './components/Breadcrumb';
 import { NavigationAssistant } from './components/NavigationAssistant';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
-import { fetchAppRoutes, createDerivedMappings } from './services/routes';
-import { navigationService } from './services/navigation-router';
+import { createDerivedMappings } from './services/routes';
+import { 
+  buildNavigationGroups,
+  getRouteByPath,
+  processIntentNavigation,
+  generateLegacyRoutes 
+} from './services/route-service';
 import type { IntentNavigationResult } from './types';
 
 export const MainApp: React.FC = () => {
@@ -39,11 +44,14 @@ export const MainApp: React.FC = () => {
   const [dynamicForm, setDynamicForm] = useState<DynamicFormConfig | null>(null);
   const [showNavigationAssistant, setShowNavigationAssistant] = useState<boolean>(false);
   
-  // API-driven routes state
+  // API-driven routes state (legacy support)
   const [appRoutes, setAppRoutes] = useState<AppRoutes | null>(null);
   const [routesLoading, setRoutesLoading] = useState(true);
   const [routesError, setRoutesError] = useState<string | null>(null);
   const [routeMappings, setRouteMappings] = useState<ReturnType<typeof createDerivedMappings> | null>(null);
+  
+  // Navigation groups for header
+  const [navigationGroups, setNavigationGroups] = useState(buildNavigationGroups());
 
   // Derive active tab from URL using API-loaded routes
   const activeTab = routeMappings?.getTabForRoute(location.pathname) || 'banking';
@@ -129,63 +137,35 @@ export const MainApp: React.FC = () => {
   };
 
   /**
-   * Handle intent-based navigation using the new navigation service
-   * This implements the Universal Schema Approach separation of concerns
+   * Handle intent-based navigation using the navigation orchestrator
+   * Clean component logic that delegates to services
    */
   const handleIntentBasedNavigation = (
     intentId: string, 
-    entities: Record<string, any> = {},
+    entities: Record<string, unknown> = {},
     uiContext: string = 'banking'
   ): IntentNavigationResult => {
-    try {
-      // Use the navigation service to determine where to go
-      const target = navigationService.processNavigationRequest(intentId, entities, uiContext);
+    // Use simple route service instead of complex orchestrator
+    const result = processIntentNavigation(intentId, entities, uiContext);
+
+    // Handle UI feedback (stays in component)
+    if (result.success && result.route) {
+      navigate(result.route);
       
-      if (!target) {
-        return {
-          success: false,
-          error: `Navigation not supported for intent: ${intentId} in context: ${uiContext}`,
-        };
-      }
-
-      // Validate route before navigation
-      if (!routeMappings?.isValidRoute(target.route)) {
-        // If the exact route doesn't exist, try to find the closest parent route
-        const parentRoute = target.route.split('/').slice(0, -1).join('/') || '/';
-        if (routeMappings?.isValidRoute(parentRoute)) {
-          target.route = parentRoute;
-        } else {
-          return {
-            success: false,
-            error: `Route not found: ${target.route}`,
-            target,
-          };
-        }
-      }
-
-      // Perform navigation
-      navigate(target.route);
-
-      // Show success notification
       notifications.show({
         title: 'Navigation',
-        message: `Opened ${target.title}`,
+        message: `Opened ${result.target?.title}`,
         color: 'blue',
       });
-
-      return {
-        success: true,
-        target,
-        route: target.route,
-      };
-
-    } catch (error) {
-      console.error('Intent-based navigation error:', error);
-      return {
-        success: false,
-        error: `Navigation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      };
+    } else {
+      notifications.show({
+        title: 'Navigation Error',
+        message: result.error || 'Unable to navigate',
+        color: 'red',
+      });
     }
+
+    return result;
   };
 
   const handleUIAssistance = (uiAssistance: UIAssistance) => {
@@ -245,14 +225,13 @@ export const MainApp: React.FC = () => {
     // Determine which navigation approach to use based on context and intent
     const shouldUseIntentBasedNavigation = 
       activeTab === 'banking' && 
-      data.intent && 
-      navigationService.supportsNavigation(data.intent, activeTab);
+      data.intent;
 
     if (shouldUseIntentBasedNavigation) {
       // Use new intent-based navigation (Universal Schema Approach)
       const navigationResult = handleIntentBasedNavigation(
         data.intent!,
-        data.entities as Record<string, any> || {},
+        data.entities as Record<string, unknown> || {},
         activeTab
       );
 
@@ -463,7 +442,7 @@ export const MainApp: React.FC = () => {
       <Container size="md" py="xl">
         <div style={{ marginBottom: 'var(--mantine-spacing-md)' }}>
           <Breadcrumb 
-            appRoutes={appRoutes!}
+            getRouteByPath={getRouteByPath}
           />
         </div>
         {children}
@@ -538,17 +517,19 @@ export const MainApp: React.FC = () => {
     }
   };
 
-  // Load routes from API
-  const loadRoutes = async () => {
+  // Load routes using clean route service
+  const loadRoutes = () => {
     try {
       setRoutesLoading(true);
       setRoutesError(null);
       
-      const routes = await fetchAppRoutes();
-      const mappings = createDerivedMappings(routes);
+      // Generate legacy route mappings for backward compatibility
+      const legacyRoutes = generateLegacyRoutes();
+      const mappings = createDerivedMappings(legacyRoutes);
       
-      setAppRoutes(routes);
+      setAppRoutes(legacyRoutes);
       setRouteMappings(mappings);
+      setNavigationGroups(buildNavigationGroups());
       
     } catch (error) {
       const errorMessage = 'Failed to load application routes';
@@ -558,6 +539,18 @@ export const MainApp: React.FC = () => {
       setRoutesLoading(false);
     }
   };
+
+
+
+  // Handle root redirect
+  useEffect(() => {
+    if (location.pathname === '/') {
+      const rootRoute = getRouteByPath('/');
+      if (rootRoute?.redirectTo) {
+        navigate(rootRoute.redirectTo, { replace: true });
+      }
+    }
+  }, [location.pathname, navigate]);
 
   // Load routes on app startup
   useEffect(() => {
@@ -624,7 +617,7 @@ export const MainApp: React.FC = () => {
           header={{ height: 56 }}
           padding="md"
         >
-          <Header isConnected={isConnected} appRoutes={appRoutes} />
+          <Header isConnected={isConnected} navigationGroups={navigationGroups} />
 
           <AppShell.Main>
             <Container size="xl">
