@@ -27,7 +27,7 @@ vi.mock('@mantine/form', () => ({
 
 // Mock @mantine/core components with clean behavior-focused mocks
 vi.mock('@mantine/core', () => ({
-  Card: vi.fn(({ children, shadow, padding, radius, withBorder, style, ...props }) => (
+  Card: vi.fn(({ children, style, ...props }) => (
     <div data-testid="card" style={style} {...props}>
       {children}
     </div>
@@ -37,7 +37,7 @@ vi.mock('@mantine/core', () => ({
       {children}
     </span>
   )),
-  Button: vi.fn(({ children, onClick, disabled, type, size, variant, ...props }) => {
+  Button: vi.fn(({ children, onClick, disabled, type, ...props }) => {
     // Filter out Mantine-specific props that shouldn't be on DOM elements
     const { ...domProps } = props;
     return (
@@ -62,14 +62,14 @@ vi.mock('@mantine/core', () => ({
       {children}
     </div>
   )),
-  TextInput: vi.fn(({ size, ...props }) => (
+  TextInput: vi.fn(({ ...props }) => (
     <input
       data-testid="text-input"
       type="text"
       {...props}
     />
   )),
-  ActionIcon: vi.fn(({ children, onClick, size, radius, variant, color, title, ...props }) => (
+  ActionIcon: vi.fn(({ children, onClick, title, ...props }) => (
     <button
       data-testid="action-icon"
       onClick={onClick}
@@ -199,9 +199,9 @@ describe('NavigationAssistant', () => {
     it('handleFormSubmit() - should process valid message submission', async () => {
       // ARRANGE
       const props = { ...defaultProps, isVisible: true };
-      mockForm.onSubmit.mockImplementation((handler) => (e: any) => {
+      mockForm.onSubmit.mockImplementation((_handler) => (e: Event) => {
         e?.preventDefault();
-        handler({ message: 'Test message' });
+        _handler({ message: 'Test message' });
       });
       
       // ACT
@@ -227,7 +227,7 @@ describe('NavigationAssistant', () => {
       const testMessage = 'Take me to international transfers';
       
       // Mock the form submission to simulate the actual behavior
-      mockForm.onSubmit.mockImplementation((handler) => (e) => {
+      mockForm.onSubmit.mockImplementation(() => (e) => {
         e?.preventDefault();
         // Simulate the actual component logic
         const userMessage = testMessage.trim();
@@ -293,7 +293,7 @@ describe('NavigationAssistant', () => {
       const props = { ...defaultProps, isVisible: true };
       const testMessage = 'Show me account overview';
       
-      mockForm.onSubmit.mockImplementation((handler) => (e) => {
+      mockForm.onSubmit.mockImplementation(() => (e) => {
         e?.preventDefault();
         const userMessage = testMessage.trim();
         if (userMessage) {

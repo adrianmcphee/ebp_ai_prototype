@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { NavigationGroup, NavigationTarget, StaticRouteDefinition, IntentRouteDefinition } from '../types';
+// Types are imported but not used in tests since we're testing the service functions directly
 
 // Mock the config modules with inline data
 vi.mock('../config/static-routes.config', () => ({
@@ -148,7 +148,7 @@ describe('Route Service', () => {
       });
       
       // All paths should be unique (no duplicates)
-      const duplicatePaths = Array.from(pathCounts.entries()).filter(([_, count]) => count > 1);
+      const duplicatePaths = Array.from(pathCounts.entries()).filter(([, count]) => count > 1);
       expect(duplicatePaths).toHaveLength(0);
     });
   });
@@ -660,7 +660,7 @@ describe('Route Service', () => {
       const routePattern = '/banking/accounts/:accountId';
 
       // ACT & ASSERT
-      expect(routeService.resolveDynamicRoute(routePattern, null as any)).toBe(routePattern);
+      expect(routeService.resolveDynamicRoute(routePattern, null as Record<string, unknown> | null)).toBe(routePattern);
       expect(routeService.resolveDynamicRoute(routePattern, undefined)).toBe(routePattern);
     });
 
@@ -669,7 +669,7 @@ describe('Route Service', () => {
       const baseTitle = 'Account Details';
 
       // ACT & ASSERT
-      expect(routeService.resolveDynamicTitle(baseTitle, null as any)).toBe(baseTitle);
+      expect(routeService.resolveDynamicTitle(baseTitle, null as Record<string, unknown> | null)).toBe(baseTitle);
       expect(routeService.resolveDynamicTitle(baseTitle, undefined)).toBe(baseTitle);
     });
 
@@ -678,10 +678,10 @@ describe('Route Service', () => {
       const intentId = 'accounts.balance.check';
 
       // ACT & ASSERT
-      expect(() => routeService.mapIntentToNavigation(intentId, null as any)).not.toThrow();
+      expect(() => routeService.mapIntentToNavigation(intentId, null as Record<string, unknown> | null)).not.toThrow();
       expect(() => routeService.mapIntentToNavigation(intentId, undefined)).not.toThrow();
       
-      const result1 = routeService.mapIntentToNavigation(intentId, null as any);
+      const result1 = routeService.mapIntentToNavigation(intentId, null as Record<string, unknown> | null);
       const result2 = routeService.mapIntentToNavigation(intentId, undefined);
       
       expect(result1).toBeDefined();
@@ -694,8 +694,8 @@ describe('Route Service', () => {
       const uiContext = 'banking';
 
       // ACT & ASSERT
-      expect(() => routeService.processIntentNavigation(intentId, null as any, uiContext)).not.toThrow();
-      expect(() => routeService.processIntentNavigation(intentId, undefined as any, uiContext)).not.toThrow();
+      expect(() => routeService.processIntentNavigation(intentId, null as Record<string, unknown> | null, uiContext)).not.toThrow();
+      expect(() => routeService.processIntentNavigation(intentId, undefined as Record<string, unknown> | undefined, uiContext)).not.toThrow();
     });
   });
 });
