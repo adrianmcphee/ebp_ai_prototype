@@ -63,6 +63,10 @@ class HealthResponse(BaseModel):
     services: dict[str, str]
 
 
+class RecipientsResponse(BaseModel):
+    recipients: list[dict[str, Any]]
+    count: int
+
 
 
 
@@ -385,14 +389,33 @@ async def get_account_transactions(account_id: str, limit: int = 10, offset: int
     }
 
 
-@app.get("/api/recipients/search")
-async def search_recipients(query: str):
-    """Search for recipients"""
-    if not query or len(query) < 2:
-        raise HTTPException(400, "Query too short")
+@app.get("/api/recipients", response_model=RecipientsResponse)
+async def get_all_recipients():
+    """Get all recipients"""
+    if not banking_service:
+        raise HTTPException(500, "Banking service unavailable")
+    
+    try:
+        recipients = await banking_service.get_all_recipients()
+        return RecipientsResponse(recipients=recipients, count=len(recipients))
+    except Exception as e:
+        raise HTTPException(500, f"Failed to retrieve recipients: {str(e)}")
 
-    recipients = await banking_service.search_recipients(query)
-    return {"recipients": recipients}
+
+@app.get("/api/recipients/search", response_model=RecipientsResponse)
+async def search_recipients(query: str):
+    """Search for recipients by name or alias"""
+    if not query or len(query) < 2:
+        raise HTTPException(400, "Query must be at least 2 characters long")
+    
+    if not banking_service:
+        raise HTTPException(500, "Banking service unavailable")
+    
+    try:
+        recipients = await banking_service.search_recipients(query)
+        return RecipientsResponse(recipients=recipients, count=len(recipients))
+    except Exception as e:
+        raise HTTPException(500, f"Failed to search recipients: {str(e)}")
 
 
 @app.post("/api/transfer/validate")

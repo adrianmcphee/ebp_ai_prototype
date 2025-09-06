@@ -23,9 +23,35 @@ class Recipient:
     name: str
     account_number: str
     bank_name: str = "Mock Bank"
+    alias: Optional[str] = None
+    bank_country: str = "US"
+    routing_number: Optional[str] = None
+    swift_code: Optional[str] = None
+    bank_address: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+    
+    def is_international(self) -> bool:
+        """Check if recipient is in a different country from US (assumed home country)."""
+        return self.bank_country != "US"
+    
+    def transfer_type(self, home_bank: str = "Mock Bank") -> str:
+        """Determine transfer type based on banking metadata.
+        
+        Args:
+            home_bank: Name of the user's home bank for internal transfer detection
+            
+        Returns:
+            "internal" if same bank, "domestic" if same country different bank,
+            "international" if different country
+        """
+        if self.bank_name == home_bank:
+            return "internal"
+        elif self.bank_country == "US":
+            return "domestic"
+        else:
+            return "international"
 
 
 @dataclass
@@ -59,11 +85,112 @@ class MockBankingService:
         }
 
         self.recipients = [
-            Recipient(id="RCP001", name="John Smith", account_number="1234567890"),
-            Recipient(id="RCP002", name="John Doe", account_number="0987654321"),
-            Recipient(id="RCP003", name="Sarah Johnson", account_number="5555555555"),
-            Recipient(id="RCP004", name="Alice Brown", account_number="1111111111"),
-            Recipient(id="RCP005", name="Bob Wilson", account_number="2222222222"),
+            # US Internal recipients (same bank - Mock Bank)
+            Recipient(
+                id="RCP001", 
+                name="John Smith", 
+                account_number="4532891067834521",
+                bank_name="Mock Bank",
+                bank_country="US",
+                routing_number="123456789",
+                alias="Johnny"
+            ),
+            Recipient(
+                id="RCP002", 
+                name="John Doe", 
+                account_number="4532891067834522",
+                bank_name="Mock Bank",
+                bank_country="US", 
+                routing_number="123456789",
+                alias="John"
+            ),
+            Recipient(
+                id="RCP003",
+                name="Amy Winehouse", 
+                account_number="4532891067834523",
+                bank_name="Mock Bank",
+                bank_country="US",
+                routing_number="123456789",
+                alias="my mum"
+            ),
+            
+            # US Domestic recipients (different US banks)
+            Recipient(
+                id="RCP004",
+                name="Sarah Johnson", 
+                account_number="1234567890123",
+                bank_name="Wells Fargo Bank",
+                bank_country="US",
+                routing_number="121000248",
+                alias="Sarah"
+            ),
+            Recipient(
+                id="RCP005",
+                name="Michael Davis",
+                account_number="9876543210987", 
+                bank_name="Chase Bank",
+                bank_country="US",
+                routing_number="021000021",
+                alias="Mike"
+            ),
+            Recipient(
+                id="RCP006",
+                name="Alice Brown",
+                account_number="5555666677778888",
+                bank_name="Bank of America", 
+                bank_country="US",
+                routing_number="026009593",
+                alias="Alice"
+            ),
+            
+            # International recipients
+            
+            # Canada
+            Recipient(
+                id="RCP007", 
+                name="Jack White", 
+                account_number="123456789",
+                bank_name="Royal Bank of Canada",
+                bank_country="CA", 
+                swift_code="ROYCCAT2",
+                bank_address="200 Bay Street, Toronto, ON M5J 2J5, Canada",
+                alias="Jack"
+            ),
+            
+            # EU - Germany
+            Recipient(
+                id="RCP008",
+                name="Hans Mueller",
+                account_number="DE89370400440532013000",
+                bank_name="Deutsche Bank AG",
+                bank_country="DE",
+                swift_code="DEUTDEFF",
+                bank_address="Taunusanlage 12, 60325 Frankfurt am Main, Germany",
+                alias="Hans"
+            ),
+            
+            # EU - France
+            Recipient(
+                id="RCP009",
+                name="Marie Dubois",
+                account_number="FR1420041010050500013M02606",
+                bank_name="BNP Paribas",
+                bank_country="FR", 
+                swift_code="BNPAFRPP",
+                bank_address="16 Boulevard des Italiens, 75009 Paris, France",
+                alias="Marie"
+            ),
+            
+            # EU - Netherlands  
+            Recipient(
+                id="RCP010",
+                name="Erik van der Berg",
+                account_number="NL91ABNA0417164300",
+                bank_name="ABN AMRO Bank",
+                bank_country="NL",
+                swift_code="ABNANL2A", 
+                bank_address="Gustav Mahlerlaan 10, 1082 PP Amsterdam, Netherlands"
+            ),
         ]
 
         self._generate_transaction_history()
@@ -126,11 +253,17 @@ class MockBankingService:
         await asyncio.sleep(0.3)
         return [acc.to_dict() for acc in self.accounts.values()]
 
+    async def get_all_recipients(self) -> list[dict[str, Any]]:
+        """Get all recipients"""
+        await asyncio.sleep(0.1)
+        return [r.to_dict() for r in self.recipients]
+
     async def search_recipients(self, query: str) -> list[dict[str, Any]]:
         await asyncio.sleep(0.2)
         query_lower = query.lower()
         matching = [
-            r.to_dict() for r in self.recipients if query_lower in r.name.lower()
+            r.to_dict() for r in self.recipients 
+            if query_lower in r.name.lower() or (r.alias and query_lower in r.alias.lower())
         ]
         return matching
 
