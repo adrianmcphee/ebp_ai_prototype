@@ -54,378 +54,190 @@ The system must automatically determine the appropriate transfer type based on r
 
 # What is missing in the system?
 
-## Data Model Gaps
+## Actual System Gaps (Verified via Code Analysis)
 
-**Enhanced Recipient Model:** ✅ PARTIALLY COMPLETE
-- Current `Recipient` class HAS the required banking metadata fields
-- Fields present: `alias`, `bank_country`, `routing_number`, `swift_code`, `bank_address`
-- ⚠️ BUG: `transfer_type()` method incorrectly classifies same-bank transfers as "domestic"
+**Recipient Resolution Integration:** ❌ MISSING
+- No `RecipientResolutionStrategy` in entity enrichment system
+- Validator finds recipients but doesn't resolve to specific recipient ID
+- No integration between validation and enrichment phases
+- Transfer intents missing `enrichment_requirements=["recipient_resolution"]`
 
-**Test Data Gaps:** ✅ MOSTLY COMPLETE
-- "Jack White" (international recipient) EXISTS with alias "Jack" 
-- "Amy Winehouse" (internal recipient) EXISTS with alias "my mum"
-- Test recipients include different banks (Wells Fargo, Chase, Royal Bank of Canada, etc.)
+**Transfer Type Detection After Resolution:** ❌ MISSING  
+- No strategy to determine transfer type after recipient is resolved
+- `transfer_type()` method exists but not integrated into enrichment pipeline
+- No connection between resolved recipient bank and transfer type classification
 
-## Business Logic Gaps
+**Intent Refinement Based on Enrichment:** ❌ MISSING
+- No mechanism to suggest better intent after recipient resolution
+- Generic intents (`payments.transfer.external`) never upgraded to specific ones (`international.wire.send`)
+- No confidence comparison between original and refined intents
 
-**Recipient Resolution Strategy:**
-- No strategy to resolve aliases ("Jack", "my mum") to full recipient records
-- System has extensible enrichment architecture but lacks recipient-specific strategy
-- `MockBankingService.search_recipients()` only searches by name, NOT by alias
-- No confidence scoring for recipient matches
+**Enhanced Disambiguation Response:** ⚠️ PARTIALLY COMPLETE
+- Disambiguation works via `validation["disambiguations"]`
+- StateManager tracks disambiguation context correctly
+- Missing only: `ResponseType.DISAMBIGUATION_NEEDED` enum value
 
-**Transfer Type Detection Logic:** ⚠️ PARTIALLY COMPLETE
-- Logic EXISTS in `Recipient.transfer_type()` but has critical bug
-- Bug: All US banks classified as "domestic" even when same bank (should be "internal")
-- Missing integration with user profile to determine "home bank" automatically
-- No connection between recipient resolution and transfer type detection
+**User Context Integration:** ⚠️ PARTIALLY COMPLETE
+- Pipeline accepts `user_profile` parameter but doesn't use it for transfer type detection
+- `transfer_type()` method requires explicit "home_bank" parameter  
+- No automatic user profile integration in enrichment strategies
 
-**Post-Enrichment Intent Refinement:**
-- No mechanism to upgrade generic transfer intents to specific ones after enrichment
-- Transfer intents missing `enrichment_requirements=["recipient_resolution"]` configuration
-- Current confidence system exists but not leveraged for intent refinement
-- Missing feedback loop between entity enrichment and intent classification
+# Revised Implementation Plan (Architecture-Focused)
 
-## Integration Gaps
+## Phase 1: Foundation Setup (Day 1 - 2 hours)
 
-**Clarification System Extension:** ✅ MOSTLY COMPLETE
-- Current system DOES handle disambiguation via `validation["disambiguations"]`
-- StateManager has robust clarification request/response mechanism
-- ⚠️ Missing: Standardized ResponseType.DISAMBIGUATION_NEEDED enum value
-- Disambiguation returns recipient list but needs better presentation format
+**1.1 Add Missing Enum Value**
+- Add `DISAMBIGUATION_NEEDED = "disambiguation_needed"` to `ResponseType` enum in `context_aware_responses.py`
+- Effort: 5 minutes
 
-**User Context Integration:**
-- No user profile integration to determine "home bank" for internal transfer detection
-- Missing relationship context for alias resolution ("my mum" → specific person)
-- `transfer_type()` requires manual "home_bank" parameter instead of auto-detection
-
-**Additional Missing Components:**
-- No mechanism to compare pre/post enrichment confidence levels
-- Missing confidence-based refinement thresholds configuration
-- Intent refinement violates Single Responsibility Principle if added to pipeline
-
-# Implementation Plan
-
-## Phase 1: Bug Fixes & Core Improvements (Priority: CRITICAL, Effort: LOW)
-
-**1.1 Fix Transfer Type Logic Bug**
-- Fix `Recipient.transfer_type()` method in `mock_banking.py`:
+**1.2 Add Enrichment Requirements to Transfer Intents**
+- Update `intent_catalog.py` transfer intents to include:
   ```python
-  if self.bank_name == home_bank:
-      return "internal"
-  elif self.bank_country == "US" and self.bank_name != home_bank:
-      return "domestic"
-  else:
-      return "international"
+  enrichment_requirements=["recipient_resolution", "transfer_type_detection"]
   ```
+- Apply to: `payments.transfer.internal`, `payments.transfer.external`, `international.wire.send`
+- Effort: 15 minutes
 
-**1.2 Add Enrichment Requirements to Intents**
-- Update `intent_catalog.py` transfer intents:
-  - `payments.transfer.internal`: Add `enrichment_requirements=["recipient_resolution"]`
-  - `payments.transfer.external`: Add `enrichment_requirements=["recipient_resolution"]`
-  - `international.wire.send`: Add `enrichment_requirements=["recipient_resolution"]`
+## Phase 2: Recipient Resolution Strategy (Day 1-2 - 4 hours)
 
-**1.3 Enhance Recipient Resolution with LLM**
-- Update RecipientResolutionStrategy to leverage LLM for typo handling:
+**2.1 Create RecipientResolutionStrategy** 
+- Create focused strategy following Single Responsibility Principle:
   ```python
   class RecipientResolutionStrategy(EnrichmentStrategy):
-      def __init__(self, banking_service, llm_client):
+      def __init__(self, banking_service):
           self.banking = banking_service
-          self.llm = llm_client
       
-      async def enrich(self, entities: Dict[str, Any]) -> Dict[str, Any]:
-          """Use LLM to handle typos and resolve recipients"""
-          if "recipient" not in entities:
-              return entities
-          
-          recipient_query = self._extract_entity_value(entities["recipient"])
-          
-          # Get all recipients for LLM to consider
-          all_recipients = await self.banking.get_all_recipients()
-          
-          # Let LLM handle typo resolution and matching
-          prompt = f'''Find the best matching recipient for "{recipient_query}".
-          Consider typos, common misspellings, and aliases.
-          
-          Available recipients:
-          {json.dumps([{"name": r["name"], "alias": r.get("alias"), "bank": r["bank_name"]} for r in all_recipients], indent=2)}
-          
-          Return JSON with:
-          {{
-              "best_match_id": "recipient_id or null",
-              "confidence": 0.0-1.0,
-              "reason": "why this match",
-              "alternatives": ["other possible matches"]
-          }}'''
-          
-          result = await self.llm.complete(prompt, response_format={"type": "json_object"})
-          # Process LLM result to enrich entities
-          return enriched_entities
-  ```
-
-**1.4 Add Explicit Intent Detection**
-- Add to RecipientResolutionStrategy:
-  ```python
-  def detect_explicit_intent(self, query: str) -> Optional[str]:
-      """Detect if user explicitly specified transfer type"""
-      explicit_patterns = {
-          "international": ["international", "wire", "swift"],
-          "internal": ["internal", "between my accounts"],
-          "external": ["external", "ach", "domestic"]
-      }
-      query_lower = query.lower()
-      for intent_type, keywords in explicit_patterns.items():
-          if any(keyword in query_lower for keyword in keywords):
-              return intent_type
-      return None
-  ```
-
-## Phase 2: Enhanced Recipient Resolution (Priority: HIGH, Effort: LOW with LLM)
-
-**2.1 LLM-Powered RecipientResolutionStrategy**
-- Leverage existing LLM client for intelligent matching:
-  ```python
-  class RecipientResolutionStrategy(EnrichmentStrategy):
-      """Let LLM handle all the complexity of matching, typos, and confidence"""
+      def get_strategy_name(self) -> str:
+          return "recipient_resolution"
       
-      async def resolve_recipient(self, query: str, recipients: List[dict]) -> dict:
-          """Use LLM's natural understanding for recipient matching"""
-          
-          # If no recipients, quick return
-          if not recipients:
-              return {"matched": None, "confidence": 0.0}
-          
-          # For single exact match, skip LLM
-          if len(recipients) == 1 and recipients[0]["name"].lower() == query.lower():
-              return {"matched": recipients[0], "confidence": 0.99}
-          
-          # Let LLM handle everything else
-          prompt = f'''Match "{query}" to the correct recipient.
-          Consider: exact matches, aliases, typos (like Jonh→John), nicknames.
-          
-          Recipients: {json.dumps(recipients, indent=2)}
-          
-          Return: {{"recipient_id": "...", "confidence": 0.0-1.0, "alternatives": []}}'''
-          
-          return await self.llm.complete(prompt, response_format={"type": "json_object"})
-  ```
-
-**2.2 Store Disambiguation Choices**
-- Add to StateManager:
-  ```python
-  async def record_recipient_choice(self, session_id: str, query: str, chosen_id: str, options: List[str]):
-      """Record user's disambiguation choice for learning"""
-      context = await self.get_context(session_id)
-      if "recipient_choices" not in context:
-          context["recipient_choices"] = {}
+      def can_enrich(self, entities: Dict[str, Any]) -> bool:
+          return "recipient" in entities and not entities.get("recipient_id")
       
-      context["recipient_choices"][query.lower()] = {
-          "chosen": chosen_id,
-          "rejected": [opt for opt in options if opt != chosen_id],
-          "timestamp": datetime.now().isoformat()
-      }
-      await self._save_context(session_id, context)
+      def enrich(self, entities: Dict[str, Any]) -> Dict[str, Any]:
+          """Resolve recipient name/alias to recipient_id"""
+          # Use existing search_recipients method
+          # Add recipient_id to entities if single match
+          # Return alternatives if multiple matches
+          pass
   ```
+- Location: Add to `entity_enricher.py` 
+- Effort: 2 hours
 
-**2.3 Enhanced Disambiguation Display**
-- Include meaningful information:
+## Phase 3: Transfer Type Detection Strategy (Day 2-3 - 3 hours)
+
+**3.1 Create TransferTypeDetectionStrategy**
+- Create strategy that uses resolved recipient data:
   ```python
-  def format_recipient_option(self, recipient: Recipient) -> str:
-      """Format recipient for disambiguation display"""
-      display = f"{recipient.name}"
-      if recipient.bank_name != "Mock Bank":
-          display += f" ({recipient.bank_name})"
-      if recipient.account_number:
-          display += f" - ****{recipient.account_number[-4:]}"
-      return display
+  class TransferTypeDetectionStrategy(EnrichmentStrategy):
+      def get_strategy_name(self) -> str:
+          return "transfer_type_detection"
+      
+      def can_enrich(self, entities: Dict[str, Any]) -> bool:
+          return "recipient_id" in entities and not entities.get("transfer_type")
+      
+      def enrich(self, entities: Dict[str, Any]) -> Dict[str, Any]:
+          """Detect transfer type based on resolved recipient"""
+          # Get recipient by ID
+          # Use existing transfer_type() method
+          # Add transfer_type to entities
+          pass
   ```
+- Effort: 2 hours
 
-## Phase 3: Safe Intent Refinement (Priority: HIGH, Effort: MEDIUM)
+## Phase 4: Intent Refinement (Day 3-4 - 3 hours)
 
-**3.1 IntentRefinementStrategy with Guardrails**
-- Create new enrichment strategy with explicit intent protection:
+**4.1 Create Simple Intent Refinement Strategy**
+- Add strategy that suggests better intent after enrichment:
   ```python
   class IntentRefinementStrategy(EnrichmentStrategy):
-      def should_refine(self, original_query: str, original_confidence: float) -> bool:
-          """Never override explicit user intent"""
-          # Check for explicit keywords
-          explicit_keywords = ["international", "wire", "swift", "ach", "internal", "external"]
-          if any(keyword in original_query.lower() for keyword in explicit_keywords):
-              return False  # User was explicit, don't refine
-          
-          # Only refine medium-confidence intents
-          return 0.60 <= original_confidence <= 0.85
+      def get_strategy_name(self) -> str:
+          return "intent_refinement"
       
-      def refine_intent(self, original_intent: str, transfer_type: str, original_confidence: float) -> dict:
-          """Suggest refinement with alternatives"""
+      def can_enrich(self, entities: Dict[str, Any]) -> bool:
+          return "transfer_type" in entities
+      
+      def enrich(self, entities: Dict[str, Any]) -> Dict[str, Any]:
+          """Suggest intent refinement based on transfer type"""
+          # Simple mapping rules
           refinement_map = {
               ("payments.transfer.external", "international"): "international.wire.send",
               ("payments.transfer.external", "internal"): "payments.transfer.internal",
           }
           
-          new_intent = refinement_map.get((original_intent, transfer_type), original_intent)
-          
-          return {
-              "intent": new_intent,
-              "confidence": min(original_confidence + 0.10, 0.90),  # Slight boost
-              "refined": new_intent != original_intent,
-              "reason": f"Based on {transfer_type} transfer type",
-              "requires_confirmation": True  # Always confirm refinements
-          }
+          # Add suggested_intent field without changing original
+          # Include confidence boost and reasoning
+          pass
   ```
+- Key Principle: **NEVER override explicit user keywords**
+- Effort: 2 hours
 
-**3.2 User Confirmation for Refinements**
-- Add to pipeline response:
-  ```python
-  if result.get("refined"):
-      response["refinement_suggested"] = {
-          "original": original_intent,
-          "suggested": result["intent"],
-          "reason": result["reason"],
-          "message": f"I think you want to do a {transfer_type} transfer. Is that correct?"
-      }
-  ```
+## Phase 5: Testing & Integration (Day 4-5 - 4 hours)
 
-## Phase 4: Enhanced Clarification (Priority: MEDIUM, Effort: LOW)
+**5.1 Core Test Scenarios**
+```python
+test_scenarios = [
+    {
+        "query": "Transfer $100 to Jack",
+        "expected_enrichment": {
+            "recipient_id": "RCP007",
+            "transfer_type": "international", 
+            "suggested_intent": "international.wire.send"
+        }
+    },
+    {
+        "query": "Send $50 to my mum", 
+        "expected_enrichment": {
+            "recipient_id": "RCP003",
+            "transfer_type": "internal",
+            "suggested_intent": None  # Already correct
+        }
+    }
+]
+```
+- Effort: 3 hours
 
-**4.1 Leverage Existing System**
-- Current validator already returns `disambiguations`
-- StateManager has clarification request/response flow
-- Just need to enhance presentation:
-  - Include bank name and last 4 digits of account
-  - Show maximum 5 options (highest confidence)
-  - Add "None of these" option
+## Implementation Timeline
 
-**4.2 Response Type Enhancement**
-- Add `DISAMBIGUATION_NEEDED` to ResponseType enum
-- Standardize disambiguation response format
-- Ensure consistent handling across UI contexts
+| Day | Phase | Tasks | Effort |
+|-----|-------|-------|--------|
+| 1 | Setup + Recipient Resolution | Add enum + enrichment requirements + RecipientResolutionStrategy | 6 hours |
+| 2 | Transfer Detection | TransferTypeDetectionStrategy + integration | 4 hours |
+| 3 | Intent Refinement | IntentRefinementStrategy + pipeline updates | 4 hours |
+| 4-5 | Testing | Core scenarios + integration tests | 4 hours |
 
-## Phase 5: Integration & Testing (Priority: HIGH, Effort: MEDIUM)
+**Total Implementation Time: 18 hours (2.5 days)**
 
-**5.1 End-to-End Testing**
-- Create comprehensive test scenarios:
-  - "Transfer $100 to Jack" → International wire
-  - "Send $50 to my mum" → Internal transfer
-  - "Send $100 to Jonh" → Fuzzy match to "John"
-  - "Wire money to Jack" → Explicit intent respected
-- Test disambiguation flows with multiple matches
-- Validate that explicit intents are never overridden
-- Test edge cases (no matches, low confidence, typos)
+## Key Architecture Principles
 
-**5.2 User Profile Integration**
-- Add mock user profile with `home_bank` = "Mock Bank"
-- Pass user profile through pipeline for transfer type detection
-- Update API to include user context in requests
-
-**5.3 API Response Enhancements**
-- Include match type and confidence in disambiguation options
-- Add refinement suggestions as optional, not automatic
-- Include clear audit trail of all decisions
-
-## Phase 6: Advanced Features (Priority: LOW, Effort: HIGH) - FOLLOW-UP
-
-**6.1 Learning System**
-- Track recipient choices per user over time:
-  ```python
-  class RecipientLearningSystem:
-      def get_historical_boost(self, user_id: str, query: str, recipient_id: str) -> float:
-          """Boost confidence based on historical choices"""
-          choices = self.get_user_choices(user_id, query)
-          if recipient_id in choices.get("previously_chosen", []):
-              days_ago = (datetime.now() - choices["last_chosen"]).days
-              recency_factor = max(0, 1 - (days_ago / 30))  # Decay over 30 days
-              return 0.15 * recency_factor
-          return 0.0
-  ```
-
-**6.2 User-Specific Aliases**
-- Separate user aliases from global recipient data:
-  ```python
-  class UserAliasService:
-      async def get_user_aliases(self, user_id: str) -> Dict[str, str]:
-          """Get aliases specific to this user"""
-          # "my mum" → recipient_id mapping is per-user
-          return await self.db.get_user_aliases(user_id)
-      
-      async def set_user_alias(self, user_id: str, alias: str, recipient_id: str):
-          """Allow users to set their own aliases"""
-          await self.db.set_user_alias(user_id, alias.lower(), recipient_id)
-  ```
-
-**6.3 Enhanced LLM Prompts for Better Matching**
-- Improve LLM prompts to handle edge cases:
-  ```python
-  def create_advanced_matching_prompt(self, query: str, recipients: List[dict], user_history: dict) -> str:
-      """Create sophisticated prompt that considers context and history"""
-      return f'''Match "{query}" to a recipient, considering:
-      
-      1. Typos and misspellings (Jonh→John, Sarh→Sarah)
-      2. Phonetic similarity (Jon/John, Catherine/Katherine)
-      3. Common nicknames (Bob→Robert, Bill→William)
-      4. User's previous choices: {json.dumps(user_history.get("recent_recipients", []))}
-      5. Cultural variations (Mohammed/Muhammad, Isabel/Isabella)
-      
-      Recipients: {json.dumps(recipients)}
-      
-      Return the best match with confidence score and reasoning.'''
-  ```
-
-**6.4 Multi-Entity Bank Handling**
-- Handle complex bank relationships:
-  ```python
-  class BankRelationshipService:
-      def get_effective_transfer_type(self, sender_bank: str, recipient_bank: str) -> str:
-          """Handle bank mergers, shared networks, etc."""
-          # Bank of America NA = Bank of America International
-          if self.same_bank_group(sender_bank, recipient_bank):
-              return "internal"
-          
-          # Zelle network participants
-          if self.in_shared_network(sender_bank, recipient_bank, "zelle"):
-              return "instant_network"
-          
-          return self.standard_transfer_type(sender_bank, recipient_bank)
-  ```
-
-
-## Implementation Sequence
-
-| Week | Phase | Deliverable | Dependencies |
-|------|-------|------------|--------------|
-| 1 | Phase 1 | Bug fixes, LLM recipient matching, explicit intent | None |
-| 2 | Phase 2 | Session storage, disambiguation tracking | Phase 1 |  
-| 3 | Phase 3 | Safe intent refinement with user confirmation | Phase 2 |
-| 4 | Phase 4 | Enhanced clarification and testing | Phase 2, 3 |
-| 5 | Phase 5 | Integration, user profile & comprehensive testing | All phases |
-| Future | Phase 6 | User aliases, learning system, A/B testing | Phase 1-5 |
+1. **Single Responsibility**: Each strategy has one clear purpose
+2. **Open-Closed Principle**: Extend via new strategies, don't modify pipeline
+3. **Dependency Injection**: Strategies auto-discovered and instantiated
+4. **Fail-Safe**: Enrichment failures don't break the pipeline
+5. **No Side Effects**: Strategies only add data, never remove or modify existing
 
 ## Success Criteria
 
 **Use Case 1: "Transfer $100 to Jack"**
-- ✅ Resolves "Jack" → "Jack White" via alias matching (0.95 confidence)
-- ✅ Detects international transfer type via bank country  
-- ✅ Suggests (not forces) intent refinement to `international.wire.send`
-- ✅ Returns pre-filled international wire form configuration
-- ✅ Records user's choice if disambiguation needed
+- ✅ Enrichment resolves "Jack" → recipient_id="RCP007" (Jack White)
+- ✅ Enrichment detects transfer_type="international" (Royal Bank of Canada)  
+- ✅ Enrichment suggests intent refinement to `international.wire.send`
+- ✅ Pipeline returns wire transfer form configuration
+- ✅ User sees confirmation before execution
 
 **Use Case 2: "Send $50 to my mum"**  
-- ✅ Resolves "my mum" → "Amy Winehouse" via alias matching
-- ✅ Detects internal transfer type via same bank
-- ✅ Maintains `payments.transfer.internal` intent
-- ✅ Returns pre-filled internal transfer form configuration
+- ✅ Enrichment resolves "my mum" → recipient_id="RCP003" (Amy Winehouse)
+- ✅ Enrichment detects transfer_type="internal" (Mock Bank)
+- ✅ No intent refinement needed (already correct intent)
+- ✅ Pipeline returns internal transfer form configuration
 
-**Additional Critical Cases:**
-- ✅ "Send $100 to Jonh" → LLM matches to "John Smith" (handles typos naturally)
-- ✅ "Do an international wire to Jack" → Respects explicit intent, no refinement
-- ✅ "Send money to Jack" (multiple Jacks) → LLM presents options with reasoning
-- ✅ User chooses "Jack Brown" → System remembers for session context
+**Core Architecture Validation:**
+- ✅ All enrichment happens via pluggable strategies
+- ✅ Pipeline remains unchanged (Open-Closed Principle)
+- ✅ Each strategy has single, clear responsibility
+- ✅ Enrichment failures don't break the system
+- ✅ Original entities never modified, only extended
 
-**Edge Cases Handled by LLM:**
-- ✅ Multiple recipients with same name (LLM explains differences)
-- ✅ Typos and misspellings (LLM handles naturally, no manual algorithm)
-- ✅ Phonetic similarities (Jon/John, Catherine/Katherine)
-- ✅ Cultural name variations (Mohammed/Muhammad)
-- ✅ Nicknames (Bob→Robert, Bill→William)
-- ✅ Explicit user intent (simple keyword check prevents override)
-- ✅ Previous choices influence future matches (passed as LLM context)
+**Disambiguation Handling:**
+- ✅ Multiple recipients trigger disambiguation response
+- ✅ StateManager tracks disambiguation context
+- ✅ Response includes `DISAMBIGUATION_NEEDED` type
