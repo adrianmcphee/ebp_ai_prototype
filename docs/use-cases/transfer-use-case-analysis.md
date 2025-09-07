@@ -289,13 +289,15 @@ class RecipientResolutionStrategy(EnrichmentStrategy):
         matches = await self.banking.search_recipients(recipient_query)
         
         if len(matches) == 1:
-            # Single match - enrich with recipient data
-            return self._enrich_with_recipient(entities, matches[0])
+            # Single match - enrich existing entity with full recipient data
+            entities["recipient"]["enriched_entity"] = matches[0]
+            return entities
         elif len(matches) > 1:
             # Multiple matches - use existing fuzzy matching logic from state_manager
             best_match = self._find_best_match(recipient_query, matches)
             if best_match:
-                return self._enrich_with_recipient(entities, best_match)
+                entities["recipient"]["enriched_entity"] = best_match
+                return entities
             # Set disambiguation_needed flag for pipeline to handle
             
         # Also search by account_number if no name/alias matches
@@ -322,11 +324,10 @@ async def refine_intent_with_enriched_entities(self, original_intent: str, entit
     # Build simple context from enriched entities
     context_parts = [f"Original intent: {original_intent}"]
     
-    if "recipient_metadata" in entities:
-        recipient = entities["recipient_metadata"]
-        context_parts.append(f"Recipient: {recipient.get('name')} at {recipient.get('bank_name')} ({recipient.get('bank_country')})")
-        if recipient.get('is_international'):
-            context_parts.append("Recipient location: International")
+    if "recipient" in entities:
+        # Get recipient details via banking service if needed
+        recipient_id = entities["recipient"].get("value") 
+        context_parts.append(f"Recipient resolved: {recipient_id}")
     
     amount = entities.get("amount", {}).get("value", 0)
     if amount > 0:
@@ -496,15 +497,16 @@ async def process(...):
     entities = await self._apply_entity_enrichment(classification.get("intent_id"), entities)
     
     # NEW: Simple intent refinement check after enrichment
-    if "recipient_metadata" in entities.get("entities", {}):
+    if "recipient" in entities.get("entities", {}):
         amount = entities.get("entities", {}).get("amount", {}).get("value", 0)
-        recipient = entities["entities"]["recipient_metadata"]
+        recipient_id = entities.get("entities", {}).get("recipient", {}).get("value")
         
-        # SIMPLE upgrade check using helper function
+        # SIMPLE upgrade check using helper function - would need to lookup recipient details if needed
+        # For now, use simple amount-based rules
         suggested_intent = should_upgrade_intent(
             classification.get("intent_id"), 
             amount, 
-            recipient.get('is_international', False)
+            False  # Would determine from banking service if needed
         )
         
         if suggested_intent:
@@ -544,3 +546,389 @@ async def process(...):
 - **Human-in-the-Loop**: All transfer operations require user confirmation via existing approval workflow
 - **Business Rule Enforcement**: Transfer limits validated before execution (P2P: $1000, External: $10000, International: $100000)
 - **Audit Trail**: Leverage existing audit logging in pipeline processing with enhanced business rule tracking
+
+# Success Criteria
+
+These success criteria demonstrate the expected system behavior for each transfer use case through standardized `/api/process` request-response pairs that follow the exact ProcessResponse schema and match the defined use cases.
+
+## UC1: Transfer to Single Savings Account
+**Use Case**: "Transfer $100 to my savings account" → `payments.transfer.internal`  
+**Expected**: SAV001 resolved, missing from_account requires user input
+
+**Request:**
+```json
+POST /api/process
+{
+  "query": "Transfer $100 to my savings account",
+  "session_id": "session_123",
+  "ui_context": "transaction"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "intent": "payments.transfer.internal",
+  "confidence": 0.92,
+  "entities": {
+    "amount": {"value": 100.0, "raw": "$100", "confidence": 0.98, "source": "extraction"},
+    "to_account": {
+      "value": "SAV001",
+      "raw": "my savings",
+      "confidence": 0.95,
+      "source": "enrichment",
+      "enriched_entity": {
+        "id": "SAV001",
+        "name": "Savings Account",
+        "type": "savings",
+        "balance": 15000.00,
+        "currency": "USD"
+      }
+    }
+  },
+  "missing_fields": ["from_account"],
+  "pending_clarification": {
+    "type": "missing_entity",
+    "entity": "from_account",
+    "message": "Which account would you like to transfer from?"
+  }
+}
+```
+
+## UC2: Account Disambiguation with Business Logic
+**Use Case**: "Move $500 from checking to business account" → `payments.transfer.internal`  
+**Expected**: CHK002 resolved for "business", CHK001 for "checking" via exclusion
+
+**Request:**
+```json
+POST /api/process
+{
+  "query": "Move $500 from checking to business account",
+  "session_id": "session_123",
+  "ui_context": "transaction"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "intent": "payments.transfer.internal",
+  "confidence": 0.89,
+  "entities": {
+    "amount": {"value": 500.0, "raw": "$500", "confidence": 0.98, "source": "extraction"},
+    "from_account": {
+      "value": "CHK001",
+      "raw": "checking",
+      "confidence": 0.85,
+      "source": "enrichment",
+      "enriched_entity": {
+        "id": "CHK001",
+        "name": "Primary Checking",
+        "type": "checking",
+        "balance": 5000.00,
+        "currency": "USD"
+      }
+    },
+    "to_account": {
+      "value": "CHK002",
+      "raw": "business account",
+      "confidence": 0.92,
+      "source": "enrichment",
+      "enriched_entity": {
+        "id": "CHK002",
+        "name": "Business Checking",
+        "type": "checking",
+        "balance": 25000.00,
+        "currency": "USD"
+      }
+    }
+  },
+}
+```
+
+## UC3: External Transfer with P2P Limit Logic
+**Use Case**: "Send $2000 to Sarah at Wells Fargo" → `payments.transfer.external`  
+**Expected**: RCP004 resolved, amount exceeds P2P limit, missing from_account
+
+**Request:**
+```json
+POST /api/process
+{
+  "query": "Send $2000 to Sarah at Wells Fargo",
+  "session_id": "session_123",
+  "ui_context": "transaction"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "intent": "payments.transfer.external",
+  "confidence": 0.87,
+  "entities": {
+    "amount": {"value": 2000.0, "raw": "$2000", "confidence": 0.98, "source": "extraction"},
+    "recipient": {
+      "value": "RCP004",
+      "raw": "Sarah",
+      "confidence": 0.91,
+      "source": "enrichment",
+      "enriched_entity": {
+        "id": "RCP004",
+        "name": "Sarah Johnson",
+        "account_number": "1234567890123",
+        "bank_name": "Wells Fargo Bank",
+        "alias": "Sarah",
+        "bank_country": "US",
+        "routing_number": "121000248",
+        "swift_code": null,
+        "bank_address": null
+      }
+    }
+  },
+  "missing_fields": ["from_account"],
+  "pending_clarification": {
+    "type": "missing_entity",
+    "entity": "from_account",
+    "message": "Which account would you like to send from?"
+  }
+}
+```
+
+## UC4: Recipient Alias Resolution with Intent Refinement  
+**Use Case**: "Transfer $3000 to my mum" → `payments.transfer.external`  
+**Expected**: RCP003 resolved from alias, P2P limit exceeded
+
+**Request:**
+```json
+POST /api/process
+{
+  "query": "Transfer $3000 to my mum",
+  "session_id": "session_123",
+  "ui_context": "transaction"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "intent": "payments.transfer.external",
+  "confidence": 0.84,
+  "entities": {
+    "amount": {"value": 3000.0, "raw": "$3000", "confidence": 0.98, "source": "extraction"},
+    "recipient": {
+      "value": "RCP003",
+      "raw": "my mum",
+      "confidence": 0.88,
+      "source": "enrichment",
+      "enriched_entity": {
+        "id": "RCP003",
+        "name": "Amy Winehouse",
+        "account_number": "4532891067834523",
+        "bank_name": "Mock Bank",
+        "alias": "my mum",
+        "bank_country": "US",
+        "routing_number": "123456789",
+        "swift_code": null,
+        "bank_address": null
+      }
+    }
+  },
+  "missing_fields": ["from_account"],
+  "pending_clarification": {
+    "type": "missing_entity",
+    "entity": "from_account", 
+    "message": "Which account would you like to send from?"
+  }
+}
+```
+
+## UC5: Explicit P2P Service Recognition
+**Use Case**: "Zelle $50 to my friend Mike" → `payments.p2p.send`  
+**Expected**: RCP005 resolved, Zelle keyword recognized, within P2P limits
+
+**Request:**
+```json
+POST /api/process
+{
+  "query": "Zelle $50 to my friend Mike",
+  "session_id": "session_123",
+  "ui_context": "transaction"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "intent": "payments.p2p.send",
+  "confidence": 0.95,
+  "entities": {
+    "amount": {"value": 50.0, "raw": "$50", "confidence": 0.98, "source": "extraction"},
+    "recipient": {
+      "value": "RCP005",
+      "raw": "my friend Mike",
+      "confidence": 0.89,
+      "source": "enrichment", 
+      "enriched_entity": {
+        "id": "RCP005",
+        "name": "Michael Davis",
+        "account_number": "9876543210987",
+        "bank_name": "Chase Bank",
+        "alias": "Mike",
+        "bank_country": "US",
+        "routing_number": "021000021",
+        "swift_code": null,
+        "bank_address": null
+      }
+    }
+  },
+  "missing_fields": ["from_account"],
+  "pending_clarification": {
+    "type": "missing_entity",
+    "entity": "from_account",
+    "message": "Which account would you like to send from?"
+  }
+}
+```
+
+## UC6: Social Context with Optional Memo
+**Use Case**: "Pay Sarah $25 for coffee" → `payments.p2p.send`  
+**Expected**: RCP004 resolved, memo extracted, social context suggests P2P
+
+**Request:**
+```json
+POST /api/process  
+{
+  "query": "Pay Sarah $25 for coffee",
+  "session_id": "session_123",
+  "ui_context": "transaction"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "intent": "payments.p2p.send",
+  "confidence": 0.91,
+  "entities": {
+    "amount": {"value": 25.0, "raw": "$25", "confidence": 0.98, "source": "extraction"},
+    "recipient": {
+      "value": "RCP004", 
+      "raw": "Sarah",
+      "confidence": 0.91,
+      "source": "enrichment",
+      "enriched_entity": {
+        "id": "RCP004",
+        "name": "Sarah Johnson", 
+        "account_number": "1234567890123",
+        "bank_name": "Wells Fargo Bank",
+        "alias": "Sarah",
+        "bank_country": "US",
+        "routing_number": "121000248",
+      }
+    },
+    "memo": {"value": "for coffee", "raw": "for coffee", "confidence": 0.87, "source": "extraction"}
+  },
+  "missing_fields": ["from_account"],
+  "pending_clarification": {
+    "type": "missing_entity", 
+    "entity": "from_account",
+    "message": "Which account would you like to send from?"
+  }
+}
+```
+
+## UC7: International Transfer with Currency Requirement
+**Use Case**: "Send $1500 to Jack" → `international.wire.send`  
+**Expected**: RCP007 (Canada) resolved, international detected, currency missing
+
+**Request:**
+```json
+POST /api/process
+{
+  "query": "Send $1500 to Jack",
+  "session_id": "session_123",
+  "ui_context": "transaction"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "intent": "international.wire.send",
+  "confidence": 0.86,
+  "entities": {
+    "amount": {"value": 1500.0, "raw": "$1500", "confidence": 0.98, "source": "extraction"},
+    "recipient": {
+      "value": "RCP007",
+      "raw": "Jack",
+      "confidence": 0.87,
+      "source": "enrichment",
+      "enriched_entity": {
+        "id": "RCP007",
+        "name": "Jack White",
+        "account_number": "123456789",
+        "bank_name": "Royal Bank of Canada",
+        "alias": "Jack W",
+        "bank_country": "CA",
+        "routing_number": null,
+        "swift_code": "ROYCCAT2",
+        "bank_address": "200 Bay Street, Toronto, ON M5J 2J5, Canada"
+      }
+    }
+  },
+  "missing_fields": ["currency", "from_account"],
+  "pending_clarification": {
+    "type": "missing_entities",
+    "entities": ["currency", "from_account"],
+    "message": "I need to know the destination currency and which account to send from."
+  }
+}
+```
+
+## UC8: International IBAN Format Detection  
+**Use Case**: "Send $800 to Hans" → `international.wire.send`  
+**Expected**: RCP008 (Germany) resolved, IBAN format detected, currency missing
+
+**Request:**
+```json
+POST /api/process
+{
+  "query": "Send $800 to Hans",
+  "session_id": "session_123", 
+  "ui_context": "transaction"
+}
+```
+
+**Expected Response:**
+```json
+{
+  "intent": "international.wire.send",
+  "confidence": 0.85,
+  "entities": {
+    "amount": {"value": 800.0, "raw": "$800", "confidence": 0.98, "source": "extraction"},
+    "recipient": {
+      "value": "RCP008",
+      "raw": "Hans", 
+      "confidence": 0.86,
+      "source": "enrichment",
+      "enriched_entity": {
+        "id": "RCP008",
+        "name": "Hans Mueller",
+        "account_number": "DE89370400440532013000",
+        "bank_name": "Deutsche Bank AG",
+        "alias": "Hans",
+        "bank_country": "Germany",
+        "routing_number": null,
+        "swift_code": "DEUTDEFF",
+        "bank_address": "60 Wall Street, New York, NY 10005"
+      }
+    }
+  },
+  "missing_fields": ["currency", "from_account"],
+  "pending_clarification": {
+    "type": "missing_entities",
+    "entities": ["currency", "from_account"],
+    "message": "I need to know the destination currency and which account to send from."
+  }
+}
+```
