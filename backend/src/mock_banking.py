@@ -154,7 +154,7 @@ class MockBankingService:
                 bank_country="CA", 
                 swift_code="ROYCCAT2",
                 bank_address="200 Bay Street, Toronto, ON M5J 2J5, Canada",
-                alias="Jack"
+                alias="Jack W"
             ),
             
             # EU - Germany
