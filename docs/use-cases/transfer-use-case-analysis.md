@@ -2,242 +2,162 @@
 
 ## Context: Supported Transfer Types
 
-The system supports three types of money transfers:
+The system supports four types of money transfers and payments:
 
-1. **Internal Transfer** - Between accounts within the same bank (instant, low cost)
-2. **Domestic Transfer** - Between different banks within the same country (ACH/wire, 1-2 business days)
-3. **International Transfer** - Between banks in different countries (SWIFT wire, 3-5 business days)
+1. **Internal Transfer** (`payments.transfer.internal`) - Between accounts within the same bank (instant, low cost)
+2. **External Transfer** (`payments.transfer.external`) - To external accounts at different banks within the same country (ACH/wire, 1-2 business days)
+3. **P2P Payment** (`payments.p2p.send`) - Person-to-person payments using services like Zelle, Venmo (instant, medium cost)
+4. **International Wire** (`international.wire.send`) - Between banks in different countries (SWIFT wire, 3-5 business days, high cost)
 
-The system must automatically determine the appropriate transfer type based on recipient information and route users to the correct form/process.
+Each of the operation is defined by an intent in the backend/src/intent_catalog.py
+
+### Key Differences
+
+| Type | Speed | Daily Limit | Required Info | User Thinks |
+|------|-------|-------------|---------------|-------------|
+| **Internal** | Instant | 200 | Account name | "Move to my savings" |
+| **P2P** | Instant | 100 | Phone/email | "Pay my friend" |
+| **External** | 1-3 days | 20 | Account + routing | "Send to another bank" |
+| **International** | 3-5 days | 10 | SWIFT + details | "Send money abroad" |
+
+**Decision Flow:**
+- Same customer? → Internal
+- Have their phone? → P2P  
+- Different bank in US? → External
+- Different country? → International
 
 ## Use Cases
 
-### Use Case 1: International Transfer
+### Given (assumptions due to the system development state):
+1. User of the system is a client of `Mock Bank`, located in `US`
 
-**User query**: "Transfer $100 to Jack"
+### Internal Transfer use cases
+
+**User query**: "Transfer $100 to my savings account"
 **Expected result**:
-- User is navigated to the international wire transfer form
-- The form has selected current checking account as "account from which the payment is made"
-- The form "benefitiary" account is set to "Jack White"
-- The form "amount" field is set to 100$
-- User can review the form and submit the payment.
+- **Initial intents**: `payments.transfer.internal` (identified explicitly by "my" indicating same customer)
+- **Extracted entities**: 
+  - `amount`: $100
+  - `to_account`: "my savings" (account type reference)
+- **Enriched entities**:
+  - `to_account`: SAV001 (Savings Account) - resolved from account type "savings", as user has single saving account (NO ASSUMPTIONS MADE)
+- **Confirmed intent**: `payments.transfer.internal` (no change)
+- **Status**: `clarification_needed` - missing required `from_account` entity
 
-### Use Case 2: Internal Transfer  
-
-**User query**: "Send $50 to my mum"
+**User query**: "Move $500 from checking to business account"
 **Expected result**:
-- User is navigated to the internal transfer form
-- The form has selected current checking account as "from account"
-- The form "to account" is set to "Amy Winehouse" (mum's account within same bank)
-- The form "amount" field is set to $50
-- User can review the form and submit the transfer.
+- **Initial intents**: `payments.transfer.internal` (identified explicitly by specific account names)
+- **Extracted entities**: 
+  - `amount`: $500
+  - `from_account`: "checking" (account name reference)
+  - `to_account`: "business account" (account name reference)
+- **Enriched entities**:
+  - `from_account`: CHK001 (Primary Checking) - resolved from account name "checking" (Resolved from name first to two checking accounts, but as from_ and to_ accs can not be the same and one of them is chosen as `to_account` can be resolved to the unique account, hence - no assumptions)
+  - `to_account`: CHK002 (Business Checking) - resolved from account name "business" (resolved from account name with high level of confidence)
+- **Confirmed intent**: `payments.transfer.internal` (no change)
+- **Status**: `success` - all required entities present
 
-# How it works?
+### External Transfer use cases
+**User query**: "Send $2000 to Sarah at Wells Fargo"  
+**Expected result**:
+- **Initial intents**: [`payments.transfer.internal`, `payments.transfer.external`, `payments.p2p.send`] (multiple possible until recipient resolved)
+- **Extracted entities**: 
+  - `amount`: $2000
+  - `recipient_name`: "Sarah"
+- **Enriched entities**:
+  - `recipient_name`: RCP004 (Sarah Johnson) - resolved from "Sarah" (match to recipient alias, which is also unique across the list)
+  - `recipient_account`: 1234567890123 - obtained from resolved recipient
+- **Confirmed intent**: `payments.transfer.external` ($2000 exceeds P2P daily limit of $100, external bank confirmed)
+- **Status**: `success` - all required entities present after enrichment
 
-1. **Intent Classification**: Initial classification identifies generic transfer intent
-   - Query: "Transfer $100 to Jack" → Intent: `payments.transfer.external` (generic)
-   - Query: "Send $50 to my mum" → Intent: `payments.transfer.internal` (generic)
+**User query**: "Transfer $3000 to my mum"
+**Expected result**:
+- **Initial intents**: [`payments.transfer.internal`, `payments.p2p.send`] ("my" suggests internal, but could be P2P)
+- **Extracted entities**: 
+  - `amount`: $3000
+  - `recipient`: "my mum" (recipient alias)
+- **Enriched entities**:
+  - `recipient`: RCP003 (Amy Winehouse) - resolved from alias "my mum" (alias of the recipient)
+  - `recipient_account`: 4532891067834523 - obtained from resolved recipient
+- **Confirmed intent**: `payments.transfer.external` ($3000 exceeds P2P limit of $100, different customer confirmed)
+- **Status**: `success` - all required entities present after enrichment
 
-2. **Entity Extraction**: Extract key information from user query
-   - Amount: $100 / $50
-   - Recipient: "Jack" / "my mum"
+### P2P Payment use cases
+**User query**: "Zelle $50 to my friend Mike"
+**Expected result**:
+- **Initial intents**: `payments.p2p.send` (identified explicitly by "Zelle" keyword)
+- **Extracted entities**: 
+  - `amount`: $50
+  - `recipient`: "my friend Mike"
+- **Enriched entities**:
+  - `recipient`: RCP005 (Michael Davis) - resolved from "Mike" reference
+- **Confirmed intent**: `payments.p2p.send` (no change)
+- **Status**: `success` - all required entities present
 
-3. **Entity Enrichment**: Resolve recipient to full contact information
-   - "Jack" → "Jack White" (international recipient at Royal Bank of Canada)
-   - "my mum" → "Amy Winehouse" (internal account at same bank)
+**User query**: "Pay Sarah $25 for coffee"
+**Expected result**:
+- **Initial intents**: [`payments.p2p.send`, `payments.transfer.external`] ("pay" could be P2P or traditional transfer)
+- **Extracted entities**: 
+  - `amount`: $25
+  - `recipient`: "Sarah"
+  - `memo`: "for coffee" (optional)
+- **Enriched entities**:
+  - `recipient`: RCP004 (Sarah Johnson) - resolved from "Sarah"
+- **Confirmed intent**: `payments.p2p.send` (social context "for coffee" suggests P2P over formal transfer)
+- **Status**: `success` - all required entities present
 
-4. **Transfer Type Detection**: Determine specific transfer type based on enriched data
-   - Jack White (foreign bank) → International Transfer → `international.wire.send`
-   - Amy Winehouse (same bank) → Internal Transfer → `payments.transfer.internal`
+### International Wire use cases
+**User query**: "Send $1500 to Jack"
+**Expected result**:
+- **Initial intents**: [`payments.transfer.internal`, `payments.transfer.external`, `payments.p2p.send`] (generic "send" - multiple possibilities)
+- **Extracted entities**: 
+  - `amount`: $1500
+  - `recipient`: "Jack"
+- **Enriched entities**:
+  - `recipient`: RCP007 (Jack White) - resolved from "Jack"
+  - `recipient_account`: 123456789 - obtained from resolved recipient
+  - `swift_code`: ROYCCAT2 - obtained from resolved recipient bank
+- **Confirmed intent**: `international.wire.send` (after finding Jack at international bank, amount exceeds P2P limit)
+- **Status**: `clarification_needed` - missing required `currency` entity
 
-5. **Form Navigation**: Route user to appropriate form with pre-filled data
+**User query**: "Send $800 to Hans"
+**Expected result**:
+- **Initial intents**: [`payments.transfer.internal`, `payments.transfer.external`, `payments.p2p.send`] (generic "send" - multiple possibilities)
+- **Extracted entities**: 
+  - `amount`: $800
+  - `recipient`: "Hans"
+- **Enriched entities**:
+  - `recipient`: RCP008 (Hans Mueller) - resolved from "Hans"
+  - `recipient_account`: DE89370400440532013000 - obtained from resolved recipient (IBAN format)
+  - `swift_code`: DEUTDEFF - obtained from resolved recipient bank
+- **Confirmed intent**: `international.wire.send` (after finding Hans at international bank, amount exceeds P2P limit)
+- **Status**: `clarification_needed` - missing required `currency` entity
 
-# What is missing in the system?
 
-## Actual System Gaps (Verified via Code Analysis)
+# How it should work?
 
-**Recipient Resolution Integration:** ❌ MISSING
-- No `RecipientResolutionStrategy` in entity enrichment system
-- Validator finds recipients but doesn't resolve to specific recipient ID
-- No integration between validation and enrichment phases
-- Transfer intents missing `enrichment_requirements=["recipient_resolution"]`
+1. **Intent Classification**: Initial classification, then refined after recipient resolution
+   - "Transfer $100 to my savings account" → `payments.transfer.internal` (clear keywords, no recipient)
+   - "Send $2000 to Sarah at Wells Fargo" → [`payments.transfer.external`, `payments.p2p.send`, `international.wire.send`] → `payments.transfer.external` (after resolving Sarah and p2p limits)  
+   - "Zelle to my friend Mike" → `payments.p2p.send` (P2P service name + social context)
+   - "Send $800 to Hans" → [`payments.transfer.external`, `payments.p2p.send`, `international.wire.send`] → `international.wire.send` (after resolving Hans)
 
-**Transfer Type Detection After Resolution:** ❌ MISSING  
-- No strategy to determine transfer type after recipient is resolved
-- `transfer_type()` method exists but not integrated into enrichment pipeline
-- No connection between resolved recipient bank and transfer type classification
+2. **Entity Extraction**: Extract entities directly from user query
+   - "Transfer $100 to my savings" → amount: 100.0, currency: "$", to_account: "my savings"
+   - "Move $500 from checking to business account" → amount: 500.0, currency: "$", from_account: "checking", to_account: "business account"
+   - "Send $2000 to Sarah" → amount: 2000.0, currency: "$", recipient: "Sarah"
+   - "Pay Sarah $25 for coffee" → amount: 25.0, currency: "$", recipient: "Sarah", memo: "for coffee"
+   - "Send $800 to Hans" → amount: 800.0, currency: "$", recipient: "Hans"
+   - "Transfer $3000 to my mum" → amount: 3000.0, currency: "$", recipient: "my mum"
 
-**Intent Refinement Based on Enrichment:** ❌ MISSING
-- No mechanism to suggest better intent after recipient resolution
-- Generic intents (`payments.transfer.external`) never upgraded to specific ones (`international.wire.send`)
-- No confidence comparison between original and refined intents
+3. **Entity Enrichment**: Resolve extracted entities to actual data
+   - "my savings" → SAV001 (Savings Account, $15,000 balance) + missing from_account triggers clarification
+   - "checking" → CHK001 (Primary Checking), "business account" → CHK002 (Business Checking)  
+   - "Sarah" → RCP004 (Sarah Johnson at Wells Fargo, routing: 121000248)
+   - "Hans" → RCP008 (Hans Mueller at Deutsche Bank AG, SWIFT: DEUTDEFF)
+   - "my mum" → RCP003 (Amy Winehouse at Mock Bank - external transfer due to different customer)
 
-**Enhanced Disambiguation Response:** ⚠️ PARTIALLY COMPLETE
-- Disambiguation works via `validation["disambiguations"]`
-- StateManager tracks disambiguation context correctly
-- Missing only: `ResponseType.DISAMBIGUATION_NEEDED` enum value
-
-**User Context Integration:** ⚠️ PARTIALLY COMPLETE
-- Pipeline accepts `user_profile` parameter but doesn't use it for transfer type detection
-- `transfer_type()` method requires explicit "home_bank" parameter  
-- No automatic user profile integration in enrichment strategies
-
-# Revised Implementation Plan (Architecture-Focused)
-
-## Phase 1: Foundation Setup (Day 1 - 2 hours)
-
-**1.1 Add Missing Enum Value**
-- Add `DISAMBIGUATION_NEEDED = "disambiguation_needed"` to `ResponseType` enum in `context_aware_responses.py`
-- Effort: 5 minutes
-
-**1.2 Add Enrichment Requirements to Transfer Intents**
-- Update `intent_catalog.py` transfer intents to include:
-  ```python
-  enrichment_requirements=["recipient_resolution", "transfer_type_detection"]
-  ```
-- Apply to: `payments.transfer.internal`, `payments.transfer.external`, `international.wire.send`
-- Effort: 15 minutes
-
-## Phase 2: Recipient Resolution Strategy (Day 1-2 - 4 hours)
-
-**2.1 Create RecipientResolutionStrategy** 
-- Create focused strategy following Single Responsibility Principle:
-  ```python
-  class RecipientResolutionStrategy(EnrichmentStrategy):
-      def __init__(self, banking_service):
-          self.banking = banking_service
-      
-      def get_strategy_name(self) -> str:
-          return "recipient_resolution"
-      
-      def can_enrich(self, entities: Dict[str, Any]) -> bool:
-          return "recipient" in entities and not entities.get("recipient_id")
-      
-      def enrich(self, entities: Dict[str, Any]) -> Dict[str, Any]:
-          """Resolve recipient name/alias to recipient_id"""
-          # Use existing search_recipients method
-          # Add recipient_id to entities if single match
-          # Return alternatives if multiple matches
-          pass
-  ```
-- Location: Add to `entity_enricher.py` 
-- Effort: 2 hours
-
-## Phase 3: Transfer Type Detection Strategy (Day 2-3 - 3 hours)
-
-**3.1 Create TransferTypeDetectionStrategy**
-- Create strategy that uses resolved recipient data:
-  ```python
-  class TransferTypeDetectionStrategy(EnrichmentStrategy):
-      def get_strategy_name(self) -> str:
-          return "transfer_type_detection"
-      
-      def can_enrich(self, entities: Dict[str, Any]) -> bool:
-          return "recipient_id" in entities and not entities.get("transfer_type")
-      
-      def enrich(self, entities: Dict[str, Any]) -> Dict[str, Any]:
-          """Detect transfer type based on resolved recipient"""
-          # Get recipient by ID
-          # Use existing transfer_type() method
-          # Add transfer_type to entities
-          pass
-  ```
-- Effort: 2 hours
-
-## Phase 4: Intent Refinement (Day 3-4 - 3 hours)
-
-**4.1 Create Simple Intent Refinement Strategy**
-- Add strategy that suggests better intent after enrichment:
-  ```python
-  class IntentRefinementStrategy(EnrichmentStrategy):
-      def get_strategy_name(self) -> str:
-          return "intent_refinement"
-      
-      def can_enrich(self, entities: Dict[str, Any]) -> bool:
-          return "transfer_type" in entities
-      
-      def enrich(self, entities: Dict[str, Any]) -> Dict[str, Any]:
-          """Suggest intent refinement based on transfer type"""
-          # Simple mapping rules
-          refinement_map = {
-              ("payments.transfer.external", "international"): "international.wire.send",
-              ("payments.transfer.external", "internal"): "payments.transfer.internal",
-          }
-          
-          # Add suggested_intent field without changing original
-          # Include confidence boost and reasoning
-          pass
-  ```
-- Key Principle: **NEVER override explicit user keywords**
-- Effort: 2 hours
-
-## Phase 5: Testing & Integration (Day 4-5 - 4 hours)
-
-**5.1 Core Test Scenarios**
-```python
-test_scenarios = [
-    {
-        "query": "Transfer $100 to Jack",
-        "expected_enrichment": {
-            "recipient_id": "RCP007",
-            "transfer_type": "international", 
-            "suggested_intent": "international.wire.send"
-        }
-    },
-    {
-        "query": "Send $50 to my mum", 
-        "expected_enrichment": {
-            "recipient_id": "RCP003",
-            "transfer_type": "internal",
-            "suggested_intent": None  # Already correct
-        }
-    }
-]
-```
-- Effort: 3 hours
-
-## Implementation Timeline
-
-| Day | Phase | Tasks | Effort |
-|-----|-------|-------|--------|
-| 1 | Setup + Recipient Resolution | Add enum + enrichment requirements + RecipientResolutionStrategy | 6 hours |
-| 2 | Transfer Detection | TransferTypeDetectionStrategy + integration | 4 hours |
-| 3 | Intent Refinement | IntentRefinementStrategy + pipeline updates | 4 hours |
-| 4-5 | Testing | Core scenarios + integration tests | 4 hours |
-
-**Total Implementation Time: 18 hours (2.5 days)**
-
-## Key Architecture Principles
-
-1. **Single Responsibility**: Each strategy has one clear purpose
-2. **Open-Closed Principle**: Extend via new strategies, don't modify pipeline
-3. **Dependency Injection**: Strategies auto-discovered and instantiated
-4. **Fail-Safe**: Enrichment failures don't break the pipeline
-5. **No Side Effects**: Strategies only add data, never remove or modify existing
-
-## Success Criteria
-
-**Use Case 1: "Transfer $100 to Jack"**
-- ✅ Enrichment resolves "Jack" → recipient_id="RCP007" (Jack White)
-- ✅ Enrichment detects transfer_type="international" (Royal Bank of Canada)  
-- ✅ Enrichment suggests intent refinement to `international.wire.send`
-- ✅ Pipeline returns wire transfer form configuration
-- ✅ User sees confirmation before execution
-
-**Use Case 2: "Send $50 to my mum"**  
-- ✅ Enrichment resolves "my mum" → recipient_id="RCP003" (Amy Winehouse)
-- ✅ Enrichment detects transfer_type="internal" (Mock Bank)
-- ✅ No intent refinement needed (already correct intent)
-- ✅ Pipeline returns internal transfer form configuration
-
-**Core Architecture Validation:**
-- ✅ All enrichment happens via pluggable strategies
-- ✅ Pipeline remains unchanged (Open-Closed Principle)
-- ✅ Each strategy has single, clear responsibility
-- ✅ Enrichment failures don't break the system
-- ✅ Original entities never modified, only extended
-
-**Disambiguation Handling:**
-- ✅ Multiple recipients trigger disambiguation response
-- ✅ StateManager tracks disambiguation context
-- ✅ Response includes `DISAMBIGUATION_NEEDED` type
+4. **Intent Refinement**: Update classification based on resolved recipient data
+   - Sarah at Wells Fargo → Upgrade to `payments.transfer.external` 
+   - Hans at Deutsche Bank → Upgrade to `international.wire.send`
+   - Generic "send to [name]" becomes specific transfer type after resolution
