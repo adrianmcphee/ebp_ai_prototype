@@ -13,12 +13,12 @@ Each of the operation is defined by an intent in the backend/src/intent_catalog.
 
 ### Key Differences
 
-| Type | Speed | Daily Limit | Required Info | User Thinks |
-|------|-------|-------------|---------------|-------------|
-| **Internal** | Instant | 200 | Account name | "Move to my savings" |
-| **P2P** | Instant | 100 | Phone/email | "Pay my friend" |
-| **External** | 1-3 days | 20 | Account + routing | "Send to another bank" |
-| **International** | 3-5 days | 10 | SWIFT + details | "Send money abroad" |
+| Type | Speed | Daily Limit (transfers) | Daily Limit (amounts) | Required Info | User Thinks |
+|------|-------|-------------|-------------|---------------|-------------|
+| **Internal**      | Instant  | 200 | 100000 | Account name      | "Move to my savings" |
+| **P2P**           | Instant  | 100 | 1000   | Phone/email       | "Pay my friend" |
+| **External**      | 1-3 days | 20  | 10000  | Account + routing | "Send to another bank" |
+| **International** | 3-5 days | 10  | 100000 | SWIFT + details   | "Send money abroad" |
 
 **Decision Flow:**
 - Same customer? → Internal
@@ -42,7 +42,7 @@ Each of the operation is defined by an intent in the backend/src/intent_catalog.
 - **Enriched entities**:
   - `to_account`: SAV001 (Savings Account) - resolved from account type "savings", as user has single saving account (NO ASSUMPTIONS MADE)
 - **Confirmed intent**: `payments.transfer.internal` (no change)
-- **Status**: `clarification_needed` - missing required `from_account` entity
+- **Status**: `awaiting_user_input` - form presented requesting missing `from_account` entity
 
 **User query**: "Move $500 from checking to business account"
 **Expected result**:
@@ -52,23 +52,24 @@ Each of the operation is defined by an intent in the backend/src/intent_catalog.
   - `from_account`: "checking" (account name reference)
   - `to_account`: "business account" (account name reference)
 - **Enriched entities**:
-  - `from_account`: CHK001 (Primary Checking) - resolved from account name "checking" (Resolved from name first to two checking accounts, but as from_ and to_ accs can not be the same and one of them is chosen as `to_account` can be resolved to the unique account, hence - no assumptions)
-  - `to_account`: CHK002 (Business Checking) - resolved from account name "business" (resolved from account name with high level of confidence)
+  - `from_account`: "checking" - AMBIGUOUS (could be CHK001 Primary or CHK002 Business)
+  - `to_account`: CHK002 (Business Checking) - resolved from "business account" unambiguously
+- **Ambiguity removal**: Since `to_account` = CHK002 and accounts can't be same, `from_account` must be CHK001 (Primary Checking)
 - **Confirmed intent**: `payments.transfer.internal` (no change)
-- **Status**: `success` - all required entities present
+- **Status**: `awaiting_user_confirmation` - pre-filled form presented for user approval
 
 ### External Transfer use cases
 **User query**: "Send $2000 to Sarah at Wells Fargo"  
 **Expected result**:
-- **Initial intents**: [`payments.transfer.internal`, `payments.transfer.external`, `payments.p2p.send`] (multiple possible until recipient resolved)
+- **Initial intents**: [`payments.transfer.external`, `payments.p2p.send`, `international.wire.send`] (multiple possible until recipient resolved)
 - **Extracted entities**: 
   - `amount`: $2000
-  - `recipient_name`: "Sarah"
+  - `recipient`: "Sarah"
 - **Enriched entities**:
-  - `recipient_name`: RCP004 (Sarah Johnson) - resolved from "Sarah" (match to recipient alias, which is also unique across the list)
+  - `recipient`: RCP004 (Sarah Johnson) - resolved from "Sarah" (match to recipient alias, which is also unique across the list)
   - `recipient_account`: 1234567890123 - obtained from resolved recipient
-- **Confirmed intent**: `payments.transfer.external` ($2000 exceeds P2P daily limit of $100, external bank confirmed)
-- **Status**: `success` - all required entities present after enrichment
+- **Confirmed intent**: `payments.transfer.external` ($2000 exceeds P2P daily limit of $1000, external bank confirmed)
+- **Status**: `awaiting_user_confirmation` - form presented with account selection required
 
 **User query**: "Transfer $3000 to my mum"
 **Expected result**:
@@ -79,8 +80,8 @@ Each of the operation is defined by an intent in the backend/src/intent_catalog.
 - **Enriched entities**:
   - `recipient`: RCP003 (Amy Winehouse) - resolved from alias "my mum" (alias of the recipient)
   - `recipient_account`: 4532891067834523 - obtained from resolved recipient
-- **Confirmed intent**: `payments.transfer.external` ($3000 exceeds P2P limit of $100, different customer confirmed)
-- **Status**: `success` - all required entities present after enrichment
+- **Confirmed intent**: `payments.transfer.external` ($3000 exceeds P2P limit of $1000, different customer confirmed)
+- **Status**: `awaiting_user_confirmation` - pre-filled form presented for user approval
 
 ### P2P Payment use cases
 **User query**: "Zelle $50 to my friend Mike"
@@ -92,7 +93,7 @@ Each of the operation is defined by an intent in the backend/src/intent_catalog.
 - **Enriched entities**:
   - `recipient`: RCP005 (Michael Davis) - resolved from "Mike" reference
 - **Confirmed intent**: `payments.p2p.send` (no change)
-- **Status**: `success` - all required entities present
+- **Status**: `awaiting_user_confirmation` - pre-filled form presented for user approval
 
 **User query**: "Pay Sarah $25 for coffee"
 **Expected result**:
@@ -104,12 +105,12 @@ Each of the operation is defined by an intent in the backend/src/intent_catalog.
 - **Enriched entities**:
   - `recipient`: RCP004 (Sarah Johnson) - resolved from "Sarah"
 - **Confirmed intent**: `payments.p2p.send` (social context "for coffee" suggests P2P over formal transfer)
-- **Status**: `success` - all required entities present
+- **Status**: `awaiting_user_confirmation` - pre-filled form presented for user approval
 
 ### International Wire use cases
 **User query**: "Send $1500 to Jack"
 **Expected result**:
-- **Initial intents**: [`payments.transfer.internal`, `payments.transfer.external`, `payments.p2p.send`] (generic "send" - multiple possibilities)
+- **Initial intents**: [`payments.transfer.external`, `payments.p2p.send`, `international.wire.send`] (generic "send" - multiple possibilities)
 - **Extracted entities**: 
   - `amount`: $1500
   - `recipient`: "Jack"
@@ -118,11 +119,11 @@ Each of the operation is defined by an intent in the backend/src/intent_catalog.
   - `recipient_account`: 123456789 - obtained from resolved recipient
   - `swift_code`: ROYCCAT2 - obtained from resolved recipient bank
 - **Confirmed intent**: `international.wire.send` (after finding Jack at international bank, amount exceeds P2P limit)
-- **Status**: `clarification_needed` - missing required `currency` entity
+- **Status**: `awaiting_user_input` - form presented requesting missing `currency` entity
 
 **User query**: "Send $800 to Hans"
 **Expected result**:
-- **Initial intents**: [`payments.transfer.internal`, `payments.transfer.external`, `payments.p2p.send`] (generic "send" - multiple possibilities)
+- **Initial intents**: [`payments.transfer.external`, `payments.p2p.send`, `international.wire.send`] (generic "send" - multiple possibilities)
 - **Extracted entities**: 
   - `amount`: $800
   - `recipient`: "Hans"
@@ -131,16 +132,16 @@ Each of the operation is defined by an intent in the backend/src/intent_catalog.
   - `recipient_account`: DE89370400440532013000 - obtained from resolved recipient (IBAN format)
   - `swift_code`: DEUTDEFF - obtained from resolved recipient bank
 - **Confirmed intent**: `international.wire.send` (after finding Hans at international bank, amount exceeds P2P limit)
-- **Status**: `clarification_needed` - missing required `currency` entity
+- **Status**: `awaiting_user_input` - form presented requesting missing `currency` entity
 
 
 # How it should work?
 
-1. **Intent Classification**: Initial classification, then refined after recipient resolution
-   - "Transfer $100 to my savings account" → `payments.transfer.internal` (clear keywords, no recipient)
-   - "Send $2000 to Sarah at Wells Fargo" → [`payments.transfer.external`, `payments.p2p.send`, `international.wire.send`] → `payments.transfer.external` (after resolving Sarah and p2p limits)  
-   - "Zelle to my friend Mike" → `payments.p2p.send` (P2P service name + social context)
-   - "Send $800 to Hans" → [`payments.transfer.external`, `payments.p2p.send`, `international.wire.send`] → `international.wire.send` (after resolving Hans)
+1. **Intent Classification**: Initial classification with confidence scoring, then refined after recipient resolution
+   - "Transfer $100 to my savings account" → `payments.transfer.internal` (confidence: 0.92, clear keywords, no recipient)
+   - "Send $2000 to Sarah at Wells Fargo" → [`payments.transfer.external`, `payments.p2p.send`, `international.wire.send`] (confidence: 0.78, multiple possibilities) → `payments.transfer.external` (after resolving Sarah and P2P limits)  
+   - "Zelle to my friend Mike" → `payments.p2p.send` (confidence: 0.95, explicit P2P service name + social context)
+   - "Send $800 to Hans" → [`payments.transfer.external`, `payments.p2p.send`, `international.wire.send`] (confidence: 0.75, generic "send") → `international.wire.send` (after resolving Hans)
 
 2. **Entity Extraction**: Extract entities directly from user query
    - "Transfer $100 to my savings" → amount: 100.0, currency: "$", to_account: "my savings"
@@ -151,13 +152,40 @@ Each of the operation is defined by an intent in the backend/src/intent_catalog.
    - "Transfer $3000 to my mum" → amount: 3000.0, currency: "$", recipient: "my mum"
 
 3. **Entity Enrichment**: Resolve extracted entities to actual data
-   - "my savings" → SAV001 (Savings Account, $15,000 balance) + missing from_account triggers clarification
-   - "checking" → CHK001 (Primary Checking), "business account" → CHK002 (Business Checking)  
+   - "my savings" → SAV001 (Savings Account, $15,000 balance) - unambiguous (only 1 savings account)
+   - "checking" → AMBIGUOUS: CHK001 (Primary) vs CHK002 (Business) - multiple matches found
+   - "business account" → CHK002 (Business Checking) - unambiguous account name match
    - "Sarah" → RCP004 (Sarah Johnson at Wells Fargo, routing: 121000248)
    - "Hans" → RCP008 (Hans Mueller at Deutsche Bank AG, SWIFT: DEUTDEFF)
    - "my mum" → RCP003 (Amy Winehouse at Mock Bank - external transfer due to different customer)
 
-4. **Intent Refinement**: Update classification based on resolved recipient data
-   - Sarah at Wells Fargo → Upgrade to `payments.transfer.external` 
-   - Hans at Deutsche Bank → Upgrade to `international.wire.send`
-   - Generic "send to [name]" becomes specific transfer type after resolution
+4. **Ambiguity Removal**: Apply business logic to resolve conflicts based on intent-specific rules
+   - "Move $500 from checking to business account" → `from_account` ambiguity resolved: "checking" could be CHK001 or CHK002, but since `to_account` is CHK002 (business) and accounts can't be same, `from_account` must be CHK001 (Primary Checking)
+   - "Send $2000 to Sarah" → Amount exceeds P2P limit ($1000), eliminate `payments.p2p.send` from initial possibilities. Upgrade to `payments.transfer.external`
+   - "Transfer $3000 to my mum" → Amount exceeds P2P limit ($1000), eliminate `payments.p2p.send` from possibilities
+   - "Send $1500 to Jack" → After recipient resolution shows international location, amount is within limits ($100000), proceed with international wire, i.e. upgrade to `international.wire.send`
+   - "Send $800 to Hans" → After recipient resolution shows international location, amount is within limits ($100000), proceed with international wire, i.e. upgrade to `international.wire.send`
+
+5. **Confidence Evaluation**: Apply confidence thresholds per ARCHITECTURE.md requirements
+   - Confidence ≥ 0.85: Proceed with confirmation → "Transfer $100 to my savings" (0.92), "Zelle $50 to Mike" (0.95)
+   - Confidence 0.6-0.85: Present disambiguation choices → "Send $2000 to Sarah" (0.78), "Send $800 to Hans" (0.75)  
+   - Confidence < 0.6: Request clarification → [None in our examples]
+
+6. **Human-in-the-Loop Confirmation**: Present dynamic form with AI suggestions for user confirmation (CRITICAL for banking compliance)
+   - UI Context determines execution method: `ui_context: "transaction"` → Dynamic form assembly
+   - "Move $500 from checking to business account" → Show pre-filled form: "Transfer $500 from Primary Checking to Business Checking - Confirm?"
+   - "Send $2000 to Sarah" → Show pre-filled form: "Send $2000 to Sarah Johnson (Wells Fargo) from [account selection] - Confirm?"
+   - "Transfer $100 to my savings" → Show form requesting missing from_account: "Transfer $100 to Savings Account from [account selection] - Confirm?"
+   - "Send $1500 to Jack" → Show form requesting missing currency: "Send $1500 to Jack White (Canada) in [currency selection] - Confirm?"
+
+7. **Status**: Final status after processing through all steps including user confirmation
+   - "Transfer $100 to my savings" → `awaiting_user_input` - form presented requesting missing `from_account` entity
+   - "Move $500 from checking to business account" → `awaiting_user_confirmation` - pre-filled form presented for user approval
+   - "Send $2000 to Sarah" → `awaiting_user_confirmation` - form presented with account selection required
+   - "Transfer $3000 to my mum" → `awaiting_user_confirmation` - pre-filled form presented for user approval  
+   - "Send $1500 to Jack" → `awaiting_user_input` - form presented requesting missing `currency` entity
+   - "Send $800 to Hans" → `awaiting_user_input` - form presented requesting missing `currency` entity
+   - "Zelle $50 to my friend Mike" → `awaiting_user_confirmation` - pre-filled form presented for user approval
+   - "Pay Sarah $25 for coffee" → `awaiting_user_confirmation` - pre-filled form presented for user approval
+
+**Note**: Final `success` status only occurs AFTER user confirms and system executes the transaction 
