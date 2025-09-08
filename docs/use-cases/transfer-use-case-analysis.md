@@ -1,35 +1,68 @@
 # Transfer Use Case Analysis
 
-## Context: Supported Transfer Types
+## Architecture Overview
 
-The system supports four types of money transfers and payments:
+This document defines the complete specification for implementing transfer capabilities in the EBP NLP Banking system. The implementation follows a **two-pass architecture**: initial intent classification followed by entity enrichment and intent refinement.
 
-1. **Internal Transfer** (`payments.transfer.internal`) - Between accounts within the same bank (instant, low cost)
-2. **External Transfer** (`payments.transfer.external`) - To external accounts at different banks within the same country (ACH/wire, 1-2 business days)
-3. **P2P Payment** (`payments.p2p.send`) - Person-to-person payments using services like Zelle, Venmo (instant, medium cost)
-4. **International Wire** (`international.wire.send`) - Between banks in different countries (SWIFT wire, 3-5 business days, high cost)
+## System Context
 
-Each of the operation is defined by an intent in the backend/src/intent_catalog.py
+### Assumptions
+- User is authenticated as a client of Mock Bank (US-based)
+- MockBankingService provides account and recipient data
+- All transfers require explicit user confirmation before execution
+- System operates in USD by default unless specified
 
-### Key Differences
+### Supported Transfer Types
 
-| Type | Speed | Daily Limit (transfers) | Daily Limit (amounts) | Required Info | User Thinks |
-|------|-------|-------------|-------------|---------------|-------------|
-| **Internal**      | Instant  | 200 | 100000 | Account name      | "Move to my savings" |
-| **P2P**           | Instant  | 100 | 1000   | Phone/email       | "Pay my friend" |
-| **External**      | 1-3 days | 20  | 10000  | Account + routing | "Send to another bank" |
-| **International** | 3-5 days | 10  | 100000 | SWIFT + details   | "Send money abroad" |
+The system supports four types of money transfers, each with distinct characteristics and business rules:
 
-**Decision Flow:**
-- Same customer? → Internal
-- Have their phone? → P2P  
-- Different bank in US? → External
-- Different country? → International
+| Intent ID | Type | Speed | Daily Limit | Per-Transaction Limit | Key Trigger |
+|-----------|------|-------|-------------|----------------------|-------------|
+| `payments.transfer.internal` | Internal Transfer | Instant | 200 txns | $100,000 | Same customer, different accounts |
+| `payments.p2p.send` | P2P Payment | Instant | 100 txns | $1,000 | Social context, small amounts |
+| `payments.transfer.external` | External Transfer | 1-3 days | 20 txns | $10,000 | Different bank, same country |
+| `international.wire.send` | International Wire | 3-5 days | 10 txns | $100,000 | Different country |
 
-## Use Cases
+### Decision Tree for Intent Selection
 
-### Given (assumptions due to the system development state):
-1. User of the system is a client of `Mock Bank`, located in `US`
+```
+User Query → Initial Classification
+    ↓
+Contains "Zelle"/"Venmo" → payments.p2p.send
+Contains "my" + account → payments.transfer.internal  
+Generic "send"/"transfer" → Multiple candidates
+    ↓
+Entity Enrichment
+    ↓
+Recipient Country != US → international.wire.send
+Amount > $1,000 → Eliminate payments.p2p.send
+Same customer → payments.transfer.internal
+Different bank → payments.transfer.external
+```
+
+## Processing Pipeline Architecture
+
+### Two-Pass Processing Model
+
+```python
+# Pass 1: Initial Intent Classification + Entity Extraction
+query → LLM Intent Classifier → Initial Intent + Confidence
+     → LLM Entity Extractor → Raw Entities
+
+# Pass 2: Enrichment + Refinement  
+raw_entities + initial_intent → Entity Enricher → Enriched Entities
+enriched_entities → Intent Refiner → Final Intent
+```
+
+### Key Architecture Decisions
+
+1. **Intent Classification First**: Provides context for entity enrichment
+2. **Enrichment Before Refinement**: Enriched data drives intent changes
+3. **Deterministic Refinement**: Rule-based refinement for predictability
+4. **Source Attribution**: Every enrichment tracks its data source
+5. **Fail-Safe Design**: Missing enrichment doesn't break the flow
+
+## Detailed Use Cases
 
 ### Internal Transfer use cases
 
@@ -135,144 +168,177 @@ Each of the operation is defined by an intent in the backend/src/intent_catalog.
 - **Status**: `awaiting_user_input` - form presented requesting missing `currency` entity
 
 
-# How it should work?
+## Processing Flow Specification
 
-1. **Intent Classification**: Initial classification with confidence scoring, then refined after recipient resolution
-   - "Transfer $100 to my savings account" → `payments.transfer.internal` (confidence: 0.92, clear keywords, no recipient)
-   - "Send $2000 to Sarah at Wells Fargo" → [`payments.transfer.external`, `payments.p2p.send`, `international.wire.send`] (confidence: 0.78, multiple possibilities) → `payments.transfer.external` (after resolving Sarah and P2P limits)  
-   - "Zelle to my friend Mike" → `payments.p2p.send` (confidence: 0.95, explicit P2P service name + social context)
-   - "Send $800 to Hans" → [`payments.transfer.external`, `payments.p2p.send`, `international.wire.send`] (confidence: 0.75, generic "send") → `international.wire.send` (after resolving Hans)
+### Step 1: Intent Classification
+Initial intent classification based on query patterns and keywords.
 
-2. **Entity Extraction**: Extract entities directly from user query
-   - "Transfer $100 to my savings" → amount: 100.0, currency: "$", to_account: "my savings"
-   - "Move $500 from checking to business account" → amount: 500.0, currency: "$", from_account: "checking", to_account: "business account"
-   - "Send $2000 to Sarah" → amount: 2000.0, currency: "$", recipient: "Sarah"
-   - "Pay Sarah $25 for coffee" → amount: 25.0, currency: "$", recipient: "Sarah", memo: "for coffee"
-   - "Send $800 to Hans" → amount: 800.0, currency: "$", recipient: "Hans"
-   - "Transfer $3000 to my mum" → amount: 3000.0, currency: "$", recipient: "my mum"
-
-3. **Entity Enrichment**: Resolve extracted entities to actual data
-   - "my savings" → SAV001 (Savings Account, $15,000 balance) - unambiguous (only 1 savings account)
-   - "checking" → AMBIGUOUS: CHK001 (Primary) vs CHK002 (Business) - multiple matches found
-   - "business account" → CHK002 (Business Checking) - unambiguous account name match
-   - "Sarah" → RCP004 (Sarah Johnson at Wells Fargo, routing: 121000248)
-   - "Hans" → RCP008 (Hans Mueller at Deutsche Bank AG, SWIFT: DEUTDEFF)
-   - "my mum" → RCP003 (Amy Winehouse at Mock Bank - external transfer due to different customer)
-
-4. **Ambiguity Removal**: Apply business logic to resolve conflicts based on intent-specific rules
-   - "Move $500 from checking to business account" → `from_account` ambiguity resolved: "checking" could be CHK001 or CHK002, but since `to_account` is CHK002 (business) and accounts can't be same, `from_account` must be CHK001 (Primary Checking)
-   - "Send $2000 to Sarah" → Amount exceeds P2P limit ($1000), eliminate `payments.p2p.send` from initial possibilities. Upgrade to `payments.transfer.external`
-   - "Transfer $3000 to my mum" → Amount exceeds P2P limit ($1000), eliminate `payments.p2p.send` from possibilities
-   - "Send $1500 to Jack" → After recipient resolution shows international location, amount is within limits ($100000), proceed with international wire, i.e. upgrade to `international.wire.send`
-   - "Send $800 to Hans" → After recipient resolution shows international location, amount is within limits ($100000), proceed with international wire, i.e. upgrade to `international.wire.send`
-
-5. **Confidence Evaluation**: Apply confidence thresholds per ARCHITECTURE.md requirements
-   - Confidence ≥ 0.85: Proceed with confirmation → "Transfer $100 to my savings" (0.92), "Zelle $50 to Mike" (0.95)
-   - Confidence 0.6-0.85: Present disambiguation choices → "Send $2000 to Sarah" (0.78), "Send $800 to Hans" (0.75)  
-   - Confidence < 0.6: Request clarification → [None in our examples]
-
-6. **Human-in-the-Loop Confirmation**: Present dynamic form with AI suggestions for user confirmation (CRITICAL for banking compliance)
-   - UI Context determines execution method: `ui_context: "transaction"` → Dynamic form assembly
-   - "Move $500 from checking to business account" → Show pre-filled form: "Transfer $500 from Primary Checking to Business Checking - Confirm?"
-   - "Send $2000 to Sarah" → Show pre-filled form: "Send $2000 to Sarah Johnson (Wells Fargo) from [account selection] - Confirm?"
-   - "Transfer $100 to my savings" → Show form requesting missing from_account: "Transfer $100 to Savings Account from [account selection] - Confirm?"
-   - "Send $1500 to Jack" → Show form requesting missing currency: "Send $1500 to Jack White (Canada) in [currency selection] - Confirm?"
-
-7. **Status**: Final status after processing through all steps including user confirmation
-   - "Transfer $100 to my savings" → `awaiting_user_input` - form presented requesting missing `from_account` entity
-   - "Move $500 from checking to business account" → `awaiting_user_confirmation` - pre-filled form presented for user approval
-   - "Send $2000 to Sarah" → `awaiting_user_confirmation` - form presented with account selection required
-   - "Transfer $3000 to my mum" → `awaiting_user_confirmation` - pre-filled form presented for user approval  
-   - "Send $1500 to Jack" → `awaiting_user_input` - form presented requesting missing `currency` entity
-   - "Send $800 to Hans" → `awaiting_user_input` - form presented requesting missing `currency` entity
-   - "Zelle $50 to my friend Mike" → `awaiting_user_confirmation` - pre-filled form presented for user approval
-   - "Pay Sarah $25 for coffee" → `awaiting_user_confirmation` - pre-filled form presented for user approval
-
-**Note**: Final `success` status only occurs AFTER user confirms and system executes the transaction 
-
-# Gap Analysis
-
-## Missing Systems (High Level)
-
-1. **RecipientResolutionStrategy**: Missing enrichment strategy class for recipient lookup/resolution from aliases ("my mum" → RCP003)
-2. **LLM-based Intent Refinement**: Missing post-enrichment intent reclassification using LLM after recipient metadata is available
-3. **Banking Operation Method Stubs**: Missing method stubs in MockBankingService (`send_payment`, `block_card`, etc.) 
-4. **Enhanced Entity Types**: Missing recipient-specific entity types in EntityExtractor
-5. **Intent Enrichment Requirements**: Transfer intents missing `enrichment_requirements` declarations
-6. **Business Rules (limits for P2P)**: Missing P2P daily limit validation ($1000) that drives intent refinement in use cases
-7. **Account Disambiguation Logic**: Missing sophisticated "checking" account disambiguation when user has multiple checking accounts
-
-## Existing Systems Improvements
-
-### Overall Pipeline (@pipeline.py)
-- **Current**: Basic entity enrichment via `_apply_entity_enrichment` 
-- **Gap**: Missing LLM-based intent refinement after entity enrichment
-- **Fix**: Add post-enrichment intent reclassification hook using LLM
-
-### Banking Data & Structure (@mock_banking.py)
-- **Current**: Rich recipient data with international metadata, solid account structure
-- **Gap**: Missing method stubs called by banking operations (`send_payment`, `block_card`, `dispute_transaction`)
-- **Strength**: Transfer type detection via `recipient.transfer_type()` method already implemented, `search_recipients()` method available
-- **Fix**: Add simple method stubs (no complex business logic needed for now)
-
-### Intents Structure and Data (@intent_catalog.py)
-- **Current**: Comprehensive intent definitions with proper risk levels and entity requirements
-- **Gap**: Missing `enrichment_requirements` population for transfer intents
-- **Fix**: Add enrichment strategies to transfer intents (`["account_resolution", "recipient_resolution"]`)
-
-### Intents Classification (@intent_classifier.py)
-- **Current**: LLM-first with pattern-based fallback, solid caching
-- **Gap**: No post-enrichment LLM-based intent reclassification after recipient resolution
-- **Strength**: Unified catalog integration works correctly, LLM approach is solid foundation
-- **Fix**: Add LLM-based intent refinement method that considers enriched entity metadata
-
-### Entity Extraction (@entity_extractor.py)  
-- **Current**: Modern hybrid approach with LLM function calling and comprehensive entity types
-- **Gap**: Missing recipient-specific entity types (`recipient_id`, `recipient_account`, `swift_code`)
-- **Strength**: LLM-based extraction with structured functions is excellent foundation
-- **Fix**: Extend entity extraction functions to include recipient-specific fields
-
-### Entity Enrichment (@entity_enricher.py)
-- **Current**: Strategy pattern implemented with account resolution, auto-discovery works perfectly
-- **Gap**: Missing `RecipientResolutionStrategy` class despite `banking_service.search_recipients()` being available
-- **Strength**: Auto-discovery of enrichment strategies follows Open-Closed Principle correctly
-- **Existing Assets**: `ConversationStateManager._match_clarification_response()` has sophisticated fuzzy matching logic for disambiguation
-- **Fix**: Add `RecipientResolutionStrategy` class that reuses existing search and disambiguation patterns
-
-### Banking Operations (@banking_operations.py)
-- **Current**: Well-structured operation definitions with business rules like `["amount_within_limits"]`
-- **Gap**: Transfer-specific limits missing from existing business rule framework  
-- **Strength**: Good separation of concerns between operations and execution
-- **Fix**: Extend existing business rules with transfer limits and implement missing MockBankingService method stubs
-
-### State Management (@state_manager.py)  
-- **Current**: Context preservation and reference resolution implemented
-- **Gap**: Missing disambiguation context management for complex scenarios  
-- **Strength**: `_match_clarification_response()` already handles sophisticated fuzzy matching, partial matches, and typo tolerance
-- **Fix**: Reuse existing disambiguation logic for recipient resolution, add multi-turn tracking
-
-# Implementation Plan
-
-## Phase 1: Core Transfer Infrastructure (High Priority)
-
-### 1.1 Missing MockBankingService Method Stubs  
 ```python
-# Add simple stubs to MockBankingService
-async def send_payment(self, recipient: str, amount: float, from_account: str) -> dict:
-    # Simple success stub - no complex business logic
-    return {"success": True, "payment_id": f"PAY-{datetime.now().strftime('%Y%m%d%H%M%S')}"}
+# Intent confidence thresholds
+CONFIDENCE_HIGH = 0.85  # Proceed with single intent
+CONFIDENCE_MEDIUM = 0.60  # Present options to user
+CONFIDENCE_LOW = 0.59  # Request clarification
 
-async def block_card(self, card_id: str, temporary: bool = True) -> dict:
-    return {"success": True, "card_blocked": card_id, "temporary": temporary}
-
-async def dispute_transaction(self, transaction_id: str) -> dict:  
-    return {"success": True, "dispute_id": f"DIS-{datetime.now().strftime('%Y%m%d%H%M%S')}"}
+# Examples
+"Transfer $100 to my savings" → payments.transfer.internal (0.92)
+"Zelle $50 to Mike" → payments.p2p.send (0.95)
+"Send $2000 to Sarah" → [multiple candidates] (0.78)
 ```
 
-### 1.2 RecipientResolutionStrategy Class
+### Step 2: Entity Extraction
+Extract structured entities from the user query.
+
 ```python
-# Reuse existing patterns: AccountResolutionStrategy + state_manager disambiguation logic
+# Entities to extract
+- amount: Monetary value
+- currency: Currency code (default: USD)
+- from_account: Source account reference
+- to_account: Destination account reference  
+- recipient: Person/entity name
+- memo: Transaction description
+
+# Examples
+"Transfer $100 to my savings" → {
+    "amount": {"value": 100.0, "raw": "$100"},
+    "to_account": {"value": "my savings", "raw": "my savings"}
+}
+```
+
+### Step 3: Entity Enrichment
+Resolve raw entities to actual database records.
+
+```python
+# Enrichment strategies
+1. AccountResolutionStrategy: Maps account references to account IDs
+2. RecipientResolutionStrategy: Maps recipient names to recipient records
+
+# Resolution examples
+"my savings" → SAV001 (unambiguous match)
+"checking" → [CHK001, CHK002] (requires disambiguation)
+"Sarah" → RCP004 (Sarah Johnson, Wells Fargo)
+"Hans" → RCP008 (Hans Mueller, Deutsche Bank, Germany)
+```
+
+### Step 4: Intent Refinement
+Apply business rules to refine intent based on enriched entities.
+
+```python
+# Refinement rules (in order of precedence)
+1. If recipient.country != "US" → international.wire.send
+2. If intent == "payments.p2p.send" AND amount > 1000 → payments.transfer.external  
+3. If recipient.bank == "Mock Bank" AND different customer → payments.transfer.external
+4. Keep initial intent if no rules apply
+
+# Examples
+"Send $2000 to Sarah" + Sarah@WellsFargo → payments.transfer.external (P2P limit exceeded)
+"Send $800 to Hans" + Hans@Germany → international.wire.send (international recipient)
+```
+
+### Step 5: Disambiguation Resolution
+Handle ambiguous entities through business logic.
+
+```python
+# Disambiguation strategies
+1. Exclusion: If to_account identified, exclude it from from_account candidates
+2. Context: Use transaction type to narrow options
+3. User prompt: If still ambiguous, request clarification
+
+# Example
+"from checking to business" →
+  to_account = CHK002 (business)
+  from_account = CHK001 (only other checking account)
+```
+
+### Step 6: Response Generation
+Determine final status and required user actions.
+
+```python
+# Status determination
+if all_required_entities_present:
+    if all_entities_unambiguous:
+        status = "awaiting_user_confirmation"
+    else:
+        status = "awaiting_disambiguation"
+else:
+    status = "awaiting_user_input"
+    
+# Response includes
+- Final intent
+- Enriched entities
+- Missing fields
+- Disambiguation options (if any)
+- Suggested form values
+``` 
+
+## Current System Analysis
+
+### What Exists and Works
+1. **Intent Catalog**: All transfer intents defined with proper risk levels
+2. **MockBankingService**: Has `search_recipients()` and recipient data structure
+3. **Entity Enricher**: Strategy pattern with auto-discovery implemented
+4. **State Manager**: Disambiguation logic with fuzzy matching available
+5. **Pipeline**: Two-pass architecture supports enrichment flow
+
+### What's Missing
+1. **RecipientResolutionStrategy**: Enrichment strategy for recipient lookup
+2. **Intent Refinement**: Post-enrichment intent adjustment based on business rules
+3. **Transfer Limits**: P2P $1,000 limit enforcement
+4. **Banking Method Stubs**: `send_payment()`, `block_card()`, etc.
+5. **Enhanced Entities**: Recipient-specific entity types in extractor
+
+## Implementation Guide
+
+### Phase 1: Minimal Working Implementation (2 Hours)
+
+#### 1.1 Add MockBankingService Method Stubs
+**File**: `backend/src/services/mock_banking.py`
+
+```python
+from datetime import datetime
+
+class MockBankingService:
+    # ... existing code ...
+    
+    async def send_payment(self, 
+                          recipient_id: str, 
+                          amount: float, 
+                          from_account: str,
+                          transfer_type: str = None) -> dict:
+        """Execute a payment transfer."""
+        # Validate inputs
+        if recipient_id not in [r.id for r in self.recipients]:
+            return {"success": False, "error": "Invalid recipient"}
+        if from_account not in self.accounts:
+            return {"success": False, "error": "Invalid account"}
+            
+        # Generate confirmation
+        return {
+            "success": True,
+            "payment_id": f"PAY-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "transfer_type": transfer_type or "external",
+            "estimated_completion": "instant" if transfer_type == "internal" else "1-3 days"
+        }
+    
+    async def block_card(self, card_id: str, temporary: bool = True) -> dict:
+        """Block a card."""
+        return {
+            "success": True,
+            "card_id": card_id,
+            "status": "temporarily_blocked" if temporary else "permanently_blocked",
+            "timestamp": datetime.now().isoformat()
+        }
+```
+
+#### 1.2 Create RecipientResolutionStrategy
+**File**: `backend/src/services/entity_enricher.py`
+
+```python
+from typing import Dict, Any, List, Optional
+from .enrichment_strategies import EnrichmentStrategy
+
 class RecipientResolutionStrategy(EnrichmentStrategy):
+    """Resolves recipient names to recipient records."""
+    
     def __init__(self, banking_service):
         self.banking = banking_service
         
@@ -280,272 +346,232 @@ class RecipientResolutionStrategy(EnrichmentStrategy):
         return "recipient_resolution"
         
     def can_enrich(self, entities: Dict[str, Any]) -> bool:
-        return "recipient" in entities
+        return "recipient" in entities and "enriched_entity" not in entities.get("recipient", {})
         
-    def enrich(self, entities: Dict[str, Any]) -> Dict[str, Any]:
-        recipient_query = self._extract_entity_value(entities["recipient"])
+    async def enrich(self, entities: Dict[str, Any]) -> Dict[str, Any]:
+        recipient_data = entities["recipient"]
+        query = self._extract_entity_value(recipient_data)
         
-        # Use existing banking.search_recipients() for initial search
-        matches = await self.banking.search_recipients(recipient_query)
+        # Search for recipient
+        matches = await self.banking.search_recipients(query)
         
         if len(matches) == 1:
-            # Single match - enrich existing entity with full recipient data
-            entities["recipient"]["enriched_entity"] = matches[0]
-            return entities
-        elif len(matches) > 1:
-            # Multiple matches - use existing fuzzy matching logic from state_manager
-            best_match = self._find_best_match(recipient_query, matches)
-            if best_match:
-                entities["recipient"]["enriched_entity"] = best_match
-                return entities
-            # Set disambiguation_needed flag for pipeline to handle
+            # Single match - enrich with full data
+            recipient_data["enriched_entity"] = matches[0]
+            recipient_data["source"] = "enrichment"
+            recipient_data["confidence"] = 0.95
             
-        # Also search by account_number if no name/alias matches
-        return self._search_by_account_number(entities, recipient_query)
+            # Add transfer type for intent refinement
+            recipient_data["transfer_type"] = self._determine_transfer_type(matches[0])
+            
+        elif len(matches) > 1:
+            # Multiple matches - needs disambiguation
+            recipient_data["disambiguation_required"] = True
+            recipient_data["options"] = matches
+            recipient_data["confidence"] = 0.60
+            
+        else:
+            # No matches
+            recipient_data["not_found"] = True
+            recipient_data["confidence"] = 0.0
+            
+        return entities
     
-    def _find_best_match(self, query: str, options: List[Dict]) -> Optional[Dict]:
-        # REUSE existing ConversationStateManager._match_clarification_response logic
-        # This already handles:
-        # - Exact matches: "John Smith" → John Smith
-        # - Partial matches: "John" → John Smith, "Smith" → John Smith  
-        # - Typos: "Jonh" → John, "Jon" → John (partial matching handles this)
-        # - Multiple matches: Returns None, sets disambiguation_needed flag
+    def _determine_transfer_type(self, recipient: dict) -> str:
+        """Determine transfer type based on recipient data."""
+        if recipient.get("bank_country") not in [None, "US"]:
+            return "international"
+        elif recipient.get("bank_name") == "Mock Bank":
+            return "internal"  
+        else:
+            return "external"
+```
+
+#### 1.3 Add Intent Refinement Logic
+**File**: `backend/src/services/intent_refiner.py` (NEW FILE)
+
+```python
+from typing import Dict, Any, Optional
+
+class IntentRefiner:
+    """Refines intent classification based on enriched entities."""
+    
+    # Transfer type limits
+    P2P_LIMIT = 1000
+    EXTERNAL_LIMIT = 10000
+    INTERNATIONAL_LIMIT = 100000
+    
+    def refine_intent(self, 
+                     initial_intent: str, 
+                     entities: Dict[str, Any]) -> tuple[str, str]:
+        """
+        Refine intent based on business rules.
+        Returns: (final_intent, refinement_reason)
+        """
         
-        # Import and adapt the existing logic:
-        from .state_manager import ConversationStateManager
-        state_manager = ConversationStateManager(None, None)  # Just for the method
-        return state_manager._match_clarification_response(query, options)
-```
-
-### 1.3 LLM-based Intent Refinement (Simple Extension)
-```python
-# REUSE existing _classify_with_llm structure with minimal changes
-async def refine_intent_with_enriched_entities(self, original_intent: str, entities: Dict[str, Any], query: str) -> str:
-    # Build simple context from enriched entities
-    context_parts = [f"Original intent: {original_intent}"]
-    
-    if "recipient" in entities:
-        # Get recipient details via banking service if needed
-        recipient_id = entities["recipient"].get("value") 
-        context_parts.append(f"Recipient resolved: {recipient_id}")
-    
-    amount = entities.get("amount", {}).get("value", 0)
-    if amount > 0:
-        context_parts.append(f"Amount: ${amount}")
-    
-    # REUSE existing prompt structure - simple and clean
-    prompt = f"""Refine this banking intent classification based on enriched entity data.
-
-Query: "{query}"
-Context:
-{chr(10).join(context_parts)}
-
-Available intents: payments.p2p.send, payments.transfer.external, payments.transfer.internal, international.wire.send
-
-Apply these rules:
-- If recipient is international → international.wire.send
-- If amount > $1000 → eliminate payments.p2p.send option
-- Otherwise keep original intent if still valid
-
-Return JSON: {{"intent_id": "refined_intent", "confidence": 0.0-1.0, "reasoning": "brief explanation"}}"""
-    
-    # REUSE existing LLM call pattern exactly
-    response = await self.llm.complete(prompt=prompt, temperature=0.2, response_format={"type": "json_object"})
-    return self._validate_llm_response(response)
-```
-
-### 1.4 Business Rule Integration (Extend Existing Pattern)
-```python
-# EXTEND existing context_aware_responses.py business_rules instead of new class
-def _initialize_business_rules(self) -> dict[str, Any]:
-    rules = super()._initialize_business_rules()  # Get existing rules
-    
-    # ADD transfer-specific limits to existing structure  
-    rules.update({
-        "p2p_limit_check": {
-            "description": "P2P payment limit check",
-            "daily_limit": 1000,
-            "error_message": "Amount exceeds P2P limit of $1000. Consider external transfer.",
-        },
-        "external_limit_check": {
-            "description": "External transfer limit check", 
-            "daily_limit": 10000,
-            "error_message": "Amount exceeds external transfer limit of $10000.",
-        },
-        "international_limit_check": {
-            "description": "International wire limit check",
-            "daily_limit": 100000, 
-            "error_message": "Amount exceeds international wire limit of $100000.",
-        }
-    })
-    return rules
-
-# SIMPLE helper function for intent refinement (no complex class needed)
-def should_upgrade_intent(intent_id: str, amount: float, recipient_international: bool) -> Optional[str]:
-    if recipient_international:
-        return "international.wire.send" 
-    if intent_id == "payments.p2p.send" and amount > 1000:
-        return "payments.transfer.external"
-    return None
-```
-
-### 1.5 Account Disambiguation (Extend Existing Validation)  
-```python
-# EXTEND existing _resolve_account_id with simple exclusion logic
-def _resolve_account_id_with_exclusion(self, entities: Dict[str, Any], exclude_account_id: str = None) -> str:
-    # REUSE existing resolution logic but exclude specified account
-    candidates = []
-    
-    if "account_type" in entities:
-        account_type = self._extract_entity_value(entities["account_type"]).lower()
-        for acc_id, account in self.banking.accounts.items():
-            if account.type.lower() == account_type and acc_id != exclude_account_id:
-                candidates.append(acc_id)
-    
-    # Return first valid candidate (simple and predictable)
-    return candidates[0] if candidates else None
-
-# SIMPLE disambiguation helper (no complex hardcoded rules)
-def resolve_transfer_accounts(self, entities: Dict[str, Any]) -> Dict[str, str]:
-    resolved = {}
-    
-    # Resolve to_account first
-    if "to_account" in entities:
-        resolved["to_account"] = self._resolve_account_id(entities["to_account"])
-    
-    # Resolve from_account, excluding to_account to avoid same-account transfers  
-    if "from_account" in entities:
-        resolved["from_account"] = self._resolve_account_id_with_exclusion(
-            entities["from_account"], 
-            exclude_account_id=resolved.get("to_account")
-        )
-    
-    return resolved
-```
-
-## Phase 2: Enhanced Entity Handling (Medium Priority)
-
-### 2.1 Enhanced Entity Types for Transfers
-```python
-# REUSE existing LLM extraction function structure (_define_extraction_functions)
-# ADD new fields to existing "extract_banking_entities" function:
-
-def _define_extraction_functions(self) -> list[dict[str, Any]]:
-    return [
-        {
-            "name": "extract_banking_entities",
-            "parameters": {
-                "type": "object", 
-                "properties": {
-                    # ... existing fields ...
-                    "recipient": {"type": "string", "description": "Person or entity receiving money"},
-                    
-                    # NEW fields for recipient enrichment
-                    "recipient_account": {"type": "string", "description": "Recipient account number if mentioned"},
-                    "swift_code": {"type": "string", "description": "SWIFT/BIC code if mentioned"},
-                    "recipient_bank": {"type": "string", "description": "Recipient bank name if mentioned"},
-                    
-                    # NEW EntityType enum values  
-                    EntityType.RECIPIENT_ID = "recipient_id"
-                    EntityType.RECIPIENT_ACCOUNT = "recipient_account"
-                    EntityType.SWIFT_CODE = "swift_code"
-                }
-            }
-        }
-    ]
-```
-
-### 2.2 Intent Catalog Enrichment Requirements
-```python
-# Update transfer intent definitions
-"payments.transfer.internal": BankingIntent(
-    enrichment_requirements=["account_resolution"],
-)
-"payments.transfer.external": BankingIntent(  
-    enrichment_requirements=["recipient_resolution", "account_resolution"],
-)
-"international.wire.send": BankingIntent(
-    enrichment_requirements=["recipient_resolution", "account_resolution"],
-)
-```
-
-## Phase 3: Pipeline Integration (Lower Priority)
-
-### 3.1 Enhanced Search Capabilities (For Use Case Coverage)
-```python
-# EXTEND existing search_recipients following OCP - add new method for completeness
-async def search_recipients_with_account(self, query: str) -> list[dict[str, Any]]:
-    # REUSE existing search_recipients for name/alias matching
-    matches = await self.search_recipients(query)
-    
-    # EXTEND with account number search for edge cases
-    if not matches:
-        account_matches = [
-            r.to_dict() for r in self.recipients 
-            if query in r.account_number  # Support account number queries
-        ]
-        matches.extend(account_matches)
-    
-    return matches
-```
-
-### 3.2 Post-Enrichment Intent Refinement Hook (Simple Integration)
-```python
-# ADD to existing pipeline.py process() method after entity enrichment
-async def process(...):
-    # ... existing enrichment logic ...
-    entities = await self._apply_entity_enrichment(classification.get("intent_id"), entities)
-    
-    # NEW: Simple intent refinement check after enrichment
-    if "recipient" in entities.get("entities", {}):
-        amount = entities.get("entities", {}).get("amount", {}).get("value", 0)
-        recipient_id = entities.get("entities", {}).get("recipient", {}).get("value")
+        # Extract key data
+        amount = entities.get("amount", {}).get("value", 0)
+        recipient = entities.get("recipient", {})
+        transfer_type = recipient.get("transfer_type")
         
-        # SIMPLE upgrade check using helper function - would need to lookup recipient details if needed
-        # For now, use simple amount-based rules
-        suggested_intent = should_upgrade_intent(
-            classification.get("intent_id"), 
-            amount, 
-            False  # Would determine from banking service if needed
-        )
+        # Rule 1: International recipient always becomes international wire
+        if transfer_type == "international":
+            if initial_intent != "international.wire.send":
+                return "international.wire.send", "international_recipient"
+                
+        # Rule 2: Amount exceeds P2P limit
+        if initial_intent == "payments.p2p.send" and amount > self.P2P_LIMIT:
+            # Upgrade to external transfer
+            return "payments.transfer.external", "p2p_limit_exceeded"
+            
+        # Rule 3: Internal bank but different customer
+        if transfer_type == "internal" and recipient.get("enriched_entity"):
+            recipient_data = recipient["enriched_entity"]
+            # Check if it's actually a different customer at same bank
+            if recipient_data.get("customer_id") != "current_user":
+                return "payments.transfer.external", "different_customer_same_bank"
+                
+        # Rule 4: Explicit P2P keywords override amount limits for suggestions
+        query_lower = entities.get("original_query", "").lower()
+        if any(keyword in query_lower for keyword in ["zelle", "venmo", "cash app"]):
+            if amount <= self.P2P_LIMIT:
+                return "payments.p2p.send", "explicit_p2p_service"
+                
+        # No refinement needed
+        return initial_intent, "no_refinement"
+```
+
+#### 1.4 Pipeline Integration
+**File**: `backend/src/services/pipeline.py`
+
+```python
+# Add to existing pipeline.py
+from .intent_refiner import IntentRefiner
+
+class Pipeline:
+    def __init__(self, ...):
+        # ... existing init ...
+        self.intent_refiner = IntentRefiner()
+    
+    async def process(self, query: str, session_id: str, ui_context: str = None):
+        # ... existing code through entity enrichment ...
         
-        if suggested_intent:
-            refined_classification = await self.classifier.refine_intent_with_enriched_entities(
-                classification.get("intent_id"), entities.get("entities", {}), resolved_query
+        # NEW: Intent refinement after enrichment
+        if classification.get("intent_id"):
+            original_intent = classification["intent_id"]
+            final_intent, reason = self.intent_refiner.refine_intent(
+                original_intent, 
+                entities
             )
-            if refined_classification.get("intent_id") == suggested_intent:
-                classification = refined_classification
+            
+            if final_intent != original_intent:
+                classification["intent_id"] = final_intent
+                classification["refinement_applied"] = True
+                classification["refinement_reason"] = reason
+                
+                # Log the refinement for debugging
+                logger.info(f"Intent refined: {original_intent} → {final_intent} ({reason})")
+        
+        # ... continue with existing flow ...
 ```
 
-## Implementation Notes
+#### 1.5 Update Intent Catalog
+**File**: `backend/src/intent_catalog.py`
 
-### SOLID Principles & Code Reuse
-- **Open-Closed Principle**: Add `RecipientResolutionStrategy` without modifying existing enrichment system; extend search_recipients via new method
-- **Single Responsibility**: Each component maintains clear responsibility - enrichment strategies only enrich, classifier only classifies
-- **Dependency Inversion**: Strategies depend on banking_service abstraction, not concrete implementation
+```python
+# Add enrichment requirements to transfer intents
+INTENT_CATALOG = {
+    "payments.transfer.internal": BankingIntent(
+        # ... existing fields ...
+        enrichment_requirements=["account_resolution"],
+    ),
+    "payments.transfer.external": BankingIntent(
+        # ... existing fields ...
+        enrichment_requirements=["recipient_resolution", "account_resolution"],
+    ),
+    "payments.p2p.send": BankingIntent(
+        # ... existing fields ...
+        enrichment_requirements=["recipient_resolution"],
+    ),
+    "international.wire.send": BankingIntent(
+        # ... existing fields ...
+        enrichment_requirements=["recipient_resolution", "account_resolution"],
+    ),
+    # ... other intents ...
+}
+```
 
-### Reusing Existing Code Assets
-- **Disambiguation Logic**: Reuse `ConversationStateManager._match_clarification_response()` for fuzzy recipient matching and typo handling
-- **LLM Classification**: Extend existing `_classify_with_llm()` prompt structure for intent refinement
-- **Entity Extraction**: Extend existing `extract_banking_entities` function schema for new recipient fields
-- **Search Capabilities**: Build upon existing `search_recipients()` method with enhanced version
+### Phase 2: Testing Strategy
 
-### Architecture Preservation  
-- **LLM-First Approach**: Maintain existing LLM-based classification and entity extraction patterns
-- **Simple Stubs**: Banking operation stubs return success - no complex business logic needed
-- **Probabilistic → Deterministic Flow**: Keep existing architecture with added enrichment + business rule validation steps
-- **Auto-Discovery**: Entity enrichment strategies auto-discovered by existing `_auto_discover_strategies()`
+#### 2.1 Unit Tests for Core Components
+**File**: `backend/tests/test_transfer_implementation.py`
 
-### Critical Use Case Alignment
-- **P2P Business Rules**: Simple business rule extension with $1000 P2P limit validation
-- **Amount-based Intent Refinement**: Clean helper function eliminates P2P when amount > $1000
-- **Account Disambiguation**: Simple exclusion logic prevents same-account transfers
-- **Recipient-driven Intent Changes**: International recipient detection triggers intent upgrade
+```python
+import pytest
+from src.services.intent_refiner import IntentRefiner
+from src.services.entity_enricher import RecipientResolutionStrategy
 
-### Banking Compliance
-- **Human-in-the-Loop**: All transfer operations require user confirmation via existing approval workflow
-- **Business Rule Enforcement**: Transfer limits validated before execution (P2P: $1000, External: $10000, International: $100000)
-- **Audit Trail**: Leverage existing audit logging in pipeline processing with enhanced business rule tracking
+class TestIntentRefiner:
+    def test_p2p_limit_enforcement(self):
+        refiner = IntentRefiner()
+        entities = {
+            "amount": {"value": 1500},
+            "recipient": {"transfer_type": "external"}
+        }
+        
+        final_intent, reason = refiner.refine_intent("payments.p2p.send", entities)
+        assert final_intent == "payments.transfer.external"
+        assert reason == "p2p_limit_exceeded"
+    
+    def test_international_recipient_upgrade(self):
+        refiner = IntentRefiner()
+        entities = {
+            "amount": {"value": 800},
+            "recipient": {"transfer_type": "international"}
+        }
+        
+        final_intent, reason = refiner.refine_intent("payments.p2p.send", entities)
+        assert final_intent == "international.wire.send"
+        assert reason == "international_recipient"
+
+class TestRecipientResolution:
+    @pytest.mark.asyncio
+    async def test_single_match_enrichment(self, mock_banking_service):
+        strategy = RecipientResolutionStrategy(mock_banking_service)
+        entities = {"recipient": {"value": "Sarah"}}
+        
+        enriched = await strategy.enrich(entities)
+        
+        assert "enriched_entity" in enriched["recipient"]
+        assert enriched["recipient"]["confidence"] == 0.95
+        assert enriched["recipient"]["transfer_type"] == "external"
+```
+
+#### 2.2 Integration Test for Full Pipeline
+**File**: `backend/tests/test_transfer_pipeline.py`
+
+```python
+@pytest.mark.asyncio
+async def test_transfer_with_intent_refinement(test_client):
+    """Test: 'Send $2000 to Sarah' → P2P becomes External due to limit."""
+    response = await test_client.post("/api/process", json={
+        "query": "Send $2000 to Sarah at Wells Fargo",
+        "session_id": "test_123",
+        "ui_context": "transaction"
+    })
+    
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Should refine from P2P to External
+    assert data["intent"] == "payments.transfer.external"
+    assert data.get("refinement_applied") == True
+    assert data.get("refinement_reason") == "p2p_limit_exceeded"
+    
+    # Should have enriched recipient
+    assert "recipient" in data["entities"]
+    assert data["entities"]["recipient"]["enriched_entity"]["name"] == "Sarah Johnson"
+```
 
 # Success Criteria
 
@@ -932,3 +958,34 @@ POST /api/process
   }
 }
 ```
+
+## Implementation Checklist
+
+### Immediate Actions (Phase 1 - 2 Hours)
+- [ ] Add `send_payment()` and `block_card()` to MockBankingService
+- [ ] Create `RecipientResolutionStrategy` class in entity_enricher.py
+- [ ] Create new `intent_refiner.py` with IntentRefiner class
+- [ ] Update Pipeline to call intent refinement after enrichment
+- [ ] Add enrichment_requirements to transfer intents in intent_catalog.py
+- [ ] Run existing tests to ensure no regression
+
+### Testing & Validation (30 Minutes)
+- [ ] Test UC1: Internal transfer with account resolution
+- [ ] Test UC3: External transfer with P2P limit enforcement
+- [ ] Test UC7: International wire detection
+- [ ] Verify intent refinement logging works
+- [ ] Check disambiguation flow for multiple recipients
+
+### Future Enhancements (Phase 2)
+- [ ] Add fuzzy matching for recipient names
+- [ ] Implement vulnerable customer detection
+- [ ] Add transaction velocity checks
+- [ ] Create audit trail for all refinement decisions
+- [ ] Add confidence score adjustments based on enrichment quality
+
+### Architecture Notes
+- Two-pass processing ensures clean separation of concerns
+- Deterministic refinement rules provide predictable behavior
+- Strategy pattern allows easy addition of new enrichment types
+- All decisions are traceable through logging and source attribution
+- System fails gracefully when enrichment is unavailable
