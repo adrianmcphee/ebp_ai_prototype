@@ -485,3 +485,60 @@ class MockBankingService:
         ]
 
         return matching[:20]
+
+    async def send_payment(self, 
+                          recipient_id: str, 
+                          amount: float, 
+                          from_account: str,
+                          transfer_type: str = None) -> dict[str, Any]:
+        """Execute a payment transfer."""
+        await asyncio.sleep(0.3)
+        
+        # Validate inputs
+        if recipient_id not in [r.id for r in self.recipients]:
+            return {"success": False, "error": "Invalid recipient"}
+        if from_account not in self.accounts:
+            return {"success": False, "error": "Invalid account"}
+        if amount <= 0:
+            return {"success": False, "error": "Invalid amount"}
+            
+        # Check balance
+        account = self.accounts[from_account]
+        if amount > account.balance:
+            return {
+                "success": False, 
+                "error": "Insufficient funds",
+                "available_balance": account.balance
+            }
+            
+        # Generate confirmation
+        payment_id = f"PAY-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
+        # Determine completion time based on transfer type
+        completion_map = {
+            "internal": "instant",
+            "external": "1-3 days", 
+            "p2p": "instant",
+            "international": "3-5 days"
+        }
+        
+        return {
+            "success": True,
+            "payment_id": payment_id,
+            "transfer_type": transfer_type or "external",
+            "estimated_completion": completion_map.get(transfer_type, "1-3 days"),
+            "amount": amount,
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    async def block_card(self, card_id: str, temporary: bool = True) -> dict[str, Any]:
+        """Block a card temporarily or permanently."""
+        await asyncio.sleep(0.2)
+        
+        return {
+            "success": True,
+            "card_id": card_id,
+            "status": "temporarily_blocked" if temporary else "permanently_blocked",
+            "timestamp": datetime.now().isoformat(),
+            "message": f"Card {card_id} has been {'temporarily' if temporary else 'permanently'} blocked"
+        }
