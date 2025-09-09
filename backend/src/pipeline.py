@@ -222,6 +222,8 @@ class IntentPipeline:
                 resolved_query, context, include_risk=True
             )
 
+            print(f"DEBUG 1. Classification: {classification}")
+
             # Smart entity extraction with validation
             required_entities = classification.get("required_entities", [])
             entities = await self.extractor.extract(
@@ -231,9 +233,13 @@ class IntentPipeline:
                 context,
             )
 
+            print(f"DEBUG 2. Entities: {entities}")
+
             # Apply intent-driven entity enrichment (e.g., account_type -> account_id)
             entities = await self._apply_entity_enrichment(classification.get("intent_id"), entities)
 
+            print(f"DEBUG 3. Enriched entities: {entities}")
+            
             # Apply intent refinement after enrichment
             if classification.get("intent_id"):
                 original_intent = classification["intent_id"]
@@ -251,6 +257,7 @@ class IntentPipeline:
                     classification["intent_id"] = final_intent
                     classification["refinement_applied"] = True
                     classification["refinement_reason"] = reason
+                    print(f"DEBUG 4. Refined classification: {classification}")
                     
             # Generate context-aware response
             response = await self.response_gen.generate_response(
@@ -461,10 +468,13 @@ class IntentPipeline:
             return {
                 "status": "confirmation_needed",
                 "intent": classification.get("intent_id"),
-                "risk_level": risk_level.value,
+                "confidence": classification.get("confidence", 0.0),
+                "entities": response.data.get("processed_entities", entities.get("entities", {})),
                 "message": response.message,
+                "risk_level": risk_level.value,
                 "warning": response.risk_warning,
-                "details": entities.get("entities", {}),
+                "ui_assistance": None,
+                "execution": None
             }
 
         elif response.response_type == ResponseType.AUTH_REQUIRED:
