@@ -152,7 +152,7 @@ class IntentPipeline:
         extracted_entities = entities.get("entities", {})
         
         # Apply enrichment based on intent requirements
-        enriched_entities = self.entity_enricher.enrich(intent_id, extracted_entities)
+        enriched_entities = await self.entity_enricher.enrich(intent_id, extracted_entities)
         
         # Update the entities dict with enriched values
         if enriched_entities != extracted_entities:
@@ -233,7 +233,7 @@ class IntentPipeline:
 
             # Apply intent-driven entity enrichment (e.g., account_type -> account_id)
             entities = await self._apply_entity_enrichment(classification.get("intent_id"), entities)
-            
+
             # Apply intent refinement after enrichment
             if classification.get("intent_id"):
                 original_intent = classification["intent_id"]

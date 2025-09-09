@@ -150,7 +150,7 @@ class IntentDrivenEnricher:
             # Unknown dependencies - skip this strategy
             return None
     
-    def enrich(self, intent_id: str, entities: Dict[str, Any]) -> Dict[str, Any]:
+    async def enrich(self, intent_id: str, entities: Dict[str, Any]) -> Dict[str, Any]:
         """Enrich based on intent's declared requirements"""
         # Get intent and its enrichment requirements
         intent = self.intent_catalog.get_intent(intent_id)
@@ -162,7 +162,12 @@ class IntentDrivenEnricher:
         for requirement in intent.enrichment_requirements:
             strategy = self._strategies.get(requirement)
             if strategy and strategy.can_enrich(enriched):
-                enriched = strategy.enrich(enriched)
+                # Check if the strategy's enrich method is async
+                import inspect
+                if inspect.iscoroutinefunction(strategy.enrich):
+                    enriched = await strategy.enrich(enriched)
+                else:
+                    enriched = strategy.enrich(enriched)
         
         return enriched
 
