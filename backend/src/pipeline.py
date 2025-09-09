@@ -17,6 +17,7 @@ from .validator import EntityValidator
 from .banking_operations import BankingOperationsCatalog, OperationStatus
 from .ui_screen_catalog import ui_screen_catalog, ScreenType
 from .entity_enricher import IntentDrivenEnricher
+from .intent_refiner import IntentRefiner
 
 
 class ParameterResolver(ABC):
@@ -115,6 +116,9 @@ class IntentPipeline:
         # Initialize intent-driven entity enricher
         from .intent_catalog import intent_catalog
         self.entity_enricher = IntentDrivenEnricher(intent_catalog, banking_service)
+        
+        # Initialize intent refiner
+        self.intent_refiner = IntentRefiner()
 
     def _register_default_resolvers(self) -> None:
         """Register default parameter resolvers - can be extended without modifying this class"""
@@ -229,7 +233,25 @@ class IntentPipeline:
 
             # Apply intent-driven entity enrichment (e.g., account_type -> account_id)
             entities = await self._apply_entity_enrichment(classification.get("intent_id"), entities)
-
+            
+            # Apply intent refinement after enrichment
+            if classification.get("intent_id"):
+                original_intent = classification["intent_id"]
+                
+                # Add original query to entities for refinement context
+                enriched_entities = entities.get("entities", {})
+                enriched_entities["original_query"] = resolved_query
+                
+                final_intent, reason = self.intent_refiner.refine_intent(
+                    original_intent, 
+                    enriched_entities
+                )
+                
+                if final_intent != original_intent:
+                    classification["intent_id"] = final_intent
+                    classification["refinement_applied"] = True
+                    classification["refinement_reason"] = reason
+                    
             # Generate context-aware response
             response = await self.response_gen.generate_response(
                 classification, entities, context, user_profile
