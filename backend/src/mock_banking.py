@@ -486,6 +486,27 @@ class MockBankingService:
 
         return matching[:20]
 
+    async def get_user_profile(self, user_id: str = "user_123") -> dict[str, Any]:
+        """Get user profile - for demo purposes, always returns Andrew John Hozier"""
+        await asyncio.sleep(0.1)
+        
+        return {
+            "user_id": user_id,
+            "full_name": "Andrew John Hozier",
+            "email": "andrew.hozier@mockbank.com", 
+            "auth_level": "full",  # Ensures user passes all auth checks
+            "account_ids": ["CHK001", "SAV001", "CHK002"],  # Access to all demo accounts
+            "authenticated": True,
+            "customer_since": "2020-01-15",
+            "phone": "+1-555-0123",
+            "address": {
+                "street": "123 Demo Street",
+                "city": "Mock City", 
+                "state": "NY",
+                "zip": "10001"
+            }
+        }
+
     async def send_payment(self, 
                           recipient_id: str, 
                           amount: float, 
