@@ -23,6 +23,7 @@ import { Breadcrumb } from './components/Breadcrumb';
 import { NavigationAssistant } from './components/NavigationAssistant';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
+import { sessionService } from './services/session';
 import { 
   buildNavigationGroups,
   getRouteByPath,
@@ -56,7 +57,7 @@ export const MainApp: React.FC = () => {
 
   const initializeSession = async () => {
     try {
-      await apiService.initializeSession();
+      await sessionService.initialize();
       addSystemMessage('Connected to EBP Banking Assistant');
     } catch (error) {
       console.error('Failed to initialize session:', error);

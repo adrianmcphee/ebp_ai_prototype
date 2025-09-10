@@ -1,14 +1,11 @@
 import axios from 'axios';
 import { API_BASE } from '../constants';
 import type { Account, ProcessResponse, AccountBalance, AccountTransactionsResponse } from '../types';
+import { sessionService } from './session';
 
 
 // API service for all HTTP requests
 export const apiService = {
-  // Initialize session
-  async initializeSession(): Promise<void> {
-    await axios.post(`${API_BASE}/api/session`);
-  },
 
   // Load user accounts
   async getAccounts(): Promise<Account[]> {
@@ -18,9 +15,11 @@ export const apiService = {
 
   // Process user message/query
   async processMessage(query: string, uiContext: string): Promise<ProcessResponse> {
+    const sessionId = sessionService.getSessionId();
     const response = await axios.post(`${API_BASE}/api/process`, {
       query,
-      ui_context: uiContext
+      ui_context: uiContext,
+      session_id: sessionId
     });
     return response.data;
   },
