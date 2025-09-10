@@ -378,7 +378,7 @@ BANKING_INTENTS = {
         confidence_threshold=0.9,
         risk_level=RiskLevel.HIGH,
         auth_required=AuthLevel.FULL,
-        required_entities=["amount", "recipient"],
+        required_entities=["amount", "recipient", "from_account"],
         optional_entities=["routing_number", "bank_name", "memo", "wire_type"],
         example_utterances=[
             "Send money to another bank",
@@ -1229,7 +1229,7 @@ BANKING_INTENTS = {
         confidence_threshold=0.85,
         risk_level=RiskLevel.HIGH,
         auth_required=AuthLevel.FULL,
-        required_entities=["amount", "recipient"],
+        required_entities=["amount", "recipient", "from_account"],
         optional_entities=["currency", "purpose", "recipient_account", "memo", "recipient_country", "correspondent_bank", "swift_code"],
         example_utterances=[
             "International wire transfer",
