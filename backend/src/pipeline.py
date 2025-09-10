@@ -205,6 +205,7 @@ class IntentPipeline:
 
             # Check for pending approval (high-risk operations)
             pending_approval = await self.state.get_pending_approval(session_id)
+            
             if pending_approval and pending_approval.get("awaiting_approval"):
                 if await self._is_approval_response(query):
                     return await self._handle_approval_confirmation(
@@ -222,8 +223,6 @@ class IntentPipeline:
                 resolved_query, context, include_risk=True
             )
 
-            print(f"DEBUG 1. Classification: {classification}")
-
             # Smart entity extraction with validation
             required_entities = classification.get("required_entities", [])
             entities = await self.extractor.extract(
@@ -233,12 +232,8 @@ class IntentPipeline:
                 context,
             )
 
-            print(f"DEBUG 2. Entities: {entities}")
-
             # Apply intent-driven entity enrichment (e.g., account_type -> account_id)
             entities = await self._apply_entity_enrichment(classification.get("intent_id"), entities)
-
-            print(f"DEBUG 3. Enriched entities: {entities}")
             
             # Apply intent refinement after enrichment
             if classification.get("intent_id"):
@@ -257,7 +252,6 @@ class IntentPipeline:
                     classification["intent_id"] = final_intent
                     classification["refinement_applied"] = True
                     classification["refinement_reason"] = reason
-                    print(f"DEBUG 4. Refined classification: {classification}")
                     
             # Generate context-aware response
             response = await self.response_gen.generate_response(
@@ -382,7 +376,29 @@ class IntentPipeline:
             # Clear pending approval
             await self.state.clear_pending_approval(session_id)
 
-            return execution_result
+            # Format as proper pipeline response
+            if execution_result.get("success"):
+                return {
+                    "status": "success",
+                    "intent": original_intent.get("intent_id"),
+                    "intent_name": original_intent.get("name"),
+                    "confidence": original_intent.get("confidence", 1.0),
+                    "entities": original_entities,
+                    "message": execution_result.get("message"),
+                    "execution_result": execution_result,
+                    "ui_assistance": None,
+                    "execution": execution_result
+                }
+            else:
+                return {
+                    "status": "error",
+                    "intent": original_intent.get("intent_id"),
+                    "confidence": original_intent.get("confidence", 0.0),
+                    "entities": original_entities,
+                    "message": execution_result.get("message", "Operation failed"),
+                    "ui_assistance": None,
+                    "execution": None
+                }
 
         elif cancelled:
             # Clear pending approval
@@ -528,8 +544,14 @@ class IntentPipeline:
         # Convert entities to simple dict (remove nested structure if present)
         simple_entities = {}
         for key, value in entities.items():
-            if isinstance(value, dict) and "value" in value:
-                simple_entities[key] = value["value"]
+            if isinstance(value, dict):
+                # For enriched entities (like recipients), use the enriched ID if available
+                if "enriched_entity" in value and "id" in value["enriched_entity"]:
+                    simple_entities[key] = value["enriched_entity"]["id"]
+                elif "value" in value:
+                    simple_entities[key] = value["value"]
+                else:
+                    simple_entities[key] = value
             else:
                 simple_entities[key] = value
 
