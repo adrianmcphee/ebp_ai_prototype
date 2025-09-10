@@ -326,7 +326,7 @@ async def process_query(request: Request, body: ProcessRequest):
             "intent": "unknown",
             "confidence": 0.0,
             "entities": {},
-            "message": "Sorry, I encountered an error processing your request.",
+            "message": "An error occurred processing your request",
             "ui_assistance": None,
             "execution": None
         }

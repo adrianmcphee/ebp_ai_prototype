@@ -323,6 +323,22 @@ class IntentPipeline:
             # Clear pending clarification
             await self.state.clear_pending_clarification(session_id)
 
+            if response.response_type == ResponseType.CONFIRMATION_NEEDED:
+                from .intent_catalog import RiskLevel
+                risk_level = RiskLevel(original_intent.get("risk_level", "low"))
+
+                await self.state.set_pending_approval(
+                    session_id,
+                    {
+                        "intent": original_intent,
+                        "entities": merged_entities,
+                        "risk_level": risk_level.value,
+                        "summary": response.message,
+                        "awaiting_approval": True,
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                )
+
             return self._format_response(response, original_intent, merged_entities)
 
         else:
@@ -620,8 +636,24 @@ class IntentPipeline:
         self, response, intent: dict[str, Any], entities: dict[str, Any]
     ) -> dict[str, Any]:
         """Format response for output"""
+        
+        # Import ResponseType here to avoid circular imports
+        from .context_aware_responses import ResponseType
+        
+        status_mapping = {
+            ResponseType.SUCCESS: "success",
+            ResponseType.CONFIRMATION_NEEDED: "awaiting_user_confirmation",
+            ResponseType.MISSING_INFO: "clarification_needed",
+            ResponseType.AUTH_REQUIRED: "auth_required",
+            ResponseType.ERROR: "error",
+            ResponseType.WARNING: "warning",
+            ResponseType.INFO: "info"
+        }
+        
+        mapped_status = status_mapping.get(response.response_type, "success")
+        
         return {
-            "status": "success",
+            "status": mapped_status,
             "intent": intent.get("intent_id"),
             "intent_name": intent.get("name"),
             "confidence": intent.get("confidence"),
