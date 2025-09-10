@@ -407,17 +407,19 @@ class BankingOperationsCatalog:
         self, entities: Dict[str, Any], user_context: Optional[Dict[str, Any]] = None
     ) -> OperationResult:
         """Execute external transfer/P2P payment"""
-        recipient = entities.get("recipient")
+        recipient_name = entities.get("recipient")
+        recipient_id = entities.get("recipient_id", recipient_name)  # Fallback to name if ID not available
         amount = entities.get("amount")
         from_account = entities.get("from_account", "CHK001")  # Default to primary checking account
 
-        result = await self.banking.send_payment(recipient, amount, from_account)
+        # Use recipient_id for the banking operation
+        result = await self.banking.send_payment(recipient_id, amount, from_account)
         
         if result.get("success"):
             return OperationResult(
                 status=OperationStatus.COMPLETED,
                 data=result,
-                message=f"Successfully sent ${amount:,.2f} to {recipient}",
+                message=f"Successfully sent ${amount:,.2f} to {recipient_name}",
                 reference_id=result.get("payment_id"),
                 ui_hints={"display_mode": "confirmation", "show_receipt": True}
             )
@@ -432,19 +434,20 @@ class BankingOperationsCatalog:
         self, entities: Dict[str, Any], user_context: Optional[Dict[str, Any]] = None
     ) -> OperationResult:
         """Execute P2P payment to friend/contact"""
-        recipient = entities.get("recipient")
+        recipient_name = entities.get("recipient")
+        recipient_id = entities.get("recipient_id", recipient_name)  # Fallback to name if ID not available
         amount = entities.get("amount")
         from_account = entities.get("from_account", "CHK001")  # Default to primary checking account
         memo = entities.get("memo", "")
 
-        # Use the same banking service but with P2P-specific handling
-        result = await self.banking.send_payment(recipient, amount, from_account, "p2p")
+        # Use recipient_id for the banking operation
+        result = await self.banking.send_payment(recipient_id, amount, from_account, "p2p")
         
         if result.get("success"):
             return OperationResult(
                 status=OperationStatus.COMPLETED,
                 data=result,
-                message=f"Successfully sent ${amount:,.2f} to {recipient}" + (f" for {memo}" if memo else ""),
+                message=f"Successfully sent ${amount:,.2f} to {recipient_name}" + (f" for {memo}" if memo else ""),
                 reference_id=result.get("payment_id"),
                 ui_hints={
                     "display_mode": "p2p_confirmation", 
