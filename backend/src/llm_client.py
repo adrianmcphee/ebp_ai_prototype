@@ -407,7 +407,7 @@ class MockLLMClient(LLMClient):
             "accounts.close.request": ["close my account", "close account", "cancel account", "terminate account", "shutdown account"],
 
             # Payments & Transfers - Enhanced patterns
-            "payments.transfer.internal": ["transfer between", "move to savings", "move to checking", "internal transfer", "transfer from checking", "transfer from savings"],
+            "payments.transfer.internal": ["transfer between", "move to savings", "move to checking", "move to business", "move from checking", "move from savings", "move from business", "internal transfer", "transfer from checking", "transfer from savings", "move money between"],
             "payments.transfer.external": ["wire transfer", "send to another bank", "external transfer", "wire money"],
             "payments.p2p.send": ["send money", "pay friend", "zelle", "venmo", "pay person", "send to john", "send to sarah", "transfer to alice", "pay bob", "send $", "send", "pay"],
             "payments.bill.pay": ["pay bill", "bill payment", "pay electric", "pay utility", "electricity bill", "gas bill", "water bill"],

@@ -561,9 +561,17 @@ class IntentPipeline:
         simple_entities = {}
         for key, value in entities.items():
             if isinstance(value, dict):
-                # For enriched entities (like recipients), use the enriched ID if available
+                # For enriched entities, use appropriate field based on entity type
                 if "enriched_entity" in value and "id" in value["enriched_entity"]:
-                    simple_entities[key] = value["enriched_entity"]["id"]
+                    enriched = value["enriched_entity"]
+                    if key == "recipient":
+                        # For recipients, use the name for display in messages
+                        simple_entities[key] = enriched.get("name", enriched["id"])
+                        # Also provide the ID separately for banking operations that need it
+                        simple_entities[f"{key}_id"] = enriched["id"]
+                    else:
+                        # For other entities (accounts, etc.), use the ID
+                        simple_entities[key] = enriched["id"]
                 elif "value" in value:
                     simple_entities[key] = value["value"]
                 else:
