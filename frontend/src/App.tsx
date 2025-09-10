@@ -24,6 +24,8 @@ import { NavigationAssistant } from './components/NavigationAssistant';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
 import { sessionService } from './services/session';
+import type { MessageStrategy } from './services/message-strategy';
+import { MessageStrategyFactory } from './services/message-strategy';
 import { 
   buildNavigationGroups,
   getRouteByPath,
@@ -215,7 +217,7 @@ export const MainApp: React.FC = () => {
     }
   };
 
-  const handleProcessResponse = (data: ProcessResponse) => {
+  const handleProcessResponse = (data: ProcessResponse, messageStrategy: MessageStrategy) => {
     // Determine which navigation approach to use based on context and intent
     const shouldUseIntentBasedNavigation = 
       activeTab === 'banking' && 
@@ -239,7 +241,7 @@ export const MainApp: React.FC = () => {
         }
       }
 
-      addAssistantMessage(responseMessage, data);
+      messageStrategy.handleAssistantResponse(responseMessage, data);
     } else {
       // Fallback to legacy UI assistance approach
       if (data.ui_assistance) {
@@ -259,18 +261,20 @@ export const MainApp: React.FC = () => {
         }
       }
 
-      addAssistantMessage(responseMessage, data);
+      messageStrategy.handleAssistantResponse(responseMessage, data);
     }
   };
 
   const handleWebSocketMessage = (message: { type: string; data: ProcessResponse }) => {
     if (message.type === 'result') {
-      handleProcessResponse(message.data);
+      // WebSocket messages are typically part of chat flow, so use persistent strategy
+      const messageStrategy = MessageStrategyFactory.createPersistent(addUserMessage, addAssistantMessage);
+      handleProcessResponse(message.data, messageStrategy);
     }
   };
 
   // Handler for Chat Panel form submission
-  // Uses persistent session strategy by default - maintains conversation context
+  // Uses persistent session and message strategies - maintains conversation context and history
   const handleSubmit = async (values: { message: string }) => {
     const userMessage = values.message.trim();
     if (!userMessage) return;
@@ -280,21 +284,24 @@ export const MainApp: React.FC = () => {
       setShowNavigationAssistant(false);
     }
 
-    addUserMessage(userMessage);
+    // Create persistent message strategy for chat history
+    const messageStrategy = MessageStrategyFactory.createPersistent(addUserMessage, addAssistantMessage);
+    
+    messageStrategy.handleUserMessage(userMessage);
     form.reset();
 
     try {
       // Uses persistent session by default for conversation continuity
       const data = await apiService.processMessage(userMessage, activeTab);
-      handleProcessResponse(data);
+      handleProcessResponse(data, messageStrategy);
     } catch (error) {
       console.error('Error processing message:', error);
-      addAssistantMessage('Sorry, I encountered an error processing your request.');
+      messageStrategy.handleAssistantResponse('Sorry, I encountered an error processing your request.');
     }
   };
 
   // Handler for Navigation Assistant form submission
-  // Uses stateless session strategy - each request is independent
+  // Uses stateless session and silent message strategies - independent requests without chat pollution
   const handleNavigationSubmit = async (values: { message: string }) => {
     const userMessage = values.message.trim();
     if (!userMessage) return;
@@ -302,15 +309,23 @@ export const MainApp: React.FC = () => {
     // Close navigation assistant
     setShowNavigationAssistant(false);
 
-    addUserMessage(userMessage);
+    // Create silent message strategy - no chat history pollution
+    const messageStrategy = MessageStrategyFactory.createSilent();
+    
+    messageStrategy.handleUserMessage(userMessage);
 
     try {
       // Use stateless strategy for navigation requests (no session continuity)
       const data = await apiService.processMessageStateless(userMessage, activeTab);
-      handleProcessResponse(data);
+      handleProcessResponse(data, messageStrategy);
     } catch (error) {
       console.error('Error processing navigation message:', error);
-      addAssistantMessage('Sorry, I encountered an error processing your navigation request.');
+      // Show error via notification instead of chat message
+      notifications.show({
+        title: 'Navigation Error',
+        message: 'Sorry, I encountered an error processing your navigation request.',
+        color: 'red',
+      });
     }
   };
 
