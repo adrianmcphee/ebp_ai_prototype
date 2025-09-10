@@ -269,6 +269,8 @@ export const MainApp: React.FC = () => {
     }
   };
 
+  // Handler for Chat Panel form submission
+  // Uses persistent session strategy by default - maintains conversation context
   const handleSubmit = async (values: { message: string }) => {
     const userMessage = values.message.trim();
     if (!userMessage) return;
@@ -282,6 +284,7 @@ export const MainApp: React.FC = () => {
     form.reset();
 
     try {
+      // Uses persistent session by default for conversation continuity
       const data = await apiService.processMessage(userMessage, activeTab);
       handleProcessResponse(data);
     } catch (error) {
@@ -291,6 +294,7 @@ export const MainApp: React.FC = () => {
   };
 
   // Handler for Navigation Assistant form submission
+  // Uses stateless session strategy - each request is independent
   const handleNavigationSubmit = async (values: { message: string }) => {
     const userMessage = values.message.trim();
     if (!userMessage) return;
@@ -301,11 +305,12 @@ export const MainApp: React.FC = () => {
     addUserMessage(userMessage);
 
     try {
-      const data = await apiService.processMessage(userMessage, activeTab);
+      // Use stateless strategy for navigation requests (no session continuity)
+      const data = await apiService.processMessageStateless(userMessage, activeTab);
       handleProcessResponse(data);
     } catch (error) {
-      console.error('Error processing message:', error);
-      addAssistantMessage('Sorry, I encountered an error processing your request.');
+      console.error('Error processing navigation message:', error);
+      addAssistantMessage('Sorry, I encountered an error processing your navigation request.');
     }
   };
 
