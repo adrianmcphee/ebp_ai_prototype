@@ -25,7 +25,7 @@ class EnrichmentStrategy(ABC):
 
 
 class AccountResolutionStrategy(EnrichmentStrategy):
-    """Strategy for resolving account entities"""
+    """Strategy for resolving all account-related entities"""
     
     def __init__(self, banking_service):
         self.banking = banking_service
@@ -34,50 +34,146 @@ class AccountResolutionStrategy(EnrichmentStrategy):
         return "account_resolution"
     
     def can_enrich(self, entities: Dict[str, Any]) -> bool:
-        return any(key in entities for key in ["account_id", "account_name", "account_type"])
+        """Check if any account-related entities can be enriched"""
+        account_entities = ["account_id", "account_name", "account_type", "from_account", "to_account"]
+        return any(key in entities for key in account_entities)
     
     def enrich(self, entities: Dict[str, Any]) -> Dict[str, Any]:
-        """Resolve account info from entities"""
-        account_id = self._resolve_account_id(entities)
-        if account_id and account_id in self.banking.accounts:
-            account = self.banking.accounts[account_id]
-            enriched = entities.copy()
+        """Resolve account info from all account-related entities"""
+        enriched = entities.copy()
+        
+        # Define account entity keys to process
+        account_entity_keys = ["account_id", "account_name", "account_type", "from_account", "to_account"]
+        
+        for entity_key in account_entity_keys:
+            if entity_key in entities:
+                # Skip if already enriched
+                entity_data = entities[entity_key]
+                if isinstance(entity_data, dict) and "enriched_entity" in entity_data:
+                    continue
+                    
+                # Try to resolve this entity to an account
+                account_id = self._resolve_account_id_for_entity(entity_key, entities)
+                if account_id and account_id in self.banking.accounts:
+                    account = self.banking.accounts[account_id]
+                    
+                    # Enrich the specific entity with full account details
+                    if isinstance(entity_data, dict):
+                        # Entity is already in dict format, add enrichment
+                        enriched[entity_key] = entity_data.copy()
+                        enriched[entity_key]["enriched_entity"] = {
+                            "id": account.id,
+                            "name": account.name,
+                            "type": account.type,
+                            "balance": account.balance,
+                            "currency": account.currency
+                        }
+                        enriched[entity_key]["source"] = "enrichment"
+                        enriched[entity_key]["confidence"] = 0.95
+                    else:
+                        # Entity is a string, convert to enriched dict format
+                        enriched[entity_key] = {
+                            "value": self._extract_entity_value(entity_data),
+                            "raw": str(entity_data),
+                            "confidence": 0.95,
+                            "source": "enrichment",
+                            "enriched_entity": {
+                                "id": account.id,
+                                "name": account.name,
+                                "type": account.type,
+                                "balance": account.balance,
+                                "currency": account.currency
+                            }
+                        }
+                    
+                    if entity_key != "account_id":
+                        enriched["account_id"] = {
+                            "value": account.id,
+                            "raw": account.id,
+                            "confidence": 0.95,
+                            "source": "enrichment",
+                            "enriched_entity": {
+                                "id": account.id,
+                                "name": account.name,
+                                "type": account.type,
+                                "balance": account.balance,
+                                "currency": account.currency
+                            }
+                        }
+        
+        # Clean up redundant entities for transfer operations
+        enriched = self._cleanup_redundant_entities(enriched)
+        
+        return enriched
+    
+    def _cleanup_redundant_entities(self, entities: Dict[str, Any]) -> Dict[str, Any]:
+        """Remove redundant account entities when transfer-specific entities are present"""
+        # If we have from_account and/or to_account, remove generic account_type
+        # since transfer-specific entities are more precise
+        if ("from_account" in entities or "to_account" in entities) and "account_type" in entities:
+            # Check if account_type is redundant (same value as from_account or to_account)
+            account_type_value = self._extract_entity_value(entities["account_type"])
+            from_account_value = self._extract_entity_value(entities.get("from_account", {}))
+            to_account_value = self._extract_entity_value(entities.get("to_account", {}))
             
-            # Add account_id if not already present
-            if "account_id" not in enriched:
-                enriched["account_id"] = account_id
-                
-            # Optionally enrich with additional account info
-            if "account_type" not in enriched:
-                enriched["account_type"] = {
-                    "value": account.type,
-                    "raw": account.type,
-                    "confidence": 0.95,
-                    "source": "enrichment"
-                }
-            if "account_name" not in enriched:
-                enriched["account_name"] = {
-                    "value": account.name,
-                    "raw": account.name,
-                    "confidence": 0.95,
-                    "source": "enrichment"
-                }
-            return enriched
+            # Remove account_type if it matches either from_account or to_account
+            if account_type_value in [from_account_value, to_account_value]:
+                entities_copy = entities.copy()
+                del entities_copy["account_type"]
+                return entities_copy
+        
         return entities
     
-    def _resolve_account_id(self, entities: Dict[str, Any]) -> str:
-        """Account id resolution"""
-        if "account_id" in entities:
-            account_id = self._extract_entity_value(entities["account_id"])
-            return account_id
+    def _resolve_account_id_for_entity(self, entity_key: str, entities: Dict[str, Any]) -> str:
+        """Resolve account ID for a specific entity"""
+        entity_data = entities[entity_key]
+        entity_value = self._extract_entity_value(entity_data)
         
-        if "account_type" in entities:
-            account_type = self._extract_entity_value(entities["account_type"])
-            if account_type:
-                account_type = account_type.lower()
-                for acc_id, account in self.banking.accounts.items():
-                    if account.type.lower() == account_type:
-                        return acc_id
+        if not entity_value:
+            return None
+            
+        entity_value = entity_value.lower().strip()
+        
+        # Direct account ID lookup
+        if entity_key == "account_id":
+            if entity_value in self.banking.accounts:
+                return entity_value
+        
+        # Account type-based resolution
+        if entity_key in ["account_type", "from_account", "to_account"]:
+            # Handle account type references (checking, savings, etc.)
+            matching_accounts = []
+            for acc_id, account in self.banking.accounts.items():
+                if account.type.lower() == entity_value:
+                    matching_accounts.append(acc_id)
+            
+            # If only one account of this type, return it
+            if len(matching_accounts) == 1:
+                return matching_accounts[0]
+            # For multiple matches, need additional logic or disambiguation
+            elif len(matching_accounts) > 1:
+                # For transfer entities, try to be smart about disambiguation
+                if entity_key == "from_account":
+                    # Prefer primary checking as default source
+                    for acc_id in matching_accounts:
+                        if "primary" in self.banking.accounts[acc_id].name.lower():
+                            return acc_id
+                    return matching_accounts[0]  # Fallback to first match
+                elif entity_key == "to_account":
+                    # For destination, return first match
+                    return matching_accounts[0]
+                else:
+                    # Generic account_type, return first match
+                    return matching_accounts[0]
+        
+        # Account name-based resolution
+        if entity_key == "account_name":
+            for acc_id, account in self.banking.accounts.items():
+                if account.name.lower() == entity_value:
+                    return acc_id
+                # Also try partial matching for common phrases
+                if entity_value in account.name.lower() or account.name.lower() in entity_value:
+                    return acc_id
         
         return None
     

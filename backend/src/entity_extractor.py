@@ -12,7 +12,8 @@ from enum import Enum
 from functools import lru_cache
 from typing import Any, Optional, Union
 
-from .llm_client import LLMClient
+from .llm_client import LLMClient, retry_llm_call
+from .config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +98,11 @@ class EntityExtractor:
                 re.IGNORECASE,
             ),
             EntityType.ACCOUNT_TYPE: re.compile(
-                r"\b(checking|savings|credit|investment|loan|business)\s*(?:account)?\b",
+                r"\b(?:my\s+)?(checking|savings|credit|investment|loan|business)\s*(?:account)?\b",
                 re.IGNORECASE,
             ),
             EntityType.ACCOUNT_NAME: re.compile(
-                r"\b(?:primary|business|personal|main|savings?)\s+(?:checking|account)\b|\b(?:checking|savings)\s+account\b",
+                r"\b(?:my\s+)?(?:primary|business|personal|main|savings?)\s+(?:checking|account)\b|\b(?:my\s+)?(?:checking|savings)\s+account\b",
                 re.IGNORECASE,
             ),
             EntityType.DATE: re.compile(
@@ -282,14 +283,20 @@ class EntityExtractor:
             pattern_entities = self._extract_with_patterns(query)
 
             # Phase 2: LLM-based extraction with function calling or JSON
-            if use_function_calling:
-                llm_entities = await self._extract_with_function_calling(
-                    query, intent_type, context
-                )
-            else:
-                llm_entities = await self._extract_with_json_mode(
-                    query, intent_type, context
-                )
+            llm_entities = {}
+            try:
+                if use_function_calling:
+                    llm_entities = await self._extract_with_function_calling(
+                        query, intent_type, context
+                    )
+                else:
+                    llm_entities = await self._extract_with_json_mode(
+                        query, intent_type, context
+                    )
+            except Exception as llm_error:
+                logger.warning(f"LLM entity extraction failed: {llm_error}, using pattern fallback only")
+                # Continue with pattern-only extraction
+                llm_entities = {}
 
             # Phase 3: Merge and validate
             merged_entities = self._merge_entities(pattern_entities, llm_entities)
@@ -297,10 +304,19 @@ class EntityExtractor:
                 merged_entities, required_entities, query, intent_type
             )
 
-            # Add confidence score
+            # Add confidence score and fallback indicator
             result["confidence_score"] = self._calculate_overall_confidence(
                 result["entities"]
             )
+            
+            # Indicate if we used fallback only
+            if not llm_entities and pattern_entities:
+                result["fallback_used"] = True
+                result["extraction_method"] = "pattern_only"
+            elif llm_entities:
+                result["extraction_method"] = "llm_enhanced"
+            else:
+                result["extraction_method"] = "none"
 
             return result
 
@@ -322,13 +338,14 @@ class EntityExtractor:
                     query, intent_type, context
                 )
 
-                # Use function calling if LLM supports it
-                response = await self.llm.complete(
-                    prompt=prompt,
-                    temperature=0.1,  # Low temperature for precision
-                    timeout=3.0,
-                    functions=self.extraction_functions,
-                    function_call={"name": "extract_banking_entities"},
+                response = await retry_llm_call(
+                    lambda: self.llm.complete(
+                        prompt=prompt,
+                        temperature=0.1,  # Low temperature for precision
+                        timeout=settings.llm_timeout,
+                        functions=self.extraction_functions,
+                        function_call={"name": "extract_banking_entities"},
+                    )
                 )
 
                 if isinstance(response, dict) and "function_call" in response:
@@ -360,11 +377,13 @@ class EntityExtractor:
             try:
                 prompt = self._build_json_extraction_prompt(query, intent_type, context)
 
-                response = await self.llm.complete(
-                    prompt=prompt,
-                    temperature=0.1,
-                    timeout=3.0,
-                    response_format={"type": "json_object"},
+                response = await retry_llm_call(
+                    lambda: self.llm.complete(
+                        prompt=prompt,
+                        temperature=0.1,
+                        timeout=settings.llm_timeout,
+                        response_format={"type": "json_object"},
+                    )
                 )
 
                 if isinstance(response, dict) and "entities" in response:
@@ -563,7 +582,7 @@ Query: "Transfer 1000 dollars to my mom tomorrow"
             return None
 
         elif entity_type == EntityType.ACCOUNT_TYPE:
-            account_type = match.group(1).lower()
+            account_type = match.group(1).lower() if match.group(1) else match.group(0).lower()
             # Normalize common variations
             if "check" in account_type:
                 return "checking"
@@ -573,6 +592,8 @@ Query: "Transfer 1000 dollars to my mom tomorrow"
 
         elif entity_type == EntityType.ACCOUNT_NAME:
             account_name = match.group(0).lower()
+            # Remove "my" prefix for normalization
+            account_name = account_name.replace("my ", "").strip()
             # Normalize common variations to match actual account names
             if "primary" in account_name and "check" in account_name:
                 return "primary checking"
@@ -580,6 +601,10 @@ Query: "Transfer 1000 dollars to my mom tomorrow"
                 return "business checking"
             elif "savings" in account_name or "saving" in account_name:
                 return "savings account"
+            elif account_name in ["savings", "saving"]:
+                return "savings"
+            elif account_name in ["checking", "check"]:
+                return "checking"
             return account_name.strip()
 
         elif entity_type == EntityType.DATE:

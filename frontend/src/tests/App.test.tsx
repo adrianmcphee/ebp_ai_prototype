@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import React from 'react';
 import App, { MainApp } from '../App';
 import type { Account, ProcessResponse, DynamicFormConfig } from '../types';
 
@@ -10,6 +11,12 @@ vi.mock('../services/api', () => ({
     // initializeSession removed - now handled by SessionService
     getAccounts: vi.fn().mockResolvedValue([]),
     processMessage: vi.fn().mockResolvedValue({
+      status: 'success',
+      message: 'Test response',
+      intent: 'test_intent',
+      confidence: 0.9
+    } as ProcessResponse),
+    processMessageStateless: vi.fn().mockResolvedValue({
       status: 'success',
       message: 'Test response',
       intent: 'test_intent',
@@ -28,6 +35,12 @@ vi.mock('../services/websocket', () => ({
       send: vi.fn()
     } as unknown as WebSocket),
     disconnect: vi.fn()
+  }
+}));
+
+vi.mock('../services/session', () => ({
+  sessionService: {
+    initialize: vi.fn().mockResolvedValue(undefined)
   }
 }));
 
@@ -60,7 +73,18 @@ vi.mock('react-router-dom', async () => {
     BrowserRouter: ({ children }: { children: React.ReactNode }) => <div data-testid="browser-router">{children}</div>,
     Routes: ({ children }: { children: React.ReactNode }) => <div data-testid="routes">{children}</div>,
     Route: ({ element }: { element: React.ReactNode }) => <div data-testid="route">{element}</div>,
-    Navigate: ({ to }: { to: string }) => <div data-testid="navigate" data-to={to}>Redirecting to {to}</div>
+    Navigate: ({ to, replace }: { to: string; replace?: boolean }) => {
+      // Call navigate in useEffect for declarative navigation (redirects)
+      React.useEffect(() => {
+        try {
+          mockNavigate(to, { replace });
+        } catch (error) {
+          // For declarative navigation errors, don't rethrow to avoid breaking React
+          console.error('Navigate component error:', error);
+        }
+      }, [to, replace]);
+      return <div data-testid="navigate" data-to={to}>Redirecting to {to}</div>;
+    }
   };
 });
 
@@ -674,7 +698,7 @@ describe('App Component', () => {
       await waitFor(() => {
         const navAssistantAfter = screen.getByTestId('navigation-assistant');
         expect(navAssistantAfter.getAttribute('data-visible')).toBe('false');
-        expect(vi.mocked(apiService.processMessage)).toHaveBeenCalledWith('nav test', 'banking');
+        expect(vi.mocked(apiService.processMessageStateless)).toHaveBeenCalledWith('nav test', 'banking');
       });
     });
   });
@@ -804,13 +828,13 @@ describe('App Component', () => {
     });
 
     it('handleUIAssistance() - should handle navigation errors gracefully', async () => {
-      // Mock navigation to throw error
-      mockNavigate.mockImplementationOnce(() => {
-        throw new Error('Navigation failed');
-      });
-
       await act(async () => {
         render(<MainApp />);
+      });
+
+      // Mock navigation to throw error AFTER rendering to avoid interfering with initial redirect
+      mockNavigate.mockImplementationOnce(() => {
+        throw new Error('Navigation failed');
       });
 
       const mockProcessResponse: ProcessResponse = {

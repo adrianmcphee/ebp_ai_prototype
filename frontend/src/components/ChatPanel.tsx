@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Card,
   Stack,
@@ -9,31 +9,41 @@ import {
   TextInput,
   Button
 } from '@mantine/core';
-import type { UseFormReturnType } from '@mantine/form';
+import { useForm } from '@mantine/form';
 import type { Message } from '../types';
 
 interface ChatPanelProps {
   messages: Message[];
-  form: UseFormReturnType<{ message: string }>;
   isConnected: boolean;
   onSubmit: (values: { message: string }) => void;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
   messages,
-  form,
   isConnected,
   onSubmit
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  
-  // Preserve focus during re-renders caused by WebSocket connection state changes
-  useEffect(() => {
-    // If focus was lost during re-render and input field has content, restore focus
-    if (document.activeElement === document.body && form.values.message) {
-      inputRef.current?.focus();
+  // Manage form internally to prevent parent re-renders from affecting input
+  const form = useForm({
+    initialValues: {
+      message: ''
     }
-  }, [isConnected, form.values.message]); // Re-run when connection state or input value changes
+  });
+
+  // Ref for the scrollable messages container
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new messages are added
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  const handleFormSubmit = (values: { message: string }) => {
+    onSubmit(values);
+    form.reset();
+  };
   
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 0.8) return 'green';
@@ -69,12 +79,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             )}
           </Paper>
         ))}
+        {/* Invisible element to scroll to */}
+        <div ref={messagesEndRef} />
       </Stack>
 
-      <form onSubmit={form.onSubmit(onSubmit)}>
+      <form onSubmit={form.onSubmit(handleFormSubmit)}>
         <Group>
           <TextInput
-            ref={inputRef}
             data-testid="chat-input"
             {...form.getInputProps('message')}
             placeholder="Try: 'Take me to transfers' or 'Send $500 to John'"
@@ -96,9 +107,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           data-testid="quick-transfer"
           size="xs" 
           variant="subtle" 
-          onClick={() => form.setFieldValue('message', 'Take me to international transfers')}
+          onClick={() => form.setFieldValue('message', 'Transfer $100 from my checking account to my savings account')}
         >
-          Navigation
+          $100 to saving
         </Button>
         <Button 
           data-testid="quick-transaction"

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   Text,
@@ -13,25 +13,18 @@ import {
 import { useForm } from '@mantine/form';
 
 interface NavigationAssistantProps {
-  /** Whether the assistant is visible */
-  isVisible: boolean;
   /** Whether the connection is active */
   isConnected: boolean;
-  /** Callback to close the assistant */
-  onClose: () => void;
-  /** Callback when assistant should be opened */
-  onOpen: () => void;
   /** Callback when form is submitted */
   onSubmit: (values: { message: string }) => void;
 }
 
 export const NavigationAssistant: React.FC<NavigationAssistantProps> = ({
-  isVisible,
   isConnected,
-  onClose,
-  onOpen,
   onSubmit
 }) => {
+  // Manage visibility state internally to prevent parent re-renders
+  const [isVisible, setIsVisible] = useState<boolean>(false);
   const form = useForm({
     initialValues: {
       message: ''
@@ -42,12 +35,22 @@ export const NavigationAssistant: React.FC<NavigationAssistantProps> = ({
     const userMessage = values.message.trim();
     if (!userMessage) return;
 
+    // Close assistant and submit
+    setIsVisible(false);
     onSubmit(values);
     form.reset();
   };
 
   const setSuggestion = (message: string) => {
     form.setFieldValue('message', message);
+  };
+
+  const handleOpen = () => {
+    setIsVisible(true);
+  };
+
+  const handleClose = () => {
+    setIsVisible(false);
   };
 
   return (
@@ -62,7 +65,7 @@ export const NavigationAssistant: React.FC<NavigationAssistantProps> = ({
               variant="filled"
               color="blue"
               style={{ ...transitionStyles }}
-              onClick={onOpen}
+              onClick={handleOpen}
               title="Navigation Assistant"
               data-testid="navigation-assistant-open-button"
             >
@@ -99,7 +102,7 @@ export const NavigationAssistant: React.FC<NavigationAssistantProps> = ({
             <ActionIcon 
               size="sm" 
               variant="subtle"
-              onClick={onClose}
+              onClick={handleClose}
               data-testid="navigation-assistant-close"
             >
               ✕

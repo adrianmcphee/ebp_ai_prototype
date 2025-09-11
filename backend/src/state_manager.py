@@ -65,30 +65,42 @@ class ConversationStateManager:
 
         # Handle recipient references
         if context.get("last_recipient"):
-            patterns = [
-                (r"\b(him|her|them)\b", context["last_recipient"]),
-                (r"\bsame\s+person\b", context["last_recipient"]),
-                (r"\bthat\s+person\b", context["last_recipient"]),
-            ]
-            replacements.extend(patterns)
+            recipient_value = self._extract_entity_value(context["last_recipient"])
+            if recipient_value:
+                patterns = [
+                    (r"\b(him|her|them)\b", str(recipient_value)),
+                    (r"\bsame\s+person\b", str(recipient_value)),
+                    (r"\bthat\s+person\b", str(recipient_value)),
+                ]
+                replacements.extend(patterns)
 
         # Handle amount references
         if context.get("last_amount"):
-            amount_str = f"${context['last_amount']:.2f}"
-            patterns = [
-                (r"\b(it|that|same\s+amount|that\s+much)\b", amount_str),
-                (r"\bsame\b(?!\s+person)", amount_str),
-            ]
-            replacements.extend(patterns)
+            try:
+                # Extract value safely in case it's still an entity dictionary
+                amount_value = self._extract_entity_value(context["last_amount"])
+                if isinstance(amount_value, (int, float)):
+                    amount_str = f"${amount_value:.2f}"
+                    patterns = [
+                        (r"\b(it|that|same\s+amount|that\s+much)\b", amount_str),
+                        (r"\bsame\b(?!\s+person)", amount_str),
+                    ]
+                    replacements.extend(patterns)
+            except (TypeError, ValueError):
+                # Skip amount replacement if formatting fails
+                print(f"Could not format amount reference: {e}. Continuing with original query.")
+                pass
 
         # Handle account references
         if context.get("last_account"):
-            patterns = [
-                (r"\bthere\b", context["last_account"]),
-                (r"\bsame\s+account\b", context["last_account"]),
-                (r"\bthat\s+account\b", context["last_account"]),
-            ]
-            replacements.extend(patterns)
+            account_value = self._extract_entity_value(context["last_account"])
+            if account_value:
+                patterns = [
+                    (r"\bthere\b", str(account_value)),
+                    (r"\bsame\s+account\b", str(account_value)),
+                    (r"\bthat\s+account\b", str(account_value)),
+                ]
+                replacements.extend(patterns)
 
         # Apply replacements
         for pattern, replacement in replacements:
@@ -97,13 +109,20 @@ class ConversationStateManager:
 
         # Handle "another" pattern (requires amount)
         if context.get("last_amount"):
-            another_pattern = r"\banother\s+\$?(\d+(?:\.\d{2})?)\b"
-            match = re.search(another_pattern, resolved, re.IGNORECASE)
-            if match:
-                new_amount = float(match.group(1))
-                resolved = re.sub(
-                    another_pattern, f"${new_amount:.2f}", resolved, flags=re.IGNORECASE
-                )
+            try:
+                amount_value = self._extract_entity_value(context["last_amount"])
+                if isinstance(amount_value, (int, float)):
+                    another_pattern = r"\banother\s+\$?(\d+(?:\.\d{2})?)\b"
+                    match = re.search(another_pattern, resolved, re.IGNORECASE)
+                    if match:
+                        new_amount = float(match.group(1))
+                        resolved = re.sub(
+                            another_pattern, f"${new_amount:.2f}", resolved, flags=re.IGNORECASE
+                        )
+            except (TypeError, ValueError):
+                # Skip "another" pattern if amount handling fails
+                print(f"Could not handle 'another' pattern: {e}. Continuing with original query.")
+                pass
 
         return resolved
 
@@ -122,17 +141,22 @@ class ConversationStateManager:
 
         # Update context fields based on entities
         if entities.get("recipient"):
-            context["last_recipient"] = entities["recipient"]
+            recipient_entity = entities["recipient"]
+            # Extract the actual value from entity dictionary
+            context["last_recipient"] = self._extract_entity_value(recipient_entity)
             # Store recipient ID if available
             if processing_result.get("matched_recipient_id"):
                 context["last_recipient_id"] = processing_result["matched_recipient_id"]
 
         if entities.get("amount"):
-            context["last_amount"] = entities["amount"]
+            amount_entity = entities["amount"]
+            # Extract the actual value from entity dictionary
+            context["last_amount"] = self._extract_entity_value(amount_entity)
 
         if entities.get("account") or entities.get("from_account"):
-            account = entities.get("from_account") or entities.get("account")
-            context["last_account"] = account
+            account_entity = entities.get("from_account") or entities.get("account")
+            # Extract the actual value from entity dictionary
+            context["last_account"] = self._extract_entity_value(account_entity)
             # Store account ID if available
             if processing_result.get("account_id"):
                 context["last_account_id"] = processing_result["account_id"]
@@ -268,6 +292,21 @@ class ConversationStateManager:
     async def cleanup_old_sessions(self):
         """Clean up old sessions from database"""
         await self.db.cleanup_old_sessions()
+
+    def _extract_entity_value(self, entity):
+        """Extract the actual value from an entity dictionary or return the entity if it's already a simple value."""
+        if isinstance(entity, dict):
+            # Handle entity dictionary format: {"value": X, "raw": Y, "confidence": Z}
+            if "value" in entity:
+                return entity["value"]
+            elif "raw" in entity:
+                return entity["raw"]
+            else:
+                # Fallback: return the entity as-is
+                return entity
+        else:
+            # Handle simple value format
+            return entity
 
     # === Multi-turn Clarification Dialog Support ===
 
