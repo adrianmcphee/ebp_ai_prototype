@@ -37,6 +37,36 @@ export const INTENT_ROUTE_CONFIG: IntentRouteDefinition[] = [
     showInNavigation: true
   },
 
+  // Internal Transfers
+  {
+    intentId: 'payments.transfer.internal',
+    baseRoute: '/banking/transfers/internal',
+    breadcrumb: 'Internal Transfer',
+    navigationLabel: 'Internal Transfer',
+    hasParameters: false,
+    showInNavigation: true
+  },
+
+  // External Transfers  
+  {
+    intentId: 'payments.transfer.external',
+    baseRoute: '/banking/transfers/external',
+    breadcrumb: 'External Transfer',
+    navigationLabel: 'External Transfer', 
+    hasParameters: false,
+    showInNavigation: true
+  },
+
+  // P2P Payments
+  {
+    intentId: 'payments.p2p.send',
+    baseRoute: '/banking/transfers/p2p',
+    breadcrumb: 'P2P Payment',
+    navigationLabel: 'P2P Payment',
+    hasParameters: false,
+    showInNavigation: true
+  },
+
   // Wire Transfers
   {
     intentId: 'international.wire.send',
