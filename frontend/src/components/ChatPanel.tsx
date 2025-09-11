@@ -107,9 +107,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           data-testid="quick-transfer"
           size="xs" 
           variant="subtle" 
-          onClick={() => form.setFieldValue('message', 'Take me to international transfers')}
+          onClick={() => form.setFieldValue('message', 'Transfer $100 from my checking account to my savings account')}
         >
-          Navigation
+          $100 to saving
         </Button>
         <Button 
           data-testid="quick-transaction"
