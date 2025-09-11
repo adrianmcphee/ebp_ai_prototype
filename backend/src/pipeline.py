@@ -237,21 +237,27 @@ class IntentPipeline:
             
             # Apply intent refinement after enrichment
             if classification.get("intent_id"):
-                original_intent = classification["intent_id"]
-                
-                # Add original query to entities for refinement context
-                enriched_entities = entities.get("entities", {})
-                enriched_entities["original_query"] = resolved_query
-                
-                final_intent, reason = self.intent_refiner.refine_intent(
-                    original_intent, 
-                    enriched_entities
-                )
-                
-                if final_intent != original_intent:
-                    classification["intent_id"] = final_intent
-                    classification["refinement_applied"] = True
-                    classification["refinement_reason"] = reason
+                try:
+                    original_intent = classification["intent_id"]
+                    
+                    # Add original query to entities for refinement context
+                    enriched_entities = entities.get("entities", {})
+                    enriched_entities["original_query"] = resolved_query
+                    
+                    final_intent, reason = self.intent_refiner.refine_intent(
+                        original_intent, 
+                        enriched_entities
+                    )
+                    
+                    if final_intent != original_intent:
+                        classification["intent_id"] = final_intent
+                        classification["refinement_applied"] = True
+                        classification["refinement_reason"] = reason
+                        
+                except Exception as e:
+                    # Continue with original intent if refinement fails
+                    print(f"Intent refinement failed: {e}. Continuing with original intent: {classification.get('intent_id')}")
+                    pass
                     
             # Generate context-aware response
             response = await self.response_gen.generate_response(
@@ -282,8 +288,15 @@ class IntentPipeline:
             return result
 
         except Exception as e:
-            print(f"Pipeline error: {e}")
-            return self._create_error_response(str(e))
+            return {
+                "status": "error",
+                "intent": "unknown",
+                "confidence": 0.0,
+                "entities": {},
+                "message": "An error occurred processing your request",
+                "ui_assistance": None,
+                "execution": None
+            }
 
     async def _handle_clarification_response(
         self,
@@ -391,6 +404,31 @@ class IntentPipeline:
 
             # Clear pending approval
             await self.state.clear_pending_approval(session_id)
+
+            # Update conversation state after successful operation to ensure continuity
+            try:
+                processing_result = {
+                    "intent": original_intent.get("intent_id"),
+                    "intent_name": original_intent.get("name"),
+                    "confidence": original_intent.get("confidence", 1.0),
+                    "entities": original_entities,
+                    "status": "success",
+                    "timestamp": datetime.now().isoformat(),
+                }
+                
+                # Note: We pass "confirm" as original query but maintain the resolved_query
+                # This ensures the context reflects the confirmation action
+                await self.state.update(
+                    session_id, 
+                    query,  # "confirm"
+                    query,  # "confirm" 
+                    processing_result
+                )
+                
+            except Exception as e:
+                # Continue anyway since the operation succeeded
+                print(f"Failed to update conversation state after successful operation: {e} Continuing anyway...")
+                pass
 
             # Format as proper pipeline response
             if execution_result.get("success"):
