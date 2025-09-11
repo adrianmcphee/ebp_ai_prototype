@@ -160,6 +160,13 @@ class ContextAwareResponseGenerator:
         if entities.get("missing_required"):
             return self._handle_missing_info(intent, entities, precondition_results)
 
+        # IMPORTANT: Medium+ risk operations require user confirmation before execution
+        # This check comes BEFORE auth to show users what they're confirming
+        if self._requires_confirmation(intent):
+            return self._handle_transfer_confirmation(
+                intent, entities, precondition_results, confidence
+            )
+
         # Handle authentication requirements
         if not auth_check["passed"]:
             return self._handle_auth_required(intent, auth_check, precondition_results)
@@ -469,7 +476,7 @@ class ContextAwareResponseGenerator:
                 "intent": intent.get("intent_id"),
                 "risk_level": intent.get("risk_level"),
                 "confidence": confidence,
-                "entities": entity_values,
+                "processed_entities": entity_values,
             },
             preconditions=preconditions,
             next_steps=[
@@ -561,6 +568,155 @@ class ContextAwareResponseGenerator:
                 return steps
 
         return ["Return to main menu", "Ask another question"]
+
+    def _requires_confirmation(self, intent: dict[str, Any]) -> bool:
+        """Check if an intent requires confirmation based on risk level (OCP compliant)"""
+        risk_level = RiskLevel(intent.get("risk_level", "low"))
+        # All MEDIUM and above risk operations require confirmation
+        return risk_level in [RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL]
+
+    def _handle_transfer_confirmation(
+        self,
+        intent: dict[str, Any],
+        entities: dict[str, Any],
+        preconditions: list[PreconditionCheck],
+        confidence: float,
+    ) -> ContextualResponse:
+        """Handle confirmation for medium+ risk operations - dynamically processes entities"""
+        entity_values = entities.get("entities", {})
+        intent_id = intent.get("intent_id", "")
+        intent_name = intent.get("name", "Operation")
+
+        # Get required and optional entities from intent
+        required_entities = intent.get("required_entities", [])
+        optional_entities = intent.get("optional_entities", [])
+
+        # Build detailed confirmation message dynamically
+        confirmation_details = []
+        
+        # Get all relevant entity names for context
+        all_relevant_entities = set(required_entities + optional_entities)
+        
+        # Process required entities first
+        for entity_name in required_entities:
+            if entity_name in entity_values:
+                detail = self._format_entity_for_confirmation(entity_name, entity_values[entity_name], all_relevant_entities)
+                if detail:
+                    confirmation_details.append(detail)
+        
+        # Then process optional entities
+        for entity_name in optional_entities:
+            if entity_name in entity_values:
+                detail = self._format_entity_for_confirmation(entity_name, entity_values[entity_name], all_relevant_entities)
+                if detail:
+                    confirmation_details.append(detail)
+
+        # Create confirmation message
+        message = f"Confirmation Required for {intent_name} \n\n"
+        if confirmation_details:
+            message += "\n".join(confirmation_details)
+        else:
+            message += "Please review the operation details\n\n"
+        message += "\n\nPlease review the details carefully and confirm to proceed."
+
+        return ContextualResponse(
+            response_type=ResponseType.CONFIRMATION_NEEDED,
+            message=message,
+            data={
+                "intent": intent_id,
+                "operation_type": intent.get("subcategory", "Operation"),
+                "confidence": confidence,
+                "processed_entities": entity_values,
+                "requires_confirmation": True
+            },
+            preconditions=preconditions,
+            next_steps=[
+                "Review the operation details above",
+                "Confirm to proceed or cancel to abort"
+            ],
+            auth_challenge=None,
+            risk_warning="Medium+ risk operations require confirmation for security",
+            follow_up_questions=[],
+            estimated_completion_time=None
+        )
+
+    def _format_entity_for_confirmation(self, entity_name: str, entity_data: dict[str, Any], relevant_entities: set[str]) -> str:
+        """Format an entity for confirmation display using generic, data-driven approach"""
+        if not entity_data:
+            return ""
+        
+        # Get the best available value: enriched first, then raw value
+        display_value = self._extract_display_value(entity_data)
+        if not display_value:
+            return ""
+        
+        formatted_value = self._format_value(display_value, entity_data)
+        formatted_name = self._format_entity_name(entity_name)
+        
+        # Handle enriched entities with additional context
+        additional_context = self._extract_additional_context(entity_data, relevant_entities)
+        
+        base_line = f"- {formatted_name}: {formatted_value}\n"
+        
+        if additional_context:
+            return f"{base_line}{additional_context}"
+        else:
+            return base_line
+    
+    def _extract_display_value(self, entity_data: dict[str, Any]) -> Any:
+        """Extract the best display value from entity data"""
+        enriched = entity_data.get("enriched_entity", {})
+        
+        # Try enriched entity display fields first
+        for field in ["display_name", "name", "label"]:
+            if enriched.get(field):
+                return enriched[field]
+        
+        # Fall back to raw value
+        return entity_data.get("value")
+    
+    def _format_value(self, value: Any, entity_data: dict[str, Any]) -> str:
+        """Format value based on its type and context"""
+        if value is None:
+            return "Not specified"
+        
+        # Check if it's a numeric amount (look for common amount indicators)
+        if isinstance(value, (int, float)):
+            # If it seems like money, format as currency
+            if value > 0 and value < 1000000:  # Reasonable money range
+                return f"${value:,.2f}"
+            else:
+                return f"{value:,}"
+        
+        # Format strings
+        if isinstance(value, str):
+            # If it looks like an account number, mask it partially
+            if len(value) > 6 and value.replace('-', '').replace(' ', '').isdigit():
+                return f"...{value[-4:]}"
+            return value
+        
+        return str(value)
+    
+    def _format_entity_name(self, entity_name: str) -> str:
+        """Format entity name for display"""
+        return entity_name.replace('_', ' ').title()
+    
+    def _extract_additional_context(self, entity_data: dict[str, Any], relevant_entities: set[str]) -> str:
+        """Extract additional context from enriched entity data based on intent entities"""
+        enriched = entity_data.get("enriched_entity", {})
+        if not enriched:
+            return ""
+        
+        context_lines = []
+        
+        # Process any enriched fields that have values and are relevant to the intent
+        for field_name, value in enriched.items():
+            if value and field_name in relevant_entities:
+                formatted_value = self._format_value(value, entity_data)
+                formatted_field_name = self._format_entity_name(field_name)
+                context_lines.append(f"- {formatted_field_name}: {formatted_value}")
+        
+        return "\n".join(context_lines)
 
     def generate_error_response(
         self,

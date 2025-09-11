@@ -150,7 +150,7 @@ class IntentDrivenEnricher:
             # Unknown dependencies - skip this strategy
             return None
     
-    def enrich(self, intent_id: str, entities: Dict[str, Any]) -> Dict[str, Any]:
+    async def enrich(self, intent_id: str, entities: Dict[str, Any]) -> Dict[str, Any]:
         """Enrich based on intent's declared requirements"""
         # Get intent and its enrichment requirements
         intent = self.intent_catalog.get_intent(intent_id)
@@ -162,6 +162,74 @@ class IntentDrivenEnricher:
         for requirement in intent.enrichment_requirements:
             strategy = self._strategies.get(requirement)
             if strategy and strategy.can_enrich(enriched):
-                enriched = strategy.enrich(enriched)
+                # Check if the strategy's enrich method is async
+                import inspect
+                if inspect.iscoroutinefunction(strategy.enrich):
+                    enriched = await strategy.enrich(enriched)
+                else:
+                    enriched = strategy.enrich(enriched)
         
         return enriched
+
+
+class RecipientResolutionStrategy(EnrichmentStrategy):
+    """Resolves recipient names to recipient records."""
+    
+    def __init__(self, banking_service):
+        self.banking = banking_service
+        
+    def get_strategy_name(self) -> str:
+        return "recipient_resolution"
+        
+    def can_enrich(self, entities: Dict[str, Any]) -> bool:
+        return "recipient" in entities and "enriched_entity" not in entities.get("recipient", {})
+        
+    async def enrich(self, entities: Dict[str, Any]) -> Dict[str, Any]:
+        recipient_data = entities["recipient"]
+        query = self._extract_entity_value(recipient_data)
+        
+        # Search for recipient
+        matches = await self.banking.search_recipients(query)
+        
+        if len(matches) == 1:
+            # Single match - enrich with full data
+            recipient_data["enriched_entity"] = matches[0]
+            recipient_data["source"] = "enrichment"
+            recipient_data["confidence"] = 0.95
+            
+            # Add transfer type for intent refinement
+            recipient_data["transfer_type"] = self._determine_transfer_type(matches[0])
+            
+        elif len(matches) > 1:
+            # Multiple matches - needs disambiguation
+            recipient_data["disambiguation_required"] = True
+            recipient_data["options"] = matches
+            recipient_data["confidence"] = 0.60
+            
+        else:
+            # No matches
+            recipient_data["not_found"] = True
+            recipient_data["confidence"] = 0.0
+            
+        return entities
+    
+    def _determine_transfer_type(self, recipient: dict) -> str:
+        """Determine transfer type based on recipient data."""
+        if recipient.get("bank_country") not in [None, "US"]:
+            return "international"
+        elif recipient.get("bank_name") == "Mock Bank":
+            return "internal"  
+        else:
+            return "external"
+    
+    def _extract_entity_value(self, entity: Any) -> str:
+        """Safely extract string value from entity (handles both dict and string formats)"""
+        if isinstance(entity, dict):
+            # Entity is in dictionary format with metadata
+            return entity.get("value", "")
+        elif isinstance(entity, str):
+            # Entity is a simple string (backward compatibility)
+            return entity
+        else:
+            # Fallback for other types
+            return str(entity) if entity is not None else ""

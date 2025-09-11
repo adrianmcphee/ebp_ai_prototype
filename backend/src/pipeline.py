@@ -17,6 +17,7 @@ from .validator import EntityValidator
 from .banking_operations import BankingOperationsCatalog, OperationStatus
 from .ui_screen_catalog import ui_screen_catalog, ScreenType
 from .entity_enricher import IntentDrivenEnricher
+from .intent_refiner import IntentRefiner
 
 
 class ParameterResolver(ABC):
@@ -115,6 +116,9 @@ class IntentPipeline:
         # Initialize intent-driven entity enricher
         from .intent_catalog import intent_catalog
         self.entity_enricher = IntentDrivenEnricher(intent_catalog, banking_service)
+        
+        # Initialize intent refiner
+        self.intent_refiner = IntentRefiner()
 
     def _register_default_resolvers(self) -> None:
         """Register default parameter resolvers - can be extended without modifying this class"""
@@ -148,7 +152,7 @@ class IntentPipeline:
         extracted_entities = entities.get("entities", {})
         
         # Apply enrichment based on intent requirements
-        enriched_entities = self.entity_enricher.enrich(intent_id, extracted_entities)
+        enriched_entities = await self.entity_enricher.enrich(intent_id, extracted_entities)
         
         # Update the entities dict with enriched values
         if enriched_entities != extracted_entities:
@@ -201,6 +205,7 @@ class IntentPipeline:
 
             # Check for pending approval (high-risk operations)
             pending_approval = await self.state.get_pending_approval(session_id)
+            
             if pending_approval and pending_approval.get("awaiting_approval"):
                 if await self._is_approval_response(query):
                     return await self._handle_approval_confirmation(
@@ -229,7 +234,25 @@ class IntentPipeline:
 
             # Apply intent-driven entity enrichment (e.g., account_type -> account_id)
             entities = await self._apply_entity_enrichment(classification.get("intent_id"), entities)
-
+            
+            # Apply intent refinement after enrichment
+            if classification.get("intent_id"):
+                original_intent = classification["intent_id"]
+                
+                # Add original query to entities for refinement context
+                enriched_entities = entities.get("entities", {})
+                enriched_entities["original_query"] = resolved_query
+                
+                final_intent, reason = self.intent_refiner.refine_intent(
+                    original_intent, 
+                    enriched_entities
+                )
+                
+                if final_intent != original_intent:
+                    classification["intent_id"] = final_intent
+                    classification["refinement_applied"] = True
+                    classification["refinement_reason"] = reason
+                    
             # Generate context-aware response
             response = await self.response_gen.generate_response(
                 classification, entities, context, user_profile
@@ -300,6 +323,22 @@ class IntentPipeline:
             # Clear pending clarification
             await self.state.clear_pending_clarification(session_id)
 
+            if response.response_type == ResponseType.CONFIRMATION_NEEDED:
+                from .intent_catalog import RiskLevel
+                risk_level = RiskLevel(original_intent.get("risk_level", "low"))
+
+                await self.state.set_pending_approval(
+                    session_id,
+                    {
+                        "intent": original_intent,
+                        "entities": merged_entities,
+                        "risk_level": risk_level.value,
+                        "summary": response.message,
+                        "awaiting_approval": True,
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                )
+
             return self._format_response(response, original_intent, merged_entities)
 
         else:
@@ -353,7 +392,29 @@ class IntentPipeline:
             # Clear pending approval
             await self.state.clear_pending_approval(session_id)
 
-            return execution_result
+            # Format as proper pipeline response
+            if execution_result.get("success"):
+                return {
+                    "status": "success",
+                    "intent": original_intent.get("intent_id"),
+                    "intent_name": original_intent.get("name"),
+                    "confidence": original_intent.get("confidence", 1.0),
+                    "entities": original_entities,
+                    "message": execution_result.get("message"),
+                    "execution_result": execution_result,
+                    "ui_assistance": None,
+                    "execution": execution_result
+                }
+            else:
+                return {
+                    "status": "error",
+                    "intent": original_intent.get("intent_id"),
+                    "confidence": original_intent.get("confidence", 0.0),
+                    "entities": original_entities,
+                    "message": execution_result.get("message", "Operation failed"),
+                    "ui_assistance": None,
+                    "execution": None
+                }
 
         elif cancelled:
             # Clear pending approval
@@ -439,10 +500,13 @@ class IntentPipeline:
             return {
                 "status": "confirmation_needed",
                 "intent": classification.get("intent_id"),
-                "risk_level": risk_level.value,
+                "confidence": classification.get("confidence", 0.0),
+                "entities": response.data.get("processed_entities", entities.get("entities", {})),
                 "message": response.message,
+                "risk_level": risk_level.value,
                 "warning": response.risk_warning,
-                "details": entities.get("entities", {}),
+                "ui_assistance": None,
+                "execution": None
             }
 
         elif response.response_type == ResponseType.AUTH_REQUIRED:
@@ -496,8 +560,22 @@ class IntentPipeline:
         # Convert entities to simple dict (remove nested structure if present)
         simple_entities = {}
         for key, value in entities.items():
-            if isinstance(value, dict) and "value" in value:
-                simple_entities[key] = value["value"]
+            if isinstance(value, dict):
+                # For enriched entities, use appropriate field based on entity type
+                if "enriched_entity" in value and "id" in value["enriched_entity"]:
+                    enriched = value["enriched_entity"]
+                    if key == "recipient":
+                        # For recipients, use the name for display in messages
+                        simple_entities[key] = enriched.get("name", enriched["id"])
+                        # Also provide the ID separately for banking operations that need it
+                        simple_entities[f"{key}_id"] = enriched["id"]
+                    else:
+                        # For other entities (accounts, etc.), use the ID
+                        simple_entities[key] = enriched["id"]
+                elif "value" in value:
+                    simple_entities[key] = value["value"]
+                else:
+                    simple_entities[key] = value
             else:
                 simple_entities[key] = value
 
@@ -566,8 +644,24 @@ class IntentPipeline:
         self, response, intent: dict[str, Any], entities: dict[str, Any]
     ) -> dict[str, Any]:
         """Format response for output"""
+        
+        # Import ResponseType here to avoid circular imports
+        from .context_aware_responses import ResponseType
+        
+        status_mapping = {
+            ResponseType.SUCCESS: "success",
+            ResponseType.CONFIRMATION_NEEDED: "awaiting_user_confirmation",
+            ResponseType.MISSING_INFO: "clarification_needed",
+            ResponseType.AUTH_REQUIRED: "auth_required",
+            ResponseType.ERROR: "error",
+            ResponseType.WARNING: "warning",
+            ResponseType.INFO: "info"
+        }
+        
+        mapped_status = status_mapping.get(response.response_type, "success")
+        
         return {
-            "status": "success",
+            "status": mapped_status,
             "intent": intent.get("intent_id"),
             "intent_name": intent.get("name"),
             "confidence": intent.get("confidence"),

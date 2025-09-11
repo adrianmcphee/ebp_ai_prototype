@@ -63,6 +63,19 @@ class HealthResponse(BaseModel):
     services: dict[str, str]
 
 
+class RecipientsResponse(BaseModel):
+    recipients: list[dict[str, Any]]
+    count: int
+
+
+class UserProfileResponse(BaseModel):
+    user_id: str
+    full_name: str
+    email: str
+    auth_level: str
+    account_ids: list[str]
+    authenticated: bool
+
 
 
 
@@ -225,6 +238,29 @@ async def create_session():
     return SessionResponse(session_id=session_id, created=True)
 
 
+@app.get("/api/user-profile", response_model=UserProfileResponse)
+async def get_user_profile():
+    """Get current user profile - always returns logged in user for demo purposes"""
+    if not banking_service:
+        raise HTTPException(500, "Banking service unavailable")
+    
+    try:
+        # In a real application, this would validate JWT token and get user_id from it
+        # For demo purposes, we use a default user
+        profile = await banking_service.get_user_profile()
+        
+        return UserProfileResponse(
+            user_id=profile["user_id"],
+            full_name=profile["full_name"],
+            email=profile["email"],
+            auth_level=profile["auth_level"],
+            account_ids=profile["account_ids"],
+            authenticated=profile["authenticated"]
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Failed to retrieve user profile: {str(e)}")
+
+
 @app.post("/api/process")
 @limiter.limit(f"{settings.rate_limit_per_minute}/minute")
 async def process_query(request: Request, body: ProcessRequest):
@@ -240,10 +276,25 @@ async def process_query(request: Request, body: ProcessRequest):
     # Get or create session
     session_id = await get_or_create_session(body.session_id)
 
+    # Get user profile (for demo, we always have a logged-in user)
+    user_profile_response = await get_user_profile()
+    user_profile = {
+        "user_id": user_profile_response.user_id,
+        "full_name": user_profile_response.full_name,
+        "email": user_profile_response.email,
+        "auth_level": user_profile_response.auth_level,
+        "account_ids": user_profile_response.account_ids,
+        "authenticated": user_profile_response.authenticated
+    }
+
     # Process through pipeline
     try:
         result = await pipeline.process(
-            sanitized_query, session_id, skip_resolution=body.skip_resolution, ui_context=body.ui_context
+            sanitized_query, 
+            session_id, 
+            user_profile=user_profile,
+            skip_resolution=body.skip_resolution, 
+            ui_context=body.ui_context
         )
 
         # Update analytics with available fields
@@ -275,7 +326,7 @@ async def process_query(request: Request, body: ProcessRequest):
             "intent": "unknown",
             "confidence": 0.0,
             "entities": {},
-            "message": "Sorry, I encountered an error processing your request.",
+            "message": "An error occurred processing your request",
             "ui_assistance": None,
             "execution": None
         }
@@ -385,14 +436,33 @@ async def get_account_transactions(account_id: str, limit: int = 10, offset: int
     }
 
 
-@app.get("/api/recipients/search")
-async def search_recipients(query: str):
-    """Search for recipients"""
-    if not query or len(query) < 2:
-        raise HTTPException(400, "Query too short")
+@app.get("/api/recipients", response_model=RecipientsResponse)
+async def get_all_recipients():
+    """Get all recipients"""
+    if not banking_service:
+        raise HTTPException(500, "Banking service unavailable")
+    
+    try:
+        recipients = await banking_service.get_all_recipients()
+        return RecipientsResponse(recipients=recipients, count=len(recipients))
+    except Exception as e:
+        raise HTTPException(500, f"Failed to retrieve recipients: {str(e)}")
 
-    recipients = await banking_service.search_recipients(query)
-    return {"recipients": recipients}
+
+@app.get("/api/recipients/search", response_model=RecipientsResponse)
+async def search_recipients(query: str):
+    """Search for recipients by name or alias"""
+    if not query or len(query) < 2:
+        raise HTTPException(400, "Query must be at least 2 characters long")
+    
+    if not banking_service:
+        raise HTTPException(500, "Banking service unavailable")
+    
+    try:
+        recipients = await banking_service.search_recipients(query)
+        return RecipientsResponse(recipients=recipients, count=len(recipients))
+    except Exception as e:
+        raise HTTPException(500, f"Failed to search recipients: {str(e)}")
 
 
 @app.post("/api/transfer/validate")

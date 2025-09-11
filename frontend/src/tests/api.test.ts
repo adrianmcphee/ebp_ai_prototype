@@ -28,40 +28,7 @@ describe('apiService', () => {
     vi.clearAllMocks();
   });
 
-  describe('initializeSession() - Session Management', () => {
-    it('initializeSession() - should make POST request to session endpoint', async () => {
-      // ARRANGE
-      mockedAxios.post.mockResolvedValueOnce({ data: {} });
-
-      // ACT
-      await apiService.initializeSession();
-
-      // ASSERT
-      expect(mockedAxios.post).toHaveBeenCalledTimes(1);
-      expect(mockedAxios.post).toHaveBeenCalledWith(`${API_BASE}/api/session`);
-    });
-
-    it('initializeSession() - should handle API errors gracefully', async () => {
-      // ARRANGE
-      const mockError = new Error('Network error');
-      mockedAxios.post.mockRejectedValueOnce(mockError);
-
-      // ACT & ASSERT
-      await expect(apiService.initializeSession()).rejects.toThrow('Network error');
-      expect(mockedAxios.post).toHaveBeenCalledTimes(1);
-    });
-
-    it('initializeSession() - should resolve with undefined on success', async () => {
-      // ARRANGE
-      mockedAxios.post.mockResolvedValueOnce({ data: {} });
-
-      // ACT
-      const result = await apiService.initializeSession();
-
-      // ASSERT
-      expect(result).toBeUndefined();
-    });
-  });
+  // Session management is now handled by SessionService
 
   describe('getAccounts() - Account Data Retrieval', () => {
     it('getAccounts() - should make GET request to accounts endpoint and return accounts array', async () => {
@@ -476,8 +443,7 @@ describe('apiService', () => {
       timeoutError.name = 'TimeoutError';
 
       // ACT & ASSERT - Test each method handles timeouts
-      mockedAxios.post.mockRejectedValueOnce(timeoutError);
-      await expect(apiService.initializeSession()).rejects.toThrow('timeout');
+      // Session timeout test removed - now handled by SessionService
 
       mockedAxios.get.mockRejectedValueOnce(timeoutError);
       await expect(apiService.getAccounts()).rejects.toThrow('timeout');
@@ -498,30 +464,12 @@ describe('apiService', () => {
       statusError.name = 'AxiosError';
 
       // ACT & ASSERT - Test each method handles HTTP errors
-      mockedAxios.post.mockRejectedValueOnce(statusError);
-      await expect(apiService.initializeSession()).rejects.toThrow('Request failed with status code 500');
+      // Session status error test removed - now handled by SessionService
 
       mockedAxios.get.mockRejectedValueOnce(statusError);
       await expect(apiService.getAccounts()).rejects.toThrow('Request failed with status code 500');
     });
 
-    it('should preserve axios response structure for successful calls', async () => {
-      // ARRANGE
-      const mockAxiosResponse = {
-        data: { test: 'data' },
-        status: 200,
-        statusText: 'OK',
-        headers: {},
-        config: {}
-      };
-      mockedAxios.post.mockResolvedValueOnce(mockAxiosResponse);
-
-      // ACT
-      await apiService.initializeSession();
-
-      // ASSERT
-      expect(mockedAxios.post).toHaveBeenCalledTimes(1);
-      // The service should work with the axios response structure
-    });
+    // Session management tests removed - now handled by SessionService
   });
 });

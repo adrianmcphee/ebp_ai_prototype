@@ -130,9 +130,9 @@ class BankingOperationsCatalog:
 
         operations["external_transfer"] = BankingOperation(
             operation_id="external_transfer",
-            name="External Transfer/P2P Payment", 
+            name="External Transfer", 
             type=OperationType.TRANSACTIONAL,
-            description="Send money to external account or person",
+            description="Send money to external bank account",
             required_entities=["recipient", "amount"],
             optional_entities=["from_account", "memo", "recipient_account"],
             business_rules=["sufficient_balance", "recipient_verified", "amount_within_limits"],
@@ -140,6 +140,21 @@ class BankingOperationsCatalog:
             auth_level=AuthLevel.CHALLENGE,
             execution_handler=self._execute_external_transfer,
             confirmation_required=True
+        )
+
+        operations["p2p_payment"] = BankingOperation(
+            operation_id="p2p_payment",
+            name="P2P Payment",
+            type=OperationType.TRANSACTIONAL,
+            description="Send money to a friend or contact via P2P payment",
+            required_entities=["recipient", "amount"],
+            optional_entities=["from_account", "memo"],
+            business_rules=["sufficient_balance", "p2p_recipient_enrolled", "p2p_daily_limit"],
+            risk_level=RiskLevel.MEDIUM,
+            auth_level=AuthLevel.FULL,
+            execution_handler=self._execute_p2p_payment,
+            confirmation_required=True,
+            ui_flow="p2p_payment"
         )
 
         # BILL PAYMENT OPERATIONS
@@ -289,6 +304,7 @@ class BankingOperationsCatalog:
             "payments.bill.pay": "pay_bill",
             "payments.bill.schedule": "schedule_payment",
             "payments.recurring.setup": "schedule_payment",
+            "payments.p2p.send": "p2p_payment",
 
             # Card operations
             "cards.block.temporary": "block_card",
@@ -312,11 +328,17 @@ class BankingOperationsCatalog:
         """Execute balance check operation"""
         account_type = entities.get("account_type", "checking")
         
-        # Get balance from banking service  
-        balance = await self.banking.get_balance(account_type)
-        
-        # Get account details
+        # Get account details first to get the account_id
         account = await self.banking.get_account_by_type(account_type)
+        if not account:
+            return OperationResult(
+                status=OperationStatus.FAILED,
+                data={},
+                message=f"No {account_type} account found"
+            )
+        
+        # Get balance using account_id
+        balance = await self.banking.get_balance(account["id"])
         
         return OperationResult(
             status=OperationStatus.COMPLETED,
@@ -378,24 +400,26 @@ class BankingOperationsCatalog:
             return OperationResult(
                 status=OperationStatus.FAILED,
                 data=result,
-                message=result.get("message", "Transfer failed")
+                message=result.get("error", "Transfer failed")
             )
 
     async def _execute_external_transfer(
         self, entities: Dict[str, Any], user_context: Optional[Dict[str, Any]] = None
     ) -> OperationResult:
         """Execute external transfer/P2P payment"""
-        recipient = entities.get("recipient")
+        recipient_name = entities.get("recipient")
+        recipient_id = entities.get("recipient_id", recipient_name)  # Fallback to name if ID not available
         amount = entities.get("amount")
-        from_account = entities.get("from_account", "checking")
+        from_account = entities.get("from_account", "CHK001")  # Default to primary checking account
 
-        result = await self.banking.send_payment(recipient, amount, from_account)
+        # Use recipient_id for the banking operation
+        result = await self.banking.send_payment(recipient_id, amount, from_account)
         
         if result.get("success"):
             return OperationResult(
                 status=OperationStatus.COMPLETED,
                 data=result,
-                message=f"Successfully sent ${amount:,.2f} to {recipient}",
+                message=f"Successfully sent ${amount:,.2f} to {recipient_name}",
                 reference_id=result.get("payment_id"),
                 ui_hints={"display_mode": "confirmation", "show_receipt": True}
             )
@@ -403,7 +427,50 @@ class BankingOperationsCatalog:
             return OperationResult(
                 status=OperationStatus.FAILED,
                 data=result,
-                message=result.get("message", "Payment failed")
+                message=result.get("error", "Payment failed")
+            )
+
+    async def _execute_p2p_payment(
+        self, entities: Dict[str, Any], user_context: Optional[Dict[str, Any]] = None
+    ) -> OperationResult:
+        """Execute P2P payment to friend/contact"""
+        recipient_name = entities.get("recipient")
+        recipient_id = entities.get("recipient_id", recipient_name)  # Fallback to name if ID not available
+        amount = entities.get("amount")
+        from_account = entities.get("from_account", "CHK001")  # Default to primary checking account
+        memo = entities.get("memo", "")
+
+        # Use recipient_id for the banking operation
+        result = await self.banking.send_payment(recipient_id, amount, from_account, "p2p")
+        
+        if result.get("success"):
+            return OperationResult(
+                status=OperationStatus.COMPLETED,
+                data=result,
+                message=f"Successfully sent ${amount:,.2f} to {recipient_name}" + (f" for {memo}" if memo else ""),
+                reference_id=result.get("payment_id"),
+                ui_hints={
+                    "display_mode": "p2p_confirmation", 
+                    "show_receipt": True,
+                    "payment_type": "p2p",
+                    "recipient_type": "contact"
+                },
+                next_steps=[
+                    f"Payment sent to {recipient}",
+                    "Receipt saved to transaction history",
+                    "Recipient will be notified"
+                ]
+            )
+        else:
+            return OperationResult(
+                status=OperationStatus.FAILED,
+                data=result,
+                message=result.get("error", f"P2P payment to {recipient} failed"),
+                next_steps=[
+                    "Check your account balance",
+                    "Verify recipient information",
+                    "Try again or contact support"
+                ]
             )
 
     async def _execute_bill_payment(
@@ -412,7 +479,7 @@ class BankingOperationsCatalog:
         """Execute bill payment"""
         payee = entities.get("payee")
         amount = entities.get("amount")
-        from_account = entities.get("from_account", "checking")
+        from_account = entities.get("from_account", "CHK001")  # Default to primary checking account
 
         # Use send_payment for bill payments (same underlying mechanism)
         result = await self.banking.send_payment(payee, amount, from_account)
@@ -429,7 +496,7 @@ class BankingOperationsCatalog:
             return OperationResult(
                 status=OperationStatus.FAILED,
                 data=result,
-                message=result.get("message", "Bill payment failed")
+                message=result.get("error", "Bill payment failed")
             )
 
     async def _execute_block_card(
@@ -452,7 +519,7 @@ class BankingOperationsCatalog:
             return OperationResult(
                 status=OperationStatus.FAILED,
                 data=result,
-                message=result.get("message", "Card blocking failed")
+                message=result.get("error", "Card blocking failed")
             )
 
     async def _execute_replace_card(
@@ -498,7 +565,7 @@ class BankingOperationsCatalog:
             return OperationResult(
                 status=OperationStatus.FAILED,
                 data=result,
-                message=result.get("message", "Dispute initiation failed")
+                message=result.get("error", "Dispute initiation failed")
             )
 
     async def _execute_statement_download(

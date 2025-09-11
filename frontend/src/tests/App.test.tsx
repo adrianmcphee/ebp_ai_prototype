@@ -7,7 +7,7 @@ import type { Account, ProcessResponse, DynamicFormConfig } from '../types';
 // Mock external services
 vi.mock('../services/api', () => ({
   apiService: {
-    initializeSession: vi.fn().mockResolvedValue(undefined),
+    // initializeSession removed - now handled by SessionService
     getAccounts: vi.fn().mockResolvedValue([]),
     processMessage: vi.fn().mockResolvedValue({
       status: 'success',
@@ -238,15 +238,7 @@ describe('App Component', () => {
   });
 
   describe('useEffect() - Component Lifecycle', () => {
-    it('initializeSession() - should call API service on component mount', async () => {
-      await act(async () => {
-        render(<MainApp />);
-      });
-
-      await waitFor(() => {
-        expect(vi.mocked(apiService.initializeSession)).toHaveBeenCalledTimes(1);
-      });
-    });
+    // Session initialization test removed - now handled by SessionService
 
     it('loadAccounts() - should call API service on component mount', async () => {
       await act(async () => {
@@ -775,23 +767,8 @@ describe('App Component', () => {
     });
   });
 
-  describe('initializeSession() / loadAccounts() / connectWebSocket() - Error Handling', () => {
-    it('initializeSession() - should handle API errors gracefully', async () => {
-      const mockError = new Error('Session initialization failed');
-      vi.mocked(apiService.initializeSession).mockRejectedValueOnce(mockError);
-
-      await act(async () => {
-        render(<MainApp />);
-      });
-
-      await waitFor(() => {
-        expect(vi.mocked(notifications.show)).toHaveBeenCalledWith({
-          title: 'Connection Error',
-          message: 'Failed to connect to banking assistant',
-          color: 'red'
-        });
-      });
-    });
+  describe('loadAccounts() / connectWebSocket() - Error Handling', () => {
+    // Session initialization error handling now in SessionService
 
     it('loadAccounts() - should handle account loading errors gracefully', async () => {
       const mockError = new Error('Failed to load accounts');

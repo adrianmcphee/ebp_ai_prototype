@@ -23,6 +23,9 @@ import { Breadcrumb } from './components/Breadcrumb';
 import { NavigationAssistant } from './components/NavigationAssistant';
 import { apiService } from './services/api';
 import { websocketService, type WebSocketMessageHandler } from './services/websocket';
+import { sessionService } from './services/session';
+import type { MessageStrategy } from './services/message-strategy';
+import { MessageStrategyFactory } from './services/message-strategy';
 import { 
   buildNavigationGroups,
   getRouteByPath,
@@ -56,7 +59,7 @@ export const MainApp: React.FC = () => {
 
   const initializeSession = async () => {
     try {
-      await apiService.initializeSession();
+      await sessionService.initialize();
       addSystemMessage('Connected to EBP Banking Assistant');
     } catch (error) {
       console.error('Failed to initialize session:', error);
@@ -214,7 +217,7 @@ export const MainApp: React.FC = () => {
     }
   };
 
-  const handleProcessResponse = (data: ProcessResponse) => {
+  const handleProcessResponse = (data: ProcessResponse, messageStrategy: MessageStrategy) => {
     // Determine which navigation approach to use based on context and intent
     const shouldUseIntentBasedNavigation = 
       activeTab === 'banking' && 
@@ -238,7 +241,7 @@ export const MainApp: React.FC = () => {
         }
       }
 
-      addAssistantMessage(responseMessage, data);
+      messageStrategy.handleAssistantResponse(responseMessage, data);
     } else {
       // Fallback to legacy UI assistance approach
       if (data.ui_assistance) {
@@ -258,16 +261,20 @@ export const MainApp: React.FC = () => {
         }
       }
 
-      addAssistantMessage(responseMessage, data);
+      messageStrategy.handleAssistantResponse(responseMessage, data);
     }
   };
 
   const handleWebSocketMessage = (message: { type: string; data: ProcessResponse }) => {
     if (message.type === 'result') {
-      handleProcessResponse(message.data);
+      // WebSocket messages are typically part of chat flow, so use persistent strategy
+      const messageStrategy = MessageStrategyFactory.createPersistent(addUserMessage, addAssistantMessage);
+      handleProcessResponse(message.data, messageStrategy);
     }
   };
 
+  // Handler for Chat Panel form submission
+  // Uses persistent session and message strategies - maintains conversation context and history
   const handleSubmit = async (values: { message: string }) => {
     const userMessage = values.message.trim();
     if (!userMessage) return;
@@ -277,19 +284,24 @@ export const MainApp: React.FC = () => {
       setShowNavigationAssistant(false);
     }
 
-    addUserMessage(userMessage);
+    // Create persistent message strategy for chat history
+    const messageStrategy = MessageStrategyFactory.createPersistent(addUserMessage, addAssistantMessage);
+    
+    messageStrategy.handleUserMessage(userMessage);
     form.reset();
 
     try {
+      // Uses persistent session by default for conversation continuity
       const data = await apiService.processMessage(userMessage, activeTab);
-      handleProcessResponse(data);
+      handleProcessResponse(data, messageStrategy);
     } catch (error) {
       console.error('Error processing message:', error);
-      addAssistantMessage('Sorry, I encountered an error processing your request.');
+      messageStrategy.handleAssistantResponse('Sorry, I encountered an error processing your request.');
     }
   };
 
   // Handler for Navigation Assistant form submission
+  // Uses stateless session and silent message strategies - independent requests without chat pollution
   const handleNavigationSubmit = async (values: { message: string }) => {
     const userMessage = values.message.trim();
     if (!userMessage) return;
@@ -297,14 +309,23 @@ export const MainApp: React.FC = () => {
     // Close navigation assistant
     setShowNavigationAssistant(false);
 
-    addUserMessage(userMessage);
+    // Create silent message strategy - no chat history pollution
+    const messageStrategy = MessageStrategyFactory.createSilent();
+    
+    messageStrategy.handleUserMessage(userMessage);
 
     try {
-      const data = await apiService.processMessage(userMessage, activeTab);
-      handleProcessResponse(data);
+      // Use stateless strategy for navigation requests (no session continuity)
+      const data = await apiService.processMessageStateless(userMessage, activeTab);
+      handleProcessResponse(data, messageStrategy);
     } catch (error) {
-      console.error('Error processing message:', error);
-      addAssistantMessage('Sorry, I encountered an error processing your request.');
+      console.error('Error processing navigation message:', error);
+      // Show error via notification instead of chat message
+      notifications.show({
+        title: 'Navigation Error',
+        message: 'Sorry, I encountered an error processing your navigation request.',
+        color: 'red',
+      });
     }
   };
 
@@ -443,23 +464,6 @@ export const MainApp: React.FC = () => {
     );
   };
 
-  // Default route redirect component
-  const DefaultRouteRedirect: React.FC = () => {
-    // Get the first route from the route service
-    const allRoutes = getAllRoutes();
-    const firstRoute = allRoutes[0];
-    
-    if (firstRoute && firstRoute.path !== '/') {
-      // Redirect to first route if it's not '/'
-      return <Navigate to={firstRoute.path} replace />;
-    } else if (firstRoute?.path === '/') {
-      // If first route is '/', render its component directly
-      return renderRouteComponent(firstRoute.component);
-    }
-    
-    // Fallback to banking dashboard if no routes found
-    return <BankingDashboard />;
-  };
 
   // Component renderer based on route config
   // @FIXME: This is a temporary solution untill we know where the source of truth is
@@ -509,20 +513,6 @@ export const MainApp: React.FC = () => {
     }
   };
 
-
-
-
-
-  // Handle root redirect
-  useEffect(() => {
-    if (location.pathname === '/') {
-      const rootRoute = getRouteByPath('/');
-      if (rootRoute?.redirectTo) {
-        navigate(rootRoute.redirectTo, { replace: true });
-      }
-    }
-  }, [location.pathname, navigate]);
-
   // Initialize app on startup
   useEffect(() => {
     initializeSession();
@@ -549,8 +539,8 @@ export const MainApp: React.FC = () => {
               {/* Main Content Area - Configuration-driven Routes */}
               <Container size="xl" pt="md">
                 <Routes>
-                  {/* Default route - redirect to first fetched route */}
-                  <Route path="/" element={<DefaultRouteRedirect />} />
+                  {/* Default route - direct redirect to banking dashboard */}
+                  <Route path="/" element={<Navigate to="/banking" replace />} />
                   
                   {/* Generate routes from modern route service */}
                   {getAllRoutes().map((route) => (
