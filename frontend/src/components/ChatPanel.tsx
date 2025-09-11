@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   Card,
   Stack,
@@ -25,6 +25,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   isConnected,
   onSubmit
 }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  
+  // Preserve focus during re-renders caused by WebSocket connection state changes
+  useEffect(() => {
+    // If focus was lost during re-render and input field has content, restore focus
+    if (document.activeElement === document.body && form.values.message) {
+      inputRef.current?.focus();
+    }
+  }, [isConnected, form.values.message]); // Re-run when connection state or input value changes
   
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 0.8) return 'green';
@@ -65,6 +74,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       <form onSubmit={form.onSubmit(onSubmit)}>
         <Group>
           <TextInput
+            ref={inputRef}
             data-testid="chat-input"
             {...form.getInputProps('message')}
             placeholder="Try: 'Take me to transfers' or 'Send $500 to John'"
