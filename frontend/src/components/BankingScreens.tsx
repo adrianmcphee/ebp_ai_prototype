@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   Card,
   Title,
@@ -14,6 +13,9 @@ import {
 import { useNavigate } from 'react-router-dom';
 import type { Account } from '../types';
 import { AccountDetails } from './AccountDetails';
+import { InternalTransferForm } from './InternalTransferForm';
+import { ExternalTransferForm } from './ExternalTransferForm';
+import { P2PTransferForm } from './P2PTransferForm';
 
 // Pre-built Banking Screens
 export const BankingScreens = {
@@ -62,28 +64,65 @@ export const BankingScreens = {
     );
   },
 
-  TransfersHub: () => (
-    <Card shadow="sm" padding="lg" radius="md" withBorder>
-      <Title order={2} mb="md">Money Transfers</Title>
-      <SimpleGrid cols={3}>
-        <Paper p="md" withBorder style={{ textAlign: 'center' }}>
-          <Text fw={500} mb="xs">Internal Transfer</Text>
-          <Text size="sm" c="dimmed">Between your accounts</Text>
-          <Button variant="light" mt="md" fullWidth>Start Transfer</Button>
-        </Paper>
-        <Paper p="md" withBorder style={{ textAlign: 'center' }}>
-          <Text fw={500} mb="xs">External Transfer</Text>
-          <Text size="sm" c="dimmed">To other banks</Text>
-          <Button variant="light" mt="md" fullWidth>Send Money</Button>
-        </Paper>
-        <Paper p="md" withBorder style={{ textAlign: 'center' }}>
-          <Text fw={500} mb="xs">International Wire</Text>
-          <Text size="sm" c="dimmed">Global transfers</Text>
-          <Button variant="light" mt="md" fullWidth>Wire Money</Button>
-        </Paper>
-      </SimpleGrid>
-    </Card>
-  ),
+  TransfersHub: () => {
+    const navigate = useNavigate();
+
+    return (
+      <Card shadow="sm" padding="lg" radius="md" withBorder>
+        <Title order={2} mb="md">Money Transfers</Title>
+        <Text size="sm" c="dimmed" mb="lg">
+          Choose the type of transfer you'd like to make
+        </Text>
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }}>
+          <Paper p="md" withBorder style={{ textAlign: 'center' }}>
+            <Text fw={500} mb="xs">Internal Transfer</Text>
+            <Text size="sm" c="dimmed" mb="md">Between your accounts</Text>
+            <Button 
+              variant="light" 
+              fullWidth
+              onClick={() => navigate('/banking/transfers/internal')}
+            >
+              Start Transfer
+            </Button>
+          </Paper>
+          <Paper p="md" withBorder style={{ textAlign: 'center' }}>
+            <Text fw={500} mb="xs">External Transfer</Text>
+            <Text size="sm" c="dimmed" mb="md">To other banks</Text>
+            <Button 
+              variant="light" 
+              fullWidth
+              onClick={() => navigate('/banking/transfers/external')}
+            >
+              Send Money
+            </Button>
+          </Paper>
+          <Paper p="md" withBorder style={{ textAlign: 'center' }}>
+            <Text fw={500} mb="xs">P2P Payment</Text>
+            <Text size="sm" c="dimmed" mb="md">Quick payments to friends</Text>
+            <Button 
+              variant="light" 
+              fullWidth
+              color="green"
+              onClick={() => navigate('/banking/transfers/p2p')}
+            >
+              Send Money
+            </Button>
+          </Paper>
+          <Paper p="md" withBorder style={{ textAlign: 'center' }}>
+            <Text fw={500} mb="xs">International Wire</Text>
+            <Text size="sm" c="dimmed" mb="md">Global transfers</Text>
+            <Button 
+              variant="light" 
+              fullWidth
+              onClick={() => navigate('/banking/transfers/wire')}
+            >
+              Wire Money
+            </Button>
+          </Paper>
+        </SimpleGrid>
+      </Card>
+    );
+  },
 
   WireTransferForm: () => (
     <Card shadow="sm" padding="lg" radius="md" withBorder>
@@ -131,5 +170,8 @@ export const BankingScreens = {
     </Card>
   ),
 
+  InternalTransferForm,
+  ExternalTransferForm,
+  P2PTransferForm,
   AccountDetails
 };

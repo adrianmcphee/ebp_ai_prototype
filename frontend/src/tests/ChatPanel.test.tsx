@@ -398,7 +398,7 @@ describe('ChatPanel Component', () => {
       });
 
       // ASSERT
-      expect(mockForm.setFieldValue).toHaveBeenCalledWith('message', 'Take me to international transfers');
+      expect(mockForm.setFieldValue).toHaveBeenCalledWith('message', 'Transfer $100 from my checking account to my savings account');
     });
 
     it('Quick Action onClick() - should set form value for transaction quick action', async () => {
@@ -415,7 +415,7 @@ describe('ChatPanel Component', () => {
       });
 
       // ASSERT
-      expect(mockForm.setFieldValue).toHaveBeenCalledWith('message', 'Send $500 to my friend in Canada');
+      expect(mockForm.setFieldValue).toHaveBeenCalledWith('message', 'Send $2000 to Sarah at Wells Fargo from my primary checking account');
     });
 
     it('Quick Action onClick() - should set form value for balance quick action', async () => {

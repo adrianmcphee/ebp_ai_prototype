@@ -34,24 +34,25 @@ const deriveGroup = (path: string): string | undefined =>
   path.startsWith('/banking') ? 'Banking' : undefined;
 
 const generateNavigationIntent = (path: string, hasParameters: boolean): string => {
-  const intentMap: Record<string, string> = {
-    '/banking/accounts': hasParameters ? 'navigation.accounts.details' : 'navigation.accounts.overview',
-    '/banking/transfers': 'navigation.transfers.hub',
-    '/banking/transfers/wire': 'navigation.transfers.wire',
-    '/banking/payments/bills': 'navigation.payments.bills'
-  };
+  // Find the route in INTENT_ROUTE_CONFIG
+  const intentRoute = INTENT_ROUTE_CONFIG.find(route => route.baseRoute === path);
   
-  return intentMap[path] || `navigation.${path.split('/').filter(Boolean).filter(s => !s.startsWith(':')).join('.')}`;
+  if (intentRoute) {
+    // Systematic conversion: intentId -> navigation.intentId
+    const { intentId } = intentRoute;
+    
+    // For parameterized routes, append .details systematically
+    if (hasParameters) {
+      return `navigation.${intentId}.details`;
+    }
+    
+    return `navigation.${intentId}`;
+  }
+  
+  // Fallback to path-based logic for routes not in config
+  return `navigation.${path.split('/').filter(Boolean).filter(s => !s.startsWith(':')).join('.')}`;
 };
 
-const inferComponent = (path: string): string => {
-  if (path.includes('/accounts') && path.includes(':')) return 'AccountDetails';
-  if (path.includes('/accounts')) return 'AccountsOverview';
-  if (path.includes('/transfers/wire')) return 'WireTransferForm';
-  if (path.includes('/transfers')) return 'TransfersHub';
-  if (path.includes('/payments/bills')) return 'BillPayHub';
-  return 'GenericBankingComponent';
-};
 
 const matchesParameterizedRoute = (path: string, pattern: string): boolean => {
   const regex = new RegExp(`^${pattern.replace(/:[\w]+/g, '[^/]+')}$`);
@@ -81,7 +82,7 @@ const loadRoutes = (): Route[] => {
 
   const intentRoutes: Route[] = INTENT_ROUTE_CONFIG.map(route => ({
     path: route.baseRoute,
-    component: inferComponent(route.baseRoute),
+    component: route.component,
     breadcrumb: route.breadcrumb,
     tab: deriveTab(route.baseRoute),
     navigationLabel: route.navigationLabel,

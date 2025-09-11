@@ -138,7 +138,14 @@ export const MainApp: React.FC = () => {
 
     // Handle UI feedback (stays in component)
     if (result.success && result.route) {
-      navigate(result.route);
+      // Pass entity data through navigation state for form pre-filling
+      navigate(result.route, { 
+        state: { 
+          entities,
+          intentId,
+          timestamp: new Date().toISOString()
+        } 
+      });
       
       notifications.show({
         title: 'Navigation',
@@ -473,6 +480,24 @@ export const MainApp: React.FC = () => {
         return (
           <RouteComponent>
             <BankingScreens.TransfersHub />
+          </RouteComponent>
+        );
+      case 'InternalTransferForm':
+        return (
+          <RouteComponent>
+            <BankingScreens.InternalTransferForm />
+          </RouteComponent>
+        );
+      case 'ExternalTransferForm':
+        return (
+          <RouteComponent>
+            <BankingScreens.ExternalTransferForm />
+          </RouteComponent>
+        );
+      case 'P2PTransferForm':
+        return (
+          <RouteComponent>
+            <BankingScreens.P2PTransferForm />
           </RouteComponent>
         );
       case 'WireTransferForm':
