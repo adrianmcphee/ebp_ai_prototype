@@ -266,12 +266,7 @@ export const P2PTransferForm: React.FC = () => {
         <Stack gap="md">
           {/* From Account */}
           <Select
-            label={
-              <Group gap="xs">
-                <Text>From Account</Text>
-                <Text c="red">*</Text>
-              </Group>
-            }
+            label="From Account"
             placeholder="Select source account"
             required
             value={formData.fromAccount}
@@ -284,12 +279,7 @@ export const P2PTransferForm: React.FC = () => {
 
           {/* Recipient */}
           <Select
-            label={
-              <Group gap="xs">
-                <Text>Send To</Text>
-                <Text c="red">*</Text>
-              </Group>
-            }
+            label="Send To"
             placeholder="Select recipient"
             required
             value={formData.recipient}
@@ -306,12 +296,7 @@ export const P2PTransferForm: React.FC = () => {
 
           {/* Amount */}
           <NumberInput
-            label={
-              <Group gap="xs">
-                <Text>Amount</Text>
-                <Text c="red">*</Text>
-              </Group>
-            }
+            label="Amount"
             placeholder="0.00"
             required
             value={formData.amount}

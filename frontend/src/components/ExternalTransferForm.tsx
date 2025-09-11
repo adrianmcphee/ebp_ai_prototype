@@ -257,12 +257,7 @@ export const ExternalTransferForm: React.FC = () => {
         <Stack gap="md">
           {/* From Account */}
           <Select
-            label={
-              <Group gap="xs">
-                <Text>From Account</Text>
-                <Text c="red">*</Text>
-              </Group>
-            }
+            label="From Account"
             placeholder="Select source account"
             required
             value={formData.fromAccount}
@@ -277,12 +272,7 @@ export const ExternalTransferForm: React.FC = () => {
 
           {/* Recipient Name */}
           <TextInput
-            label={
-              <Group gap="xs">
-                <Text>Recipient Name</Text>
-                <Text c="red">*</Text>
-              </Group>
-            }
+            label="Recipient Name"
             placeholder="Full name as it appears on their account"
             required
             value={formData.recipientName}
@@ -294,12 +284,7 @@ export const ExternalTransferForm: React.FC = () => {
 
           {/* Recipient Bank */}
           <TextInput
-            label={
-              <Group gap="xs">
-                <Text>Recipient Bank</Text>
-                <Text c="red">*</Text>
-              </Group>
-            }
+            label="Recipient Bank"
             placeholder="Bank name (e.g., Wells Fargo, Chase)"
             required
             value={formData.recipientBank}
@@ -311,12 +296,7 @@ export const ExternalTransferForm: React.FC = () => {
 
           {/* Account Number */}
           <TextInput
-            label={
-              <Group gap="xs">
-                <Text>Account Number</Text>
-                <Text c="red">*</Text>
-              </Group>
-            }
+            label="Account Number"
             placeholder="Recipient's account number"
             required
             value={formData.accountNumber}
@@ -328,12 +308,7 @@ export const ExternalTransferForm: React.FC = () => {
 
           {/* Routing Number */}
           <TextInput
-            label={
-              <Group gap="xs">
-                <Text>Routing Number</Text>
-                <Text c="red">*</Text>
-              </Group>
-            }
+            label="Routing Number"
             placeholder="9-digit routing number"
             required
             value={formData.routingNumber}
@@ -347,12 +322,7 @@ export const ExternalTransferForm: React.FC = () => {
 
           {/* Amount */}
           <NumberInput
-            label={
-              <Group gap="xs">
-                <Text>Amount</Text>
-                <Text c="red">*</Text>
-              </Group>
-            }
+            label="Amount"
             placeholder="0.00"
             required
             value={formData.amount}

@@ -248,12 +248,7 @@ export const InternalTransferForm: React.FC = () => {
         <Stack gap="md">
           {/* From Account */}
           <Select
-            label={
-              <Group gap="xs">
-                <Text>From Account</Text>
-                <Text c="red">*</Text>
-              </Group>
-            }
+            label="From Account"
             placeholder="Select source account"
             required
             value={formData.fromAccount}
@@ -266,12 +261,7 @@ export const InternalTransferForm: React.FC = () => {
 
           {/* To Account */}
           <Select
-            label={
-              <Group gap="xs">
-                <Text>To Account</Text>
-                <Text c="red">*</Text>
-              </Group>
-            }
+            label="To Account"
             placeholder="Select destination account"
             required
             value={formData.toAccount}
@@ -287,12 +277,7 @@ export const InternalTransferForm: React.FC = () => {
 
           {/* Amount */}
           <NumberInput
-            label={
-              <Group gap="xs">
-                <Text>Amount</Text>
-                <Text c="red">*</Text>
-              </Group>
-            }
+            label="Amount"
             placeholder="0.00"
             required
             value={formData.amount}
