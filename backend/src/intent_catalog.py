@@ -428,7 +428,7 @@ BANKING_INTENTS = {
             r"\bp2p .* payment\b",
         ],
         preconditions=["balance_check", "recipient_enrolled"],
-        enrichment_requirements=["recipient_resolution"],
+        enrichment_requirements=["recipient_resolution", "account_resolution"],
         daily_limit=100,
         timeout_ms=6000,
     ),
