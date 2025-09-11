@@ -315,6 +315,32 @@ class IntentPipeline:
             query, original_intent.get("intent_id"), missing_entities
         )
 
+        # Apply entity enrichment to clarification entities (same as main flow)
+        clarification_entities = await self._apply_entity_enrichment(
+            original_intent.get("intent_id"), clarification_entities
+        )
+
+        # Apply intent refinement to clarification entities if needed
+        if original_intent.get("intent_id"):
+            try:
+                enriched_entities = clarification_entities.get("entities", {})
+                enriched_entities["original_query"] = query
+                
+                final_intent, reason = self.intent_refiner.refine_intent(
+                    original_intent["intent_id"], 
+                    enriched_entities
+                )
+                
+                if final_intent != original_intent["intent_id"]:
+                    original_intent["intent_id"] = final_intent
+                    original_intent["refinement_applied"] = True
+                    original_intent["refinement_reason"] = reason
+                    
+            except Exception as e:
+                # Continue with original intent if refinement fails
+                print(f"Intent refinement failed during clarification: {e}")
+                pass
+
         # Check if we got the missing information
         still_missing = clarification_entities.get("missing_required", [])
 
@@ -355,13 +381,20 @@ class IntentPipeline:
             return self._format_response(response, original_intent, merged_entities)
 
         else:
-            # Still missing information, provide helpful guidance
+            # Merge what we have so far with original entities
+            partial_merged_entities = self._merge_entity_sets(
+                pending_clarification.get("original_entities", {}),
+                clarification_entities,
+            )
+            
             return {
                 "status": "clarification_needed",
                 "intent": original_intent.get("intent_id"),
                 "message": f"I still need: {', '.join(still_missing)}",
                 "suggestions": clarification_entities.get("suggestions", []),
                 "provided_entities": clarification_entities.get("entities", {}),
+                "entities": partial_merged_entities,  # Include enriched entities
+                "missing_fields": still_missing,
             }
 
     async def _handle_approval_confirmation(
@@ -513,10 +546,14 @@ class IntentPipeline:
             return {
                 "status": "clarification_needed",
                 "intent": classification.get("intent_id"),
+                "confidence": classification.get("confidence", 0.0),
+                "entities": entities.get("entities", {}),  # Include enriched entities
                 "message": response.message,
                 "missing_fields": entities.get("missing_required", []),
                 "suggestions": response.follow_up_questions,
                 "provided_entities": entities.get("entities", {}),
+                "ui_assistance": None,
+                "execution": None
             }
 
         elif response.response_type == ResponseType.CONFIRMATION_NEEDED:
