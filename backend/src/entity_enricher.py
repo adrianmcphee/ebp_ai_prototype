@@ -85,6 +85,21 @@ class AccountResolutionStrategy(EnrichmentStrategy):
                                 "currency": account.currency
                             }
                         }
+                    
+                    if entity_key != "account_id":
+                        enriched["account_id"] = {
+                            "value": account.id,
+                            "raw": account.id,
+                            "confidence": 0.95,
+                            "source": "enrichment",
+                            "enriched_entity": {
+                                "id": account.id,
+                                "name": account.name,
+                                "type": account.type,
+                                "balance": account.balance,
+                                "currency": account.currency
+                            }
+                        }
         
         # Clean up redundant entities for transfer operations
         enriched = self._cleanup_redundant_entities(enriched)

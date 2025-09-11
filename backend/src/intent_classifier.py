@@ -63,8 +63,9 @@ class IntentClassifier:
             # Try LLM classification first
             llm_result = await self._classify_with_llm(query, context)
 
-            # Cache the result
-            await self._cache_result(cache_key, llm_result)
+            # Only cache successful results (no error field)
+            if "error" not in llm_result:
+                await self._cache_result(cache_key, llm_result)
 
             response_time = (datetime.now() - start_time).total_seconds() * 1000
             llm_result["response_time_ms"] = int(response_time)
