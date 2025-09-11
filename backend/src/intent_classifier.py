@@ -10,7 +10,8 @@ from typing import Any, Optional
 
 from .cache import RedisCache
 from .intent_catalog import IntentCategory, intent_catalog
-from .llm_client import LLMClient
+from .llm_client import LLMClient, retry_llm_call
+from .config import settings
 
 
 class IntentClassifier:
@@ -124,11 +125,13 @@ Return JSON with:
 
 Be very specific - prefer subcategory intents over general ones."""
 
-        response = await self.llm.complete(
-            prompt=prompt,
-            temperature=0.2,  # Lower temperature for more consistent classification
-            timeout=3.0,
-            response_format={"type": "json_object"},
+        response = await retry_llm_call(
+            lambda: self.llm.complete(
+                prompt=prompt,
+                temperature=0.2,  # Lower temperature for more consistent classification
+                timeout=settings.llm_timeout,
+                response_format={"type": "json_object"},
+            )
         )
 
         if isinstance(response, dict) and "error" not in response:

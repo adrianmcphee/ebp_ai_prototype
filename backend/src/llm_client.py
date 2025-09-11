@@ -2,10 +2,12 @@ import asyncio
 import json
 import re
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any, Optional, Callable
 
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
+
+from .config import settings
 
 
 class LLMClient(ABC):
@@ -535,3 +537,14 @@ def create_llm_client(provider: str, api_key: str, model: str) -> LLMClient:
         return MockLLMClient()
     else:
         raise ValueError(f"Unknown LLM provider: {provider}")
+
+
+async def retry_llm_call(llm_func: Callable[[], Any]) -> Any:
+    """Simple retry wrapper for LLM calls"""
+    for attempt in range(settings.llm_max_retries + 1):
+        try:
+            return await llm_func()
+        except Exception as e:
+            if attempt == settings.llm_max_retries:
+                raise e
+            await asyncio.sleep(0.5 * (attempt + 1))  # Simple backoff

@@ -10,8 +10,10 @@ class Settings(BaseSettings):
     llm_model: str = os.getenv("LLM_MODEL", "")  # Auto-selects if empty
     llm_temperature_intent: float = 0.3
     llm_temperature_entity: float = 0.0
-    llm_timeout: int = 5
-    llm_max_tokens: int = 500
+    llm_max_tokens: int = 5000
+
+    llm_timeout: int = int(os.getenv("LLM_TIMEOUT", "15"))
+    llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "3"))
 
     # Fallback LLM Configuration
     llm_fallback_provider: str = os.getenv("LLM_FALLBACK_PROVIDER", "")

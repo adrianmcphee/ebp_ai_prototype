@@ -12,7 +12,8 @@ from enum import Enum
 from functools import lru_cache
 from typing import Any, Optional, Union
 
-from .llm_client import LLMClient
+from .llm_client import LLMClient, retry_llm_call
+from .config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -337,13 +338,14 @@ class EntityExtractor:
                     query, intent_type, context
                 )
 
-                # Use function calling if LLM supports it
-                response = await self.llm.complete(
-                    prompt=prompt,
-                    temperature=0.1,  # Low temperature for precision
-                    timeout=3.0,
-                    functions=self.extraction_functions,
-                    function_call={"name": "extract_banking_entities"},
+                response = await retry_llm_call(
+                    lambda: self.llm.complete(
+                        prompt=prompt,
+                        temperature=0.1,  # Low temperature for precision
+                        timeout=settings.llm_timeout,
+                        functions=self.extraction_functions,
+                        function_call={"name": "extract_banking_entities"},
+                    )
                 )
 
                 if isinstance(response, dict) and "function_call" in response:
@@ -375,11 +377,13 @@ class EntityExtractor:
             try:
                 prompt = self._build_json_extraction_prompt(query, intent_type, context)
 
-                response = await self.llm.complete(
-                    prompt=prompt,
-                    temperature=0.1,
-                    timeout=3.0,
-                    response_format={"type": "json_object"},
+                response = await retry_llm_call(
+                    lambda: self.llm.complete(
+                        prompt=prompt,
+                        temperature=0.1,
+                        timeout=settings.llm_timeout,
+                        response_format={"type": "json_object"},
+                    )
                 )
 
                 if isinstance(response, dict) and "entities" in response:
