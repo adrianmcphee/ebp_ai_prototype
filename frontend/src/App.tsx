@@ -464,23 +464,6 @@ export const MainApp: React.FC = () => {
     );
   };
 
-  // Default route redirect component
-  const DefaultRouteRedirect: React.FC = () => {
-    // Get the first route from the route service
-    const allRoutes = getAllRoutes();
-    const firstRoute = allRoutes[0];
-    
-    if (firstRoute && firstRoute.path !== '/') {
-      // Redirect to first route if it's not '/'
-      return <Navigate to={firstRoute.path} replace />;
-    } else if (firstRoute?.path === '/') {
-      // If first route is '/', render its component directly
-      return renderRouteComponent(firstRoute.component);
-    }
-    
-    // Fallback to banking dashboard if no routes found
-    return <BankingDashboard />;
-  };
 
   // Component renderer based on route config
   // @FIXME: This is a temporary solution untill we know where the source of truth is
@@ -530,20 +513,6 @@ export const MainApp: React.FC = () => {
     }
   };
 
-
-
-
-
-  // Handle root redirect
-  useEffect(() => {
-    if (location.pathname === '/') {
-      const rootRoute = getRouteByPath('/');
-      if (rootRoute?.redirectTo) {
-        navigate(rootRoute.redirectTo, { replace: true });
-      }
-    }
-  }, [location.pathname, navigate]);
-
   // Initialize app on startup
   useEffect(() => {
     initializeSession();
@@ -570,8 +539,8 @@ export const MainApp: React.FC = () => {
               {/* Main Content Area - Configuration-driven Routes */}
               <Container size="xl" pt="md">
                 <Routes>
-                  {/* Default route - redirect to first fetched route */}
-                  <Route path="/" element={<DefaultRouteRedirect />} />
+                  {/* Default route - direct redirect to banking dashboard */}
+                  <Route path="/" element={<Navigate to="/banking" replace />} />
                   
                   {/* Generate routes from modern route service */}
                   {getAllRoutes().map((route) => (
