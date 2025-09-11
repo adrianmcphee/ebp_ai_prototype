@@ -163,7 +163,7 @@ BANKING_INTENTS = {
             "Navigate to my checking account",
             "Take me to my primary account",
         ],
-        keywords=["balance", "how much money", "available funds", "account balance", "checking balance", "savings balance", "what's my balance", "show accounts", "my accounts", "accounts page", "account overview", "account dashboard", "take me to", "show me my", "go to my", "navigate to my", "my savings account", "my checking account", "my primary account"],
+        keywords=["balance", "how much money", "available funds", "account balance", "checking balance", "savings balance", "what's my balance", "show accounts", "my accounts", "accounts page", "account overview", "account dashboard", "take me to", "show me my", "go to my", "navigate to my", "my savings account", "my checking account", "my primary account", "view account", "view my account"],
         patterns=[
             r"\b(what('s| is) my|check|show) .* balance\b",
             r"\bhow much .* (have|available|left)\b",
@@ -173,6 +173,9 @@ BANKING_INTENTS = {
             r"\baccount overview\b",
             r"\bshow me .* accounts?\b",
             r"\bshow me my .* account\b",
+            r"\bmy accounts\b",
+            r"\bshow .* my accounts\b",
+            r"\bview .* (my )?account\b",
         ],
         preconditions=["account_exists"],
         enrichment_requirements=["account_resolution"],
@@ -256,7 +259,7 @@ BANKING_INTENTS = {
             "See my account statement",
             "Display statement",
         ],
-        keywords=["view", "show", "statement", "online", "transactions", "display"],
+        keywords=["view statement", "show statement", "statement", "online statement", "transactions", "display statement", "account statement", "monthly statement"],
         patterns=[
             r"\b(view|show|display) .* statement\b",
             r"\bonline statement\b",
