@@ -43,7 +43,6 @@ export const MainApp: React.FC = () => {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [dynamicForm, setDynamicForm] = useState<DynamicFormConfig | null>(null);
-  const [showNavigationAssistant, setShowNavigationAssistant] = useState<boolean>(false);
   
   // Navigation groups for header
   const [navigationGroups] = useState(buildNavigationGroups());
@@ -279,10 +278,6 @@ export const MainApp: React.FC = () => {
     const userMessage = values.message.trim();
     if (!userMessage) return;
 
-    // Close navigation assistant if it's open (prevents form disconnect issues)
-    if (showNavigationAssistant) {
-      setShowNavigationAssistant(false);
-    }
 
     // Create persistent message strategy for chat history
     const messageStrategy = MessageStrategyFactory.createPersistent(addUserMessage, addAssistantMessage);
@@ -306,8 +301,6 @@ export const MainApp: React.FC = () => {
     const userMessage = values.message.trim();
     if (!userMessage) return;
 
-    // Close navigation assistant
-    setShowNavigationAssistant(false);
 
     // Create silent message strategy - no chat history pollution
     const messageStrategy = MessageStrategyFactory.createSilent();
@@ -559,10 +552,7 @@ export const MainApp: React.FC = () => {
               {/* Floating AI Navigation Assistant - Only show on banking routes */}
               {activeTab === 'banking' && (
                 <NavigationAssistant
-                  isVisible={showNavigationAssistant}
                   isConnected={isConnected}
-                  onClose={() => setShowNavigationAssistant(false)}
-                  onOpen={() => setShowNavigationAssistant(true)}
                   onSubmit={handleNavigationSubmit}
                 />
               )}
