@@ -88,7 +88,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           <TextInput
             data-testid="chat-input"
             {...form.getInputProps('message')}
-            placeholder="Try: 'Take me to transfers' or 'Send $500 to John'"
+            placeholder="Try: 'Zelle $50 to my friend Mike' or 'What's my checking account balance?'"
             style={{ flex: 1 }}
           />
           <Button 
@@ -115,15 +115,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           data-testid="quick-transaction"
           size="xs" 
           variant="subtle" 
-          onClick={() => form.setFieldValue('message', 'Send $500 to my friend in Canada')}
+          onClick={() => form.setFieldValue('message', 'Send $2000 to Sarah at Wells Fargo from my primary checking account')}
         >
-          Transaction
+          External wire
         </Button>
         <Button 
           data-testid="quick-balance"
           size="xs" 
           variant="subtle" 
-          onClick={() => form.setFieldValue('message', 'What\'s my balance?')}
+          onClick={() => form.setFieldValue('message', 'What\'s my savings account balance?')}
         >
           Balance
         </Button>
