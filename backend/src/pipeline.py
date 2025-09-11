@@ -640,8 +640,13 @@ class IntentPipeline:
                 if "enriched_entity" in value and "id" in value["enriched_entity"]:
                     enriched = value["enriched_entity"]
                     if key == "recipient":
-                        # For recipients, use the name for display in messages
-                        simple_entities[key] = enriched.get("name", enriched["id"])
+                        # For recipients, format with name and alias for display in messages
+                        name = enriched.get("name", enriched["id"])
+                        alias = enriched.get("alias")
+                        if name and alias:
+                            simple_entities[key] = f"{name} ({alias})"
+                        else:
+                            simple_entities[key] = name
                         # Also provide the ID separately for banking operations that need it
                         simple_entities[f"{key}_id"] = enriched["id"]
                     else:

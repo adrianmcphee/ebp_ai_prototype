@@ -508,7 +508,16 @@ class ContextAwareResponseGenerator:
 
         elif "transfer" in intent_id:
             amount = entity_values.get("amount", {}).get("value", 0)
-            recipient = entity_values.get("recipient", {}).get("value", "recipient")
+            
+            # For recipient, use formatted name with alias if available
+            recipient_data = entity_values.get("recipient", {})
+            enriched = recipient_data.get("enriched_entity", {})
+            if enriched.get("name") and enriched.get("alias"):
+                recipient = f"{enriched['name']} ({enriched['alias']})"
+            elif enriched.get("name"):
+                recipient = enriched["name"]
+            else:
+                recipient = recipient_data.get("value", "recipient")
 
             message = self.response_templates["transfer_initiated"].format(
                 amount=amount, recipient=recipient, completion_time="2-3 business days"
@@ -666,6 +675,13 @@ class ContextAwareResponseGenerator:
     def _extract_display_value(self, entity_data: dict[str, Any]) -> Any:
         """Extract the best display value from entity data"""
         enriched = entity_data.get("enriched_entity", {})
+        
+        # Special handling for recipients: show both name and alias
+        if enriched.get("name") and enriched.get("alias"):
+            name = enriched["name"]
+            alias = enriched["alias"]
+            # Format as "Name (alias)" for better clarity
+            return f"{name} ({alias})"
         
         # Try enriched entity display fields first
         for field in ["display_name", "name", "label"]:
