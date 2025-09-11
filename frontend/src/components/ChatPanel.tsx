@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Card,
   Stack,
@@ -29,6 +29,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       message: ''
     }
   });
+
+  // Ref for the scrollable messages container
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new messages are added
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   const handleFormSubmit = (values: { message: string }) => {
     onSubmit(values);
@@ -69,6 +79,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             )}
           </Paper>
         ))}
+        {/* Invisible element to scroll to */}
+        <div ref={messagesEndRef} />
       </Stack>
 
       <form onSubmit={form.onSubmit(handleFormSubmit)}>
