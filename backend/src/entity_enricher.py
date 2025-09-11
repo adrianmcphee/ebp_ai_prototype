@@ -293,9 +293,6 @@ class RecipientResolutionStrategy(EnrichmentStrategy):
             recipient_data["source"] = "enrichment"
             recipient_data["confidence"] = 0.95
             
-            # Add transfer type for intent refinement
-            recipient_data["transfer_type"] = self._determine_transfer_type(matches[0])
-            
         elif len(matches) > 1:
             # Multiple matches - needs disambiguation
             recipient_data["disambiguation_required"] = True
@@ -308,15 +305,6 @@ class RecipientResolutionStrategy(EnrichmentStrategy):
             recipient_data["confidence"] = 0.0
             
         return entities
-    
-    def _determine_transfer_type(self, recipient: dict) -> str:
-        """Determine transfer type based on recipient data."""
-        if recipient.get("bank_country") not in [None, "US"]:
-            return "international"
-        elif recipient.get("bank_name") == "Mock Bank":
-            return "internal"  
-        else:
-            return "external"
     
     def _extract_entity_value(self, entity: Any) -> str:
         """Safely extract string value from entity (handles both dict and string formats)"""
