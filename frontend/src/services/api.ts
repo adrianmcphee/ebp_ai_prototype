@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { API_BASE } from '../constants';
-import type { Account, ProcessResponse, AccountBalance, AccountTransactionsResponse } from '../types';
+import type { Account, ProcessResponse, AccountBalance, AccountTransactionsResponse, Recipient } from '../types';
 import type { SessionStrategy } from './session-strategy';
 import { SessionStrategyFactory } from './session-strategy';
 
@@ -65,5 +65,19 @@ export const apiService = {
     const params = limit ? { limit } : {};
     const response = await axios.get(`${API_BASE}/api/accounts/${accountId}/transactions`, { params });
     return response.data;
+  },
+
+  // Get all recipients
+  async getRecipients(): Promise<Recipient[]> {
+    const response = await axios.get(`${API_BASE}/api/recipients`);
+    return response.data.recipients;
+  },
+
+  // Search recipients by name or alias
+  async searchRecipients(query: string): Promise<Recipient[]> {
+    const response = await axios.get(`${API_BASE}/api/recipients/search`, { 
+      params: { query } 
+    });
+    return response.data.recipients;
   }
 };

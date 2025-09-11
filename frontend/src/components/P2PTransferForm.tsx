@@ -17,7 +17,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { notifications } from '@mantine/notifications';
 import { apiService } from '../services/api';
-import type { Account } from '../types';
+import type { Account, Recipient } from '../types';
 
 interface FormData {
   fromAccount: string;
@@ -52,11 +52,7 @@ interface EntityData {
   memo?: { value: string; source: string };
 }
 
-const P2P_RECIPIENTS = [
-  { id: 'RCP004', name: 'Sarah Johnson', alias: 'Sarah', phone: '555-0123' },
-  { id: 'RCP005', name: 'Michael Davis', alias: 'Mike', phone: '555-0124' },
-  { id: 'RCP006', name: 'Jennifer Wilson', alias: 'Jen', phone: '555-0125' }
-];
+// Recipients are now fetched from API
 
 export const P2PTransferForm: React.FC = () => {
   const location = useLocation();
@@ -64,6 +60,9 @@ export const P2PTransferForm: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [recipientsLoading, setRecipientsLoading] = useState(true);
+  const [recipientsError, setRecipientsError] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     fromAccount: '',
     recipient: '',
@@ -97,10 +96,39 @@ export const P2PTransferForm: React.FC = () => {
     loadAccounts();
   }, []);
 
+  // Fetch recipients on component mount
+  useEffect(() => {
+    const loadRecipients = async () => {
+      try {
+        setRecipientsLoading(true);
+        setRecipientsError(null);
+        const fetchedRecipients = await apiService.getRecipients();
+        // For P2P transfers, we can use all recipients but prioritize those with aliases
+        // Filter for domestic recipients (same country) for P2P context
+        const p2pRecipients = fetchedRecipients.filter(r => 
+          r.bank_country === 'US' && r.alias // P2P typically uses known contacts with aliases
+        );
+        setRecipients(p2pRecipients.length > 0 ? p2pRecipients : fetchedRecipients);
+      } catch (error) {
+        console.error('Failed to load recipients:', error);
+        setRecipientsError('Failed to load recipients. Please refresh the page.');
+        notifications.show({
+          title: 'Error',
+          message: 'Failed to load recipients. Please try again.',
+          color: 'red',
+        });
+      } finally {
+        setRecipientsLoading(false);
+      }
+    };
+
+    loadRecipients();
+  }, []);
+
   // Extract entities from navigation state
   useEffect(() => {
     const entities = (location.state as { entities?: EntityData })?.entities;
-    if (!entities) return;
+    if (!entities || recipients.length === 0) return;
 
     const updates: Partial<FormData> = {};
 
@@ -117,17 +145,18 @@ export const P2PTransferForm: React.FC = () => {
     // Pre-fill recipient
     if (entities.recipient?.enriched_entity) {
       const recipient = entities.recipient.enriched_entity;
-      const matchedRecipient = P2P_RECIPIENTS.find(r => 
-        r.name === recipient.name || r.alias === recipient.alias
+      const matchedRecipient = recipients.find(r => 
+        r.name === recipient.name || 
+        (r.alias && recipient.alias && r.alias === recipient.alias)
       );
       if (matchedRecipient) {
         updates.recipient = matchedRecipient.id;
       }
     } else if (entities.recipient?.value) {
       // Try to match by name or alias
-      const matchedRecipient = P2P_RECIPIENTS.find(r => 
+      const matchedRecipient = recipients.find(r => 
         r.name.toLowerCase().includes(entities.recipient!.value.toLowerCase()) ||
-        r.alias.toLowerCase().includes(entities.recipient!.value.toLowerCase())
+        (r.alias && r.alias.toLowerCase().includes(entities.recipient!.value.toLowerCase()))
       );
       if (matchedRecipient) {
         updates.recipient = matchedRecipient.id;
@@ -140,7 +169,7 @@ export const P2PTransferForm: React.FC = () => {
     }
 
     setFormData(prev => ({ ...prev, ...updates }));
-  }, [location.state, accounts]);
+  }, [location.state, accounts, recipients]);
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -180,8 +209,8 @@ export const P2PTransferForm: React.FC = () => {
   const formatAccountOption = (account: { name: string; balance: number }) => 
     `${account.name} - $${account.balance.toFixed(2)}`;
 
-  const formatRecipientOption = (recipient: { name: string; alias: string; phone: string }) => 
-    `${recipient.name} (${recipient.alias}) - ${recipient.phone}`;
+  const formatRecipientOption = (recipient: Recipient) => 
+    `${recipient.name}${recipient.alias ? ` (${recipient.alias})` : ''} - ${recipient.bank_name}`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,7 +220,7 @@ export const P2PTransferForm: React.FC = () => {
     }
 
     try {
-      const recipient = P2P_RECIPIENTS.find(r => r.id === formData.recipient);
+      const recipient = recipients.find(r => r.id === formData.recipient);
       
       console.log('Submitting P2P transfer:', formData);
       
@@ -215,28 +244,32 @@ export const P2PTransferForm: React.FC = () => {
                      formData.amount && Number(formData.amount) > 0 &&
                      Object.keys(formErrors).length === 0;
 
-  const selectedRecipient = P2P_RECIPIENTS.find(r => r.id === formData.recipient);
+  const selectedRecipient = recipients.find(r => r.id === formData.recipient);
 
-  // Show loading state while accounts are being fetched
-  if (accountsLoading) {
+  // Show loading state while data is being fetched
+  if (accountsLoading || recipientsLoading) {
     return (
       <Card shadow="sm" padding="lg" radius="md" withBorder>
         <Center>
           <Stack align="center" gap="md">
             <Loader size="md" />
-            <Text>Loading accounts...</Text>
+            <Text>Loading accounts and recipients...</Text>
           </Stack>
         </Center>
       </Card>
     );
   }
 
-  // Show error state if accounts failed to load
-  if (accountsError) {
+  // Show error state if data failed to load
+  if (accountsError || recipientsError) {
     return (
       <Card shadow="sm" padding="lg" radius="md" withBorder>
-        <Alert color="red" title="Error Loading Accounts">
-          <Text>{accountsError}</Text>
+        <Alert color="red" title="Error Loading Data">
+          <Text>
+            {accountsError && `Accounts: ${accountsError}`}
+            {accountsError && recipientsError && <br />}
+            {recipientsError && `Recipients: ${recipientsError}`}
+          </Text>
           <Button 
             mt="md" 
             color="red" 
@@ -284,7 +317,7 @@ export const P2PTransferForm: React.FC = () => {
             required
             value={formData.recipient}
             onChange={(value) => setFormData(prev => ({ ...prev, recipient: value || '' }))}
-            data={P2P_RECIPIENTS.map(rec => ({ 
+            data={recipients.map(rec => ({ 
               value: rec.id, 
               label: formatRecipientOption(rec) 
             }))}

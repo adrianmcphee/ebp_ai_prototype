@@ -175,3 +175,21 @@ export interface NavigationGroup {
   links: NavigationLink[];
 }
 
+// Recipient Types
+export interface Recipient {
+  id: string;
+  name: string;
+  account_number: string;
+  bank_name: string;
+  alias?: string;
+  bank_country: string;
+  routing_number?: string;
+  swift_code?: string;
+  bank_address?: string;
+}
+
+export interface RecipientsResponse {
+  recipients: Recipient[];
+  count: number;
+}
+
