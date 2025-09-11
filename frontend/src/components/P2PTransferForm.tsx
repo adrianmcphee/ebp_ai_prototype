@@ -10,19 +10,14 @@ import {
   Text,
   Group,
   Alert,
-  Badge
+  Badge,
+  Loader,
+  Center
 } from '@mantine/core';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { notifications } from '@mantine/notifications';
-
-interface P2PTransferFormProps {
-  accounts?: Array<{
-    id: string;
-    name: string;
-    type: string;
-    balance: number;
-  }>;
-}
+import { apiService } from '../services/api';
+import type { Account } from '../types';
 
 interface FormData {
   fromAccount: string;
@@ -34,7 +29,16 @@ interface FormData {
 
 interface EntityData {
   amount?: { value: number; raw: string; source: string };
-  from_account?: { value: string; enriched_entity?: any; source: string };
+  from_account?: { 
+    value: string; 
+    enriched_entity?: {
+      id: string;
+      name: string;
+      type: string;
+      balance: number;
+    }; 
+    source: string;
+  };
   recipient?: { 
     value: string; 
     enriched_entity?: {
@@ -54,15 +58,12 @@ const P2P_RECIPIENTS = [
   { id: 'RCP006', name: 'Jennifer Wilson', alias: 'Jen', phone: '555-0125' }
 ];
 
-export const P2PTransferForm: React.FC<P2PTransferFormProps> = ({ 
-  accounts = [
-    { id: 'CHK001', name: 'Primary Checking', type: 'checking', balance: 5000.00 },
-    { id: 'SAV001', name: 'Savings Account', type: 'savings', balance: 15000.00 },
-    { id: 'CHK002', name: 'Business Checking', type: 'checking', balance: 25000.00 }
-  ]
-}) => {
+export const P2PTransferForm: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     fromAccount: '',
     recipient: '',
@@ -72,9 +73,33 @@ export const P2PTransferForm: React.FC<P2PTransferFormProps> = ({
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
+  // Fetch accounts on component mount
+  useEffect(() => {
+    const loadAccounts = async () => {
+      try {
+        setAccountsLoading(true);
+        setAccountsError(null);
+        const fetchedAccounts = await apiService.getAccounts();
+        setAccounts(fetchedAccounts);
+      } catch (error) {
+        console.error('Failed to load accounts:', error);
+        setAccountsError('Failed to load accounts. Please refresh the page.');
+        notifications.show({
+          title: 'Error',
+          message: 'Failed to load your accounts. Please try again.',
+          color: 'red',
+        });
+      } finally {
+        setAccountsLoading(false);
+      }
+    };
+
+    loadAccounts();
+  }, []);
+
   // Extract entities from navigation state
   useEffect(() => {
-    const entities = (location.state as any)?.entities as EntityData;
+    const entities = (location.state as { entities?: EntityData })?.entities;
     if (!entities) return;
 
     const updates: Partial<FormData> = {};
@@ -126,7 +151,7 @@ export const P2PTransferForm: React.FC<P2PTransferFormProps> = ({
     if (!formData.recipient) {
       errors.recipient = 'Please select a recipient';
     }
-    if (!formData.amount || formData.amount <= 0) {
+    if (!formData.amount || Number(formData.amount) <= 0) {
       errors.amount = 'Please enter a valid amount';
     }
 
@@ -152,10 +177,10 @@ export const P2PTransferForm: React.FC<P2PTransferFormProps> = ({
     borderWidth: isRequired && formErrors[fieldName] ? 2 : undefined
   });
 
-  const formatAccountOption = (account: any) => 
+  const formatAccountOption = (account: { name: string; balance: number }) => 
     `${account.name} - $${account.balance.toFixed(2)}`;
 
-  const formatRecipientOption = (recipient: any) => 
+  const formatRecipientOption = (recipient: { name: string; alias: string; phone: string }) => 
     `${recipient.name} (${recipient.alias}) - ${recipient.phone}`;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -177,7 +202,7 @@ export const P2PTransferForm: React.FC<P2PTransferFormProps> = ({
       });
 
       navigate('/banking/transfers');
-    } catch (error) {
+    } catch {
       notifications.show({
         title: 'Payment Failed',
         message: 'There was an error sending your payment. Please try again.',
@@ -191,6 +216,39 @@ export const P2PTransferForm: React.FC<P2PTransferFormProps> = ({
                      Object.keys(formErrors).length === 0;
 
   const selectedRecipient = P2P_RECIPIENTS.find(r => r.id === formData.recipient);
+
+  // Show loading state while accounts are being fetched
+  if (accountsLoading) {
+    return (
+      <Card shadow="sm" padding="lg" radius="md" withBorder>
+        <Center>
+          <Stack align="center" gap="md">
+            <Loader size="md" />
+            <Text>Loading accounts...</Text>
+          </Stack>
+        </Center>
+      </Card>
+    );
+  }
+
+  // Show error state if accounts failed to load
+  if (accountsError) {
+    return (
+      <Card shadow="sm" padding="lg" radius="md" withBorder>
+        <Alert color="red" title="Error Loading Accounts">
+          <Text>{accountsError}</Text>
+          <Button 
+            mt="md" 
+            color="red" 
+            variant="light"
+            onClick={() => window.location.reload()}
+          >
+            Refresh Page
+          </Button>
+        </Alert>
+      </Card>
+    );
+  }
 
   return (
     <Card shadow="sm" padding="lg" radius="md" withBorder>
