@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import {
   Card,
   Stack,
@@ -9,31 +9,31 @@ import {
   TextInput,
   Button
 } from '@mantine/core';
-import type { UseFormReturnType } from '@mantine/form';
+import { useForm } from '@mantine/form';
 import type { Message } from '../types';
 
 interface ChatPanelProps {
   messages: Message[];
-  form: UseFormReturnType<{ message: string }>;
   isConnected: boolean;
   onSubmit: (values: { message: string }) => void;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
   messages,
-  form,
   isConnected,
   onSubmit
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  
-  // Preserve focus during re-renders caused by WebSocket connection state changes
-  useEffect(() => {
-    // If focus was lost during re-render and input field has content, restore focus
-    if (document.activeElement === document.body && form.values.message) {
-      inputRef.current?.focus();
+  // Manage form internally to prevent parent re-renders from affecting input
+  const form = useForm({
+    initialValues: {
+      message: ''
     }
-  }, [isConnected, form.values.message]); // Re-run when connection state or input value changes
+  });
+
+  const handleFormSubmit = (values: { message: string }) => {
+    onSubmit(values);
+    form.reset();
+  };
   
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 0.8) return 'green';
@@ -71,10 +71,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         ))}
       </Stack>
 
-      <form onSubmit={form.onSubmit(onSubmit)}>
+      <form onSubmit={form.onSubmit(handleFormSubmit)}>
         <Group>
           <TextInput
-            ref={inputRef}
             data-testid="chat-input"
             {...form.getInputProps('message')}
             placeholder="Try: 'Take me to transfers' or 'Send $500 to John'"

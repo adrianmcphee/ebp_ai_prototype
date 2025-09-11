@@ -11,7 +11,6 @@ import {
   Title,
   SimpleGrid
 } from '@mantine/core';
-import { useForm } from '@mantine/form';
 import { Notifications, notifications } from '@mantine/notifications';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import type { Message, ProcessResponse, UIAssistance, DynamicFormConfig, Account } from './types';
@@ -50,11 +49,6 @@ export const MainApp: React.FC = () => {
   // Derive active tab from URL using modern route service
   const activeTab = getRouteByPath(location.pathname)?.tab || 'banking';
 
-  const form = useForm({
-    initialValues: {
-      message: ''
-    }
-  });
 
   const initializeSession = async () => {
     try {
@@ -283,7 +277,6 @@ export const MainApp: React.FC = () => {
     const messageStrategy = MessageStrategyFactory.createPersistent(addUserMessage, addAssistantMessage);
     
     messageStrategy.handleUserMessage(userMessage);
-    form.reset();
 
     try {
       // Uses persistent session by default for conversation continuity
@@ -396,7 +389,6 @@ export const MainApp: React.FC = () => {
   const ChatTabContent = () => (
     <ChatPanel
       messages={messages}
-      form={form}
       isConnected={isConnected}
       onSubmit={handleSubmit}
     />
