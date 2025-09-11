@@ -15,7 +15,8 @@ export const INTENT_ROUTE_CONFIG: IntentRouteDefinition[] = [
     breadcrumb: 'Account Overview',
     navigationLabel: 'Accounts',
     hasParameters: false,
-    showInNavigation: true
+    showInNavigation: true,
+    component: 'AccountsOverview'
   },
   {
     intentId: 'accounts.balance.check',
@@ -24,7 +25,8 @@ export const INTENT_ROUTE_CONFIG: IntentRouteDefinition[] = [
     navigationLabel: 'Account Details',
     hasParameters: true,
     parameterFallback: '/banking/accounts',
-    showInNavigation: false
+    showInNavigation: false,
+    component: 'AccountDetails'
   },
 
   // Transfers
@@ -34,7 +36,8 @@ export const INTENT_ROUTE_CONFIG: IntentRouteDefinition[] = [
     breadcrumb: 'Transfer Hub',
     navigationLabel: 'Transfers',
     hasParameters: false,
-    showInNavigation: true
+    showInNavigation: true,
+    component: 'TransfersHub'
   },
 
   // Internal Transfers
@@ -44,7 +47,8 @@ export const INTENT_ROUTE_CONFIG: IntentRouteDefinition[] = [
     breadcrumb: 'Internal Transfer',
     navigationLabel: 'Internal Transfer',
     hasParameters: false,
-    showInNavigation: true
+    showInNavigation: true,
+    component: 'InternalTransferForm'
   },
 
   // External Transfers  
@@ -54,7 +58,8 @@ export const INTENT_ROUTE_CONFIG: IntentRouteDefinition[] = [
     breadcrumb: 'External Transfer',
     navigationLabel: 'External Transfer', 
     hasParameters: false,
-    showInNavigation: true
+    showInNavigation: true,
+    component: 'ExternalTransferForm'
   },
 
   // P2P Payments
@@ -64,7 +69,8 @@ export const INTENT_ROUTE_CONFIG: IntentRouteDefinition[] = [
     breadcrumb: 'P2P Payment',
     navigationLabel: 'P2P Payment',
     hasParameters: false,
-    showInNavigation: true
+    showInNavigation: true,
+    component: 'P2PTransferForm'
   },
 
   // Wire Transfers
@@ -74,7 +80,8 @@ export const INTENT_ROUTE_CONFIG: IntentRouteDefinition[] = [
     breadcrumb: 'Wire Transfers',
     navigationLabel: 'Wire Transfers',
     hasParameters: false,
-    showInNavigation: true
+    showInNavigation: true,
+    component: 'WireTransferForm'
   },
 
   // Bill Pay
@@ -84,6 +91,7 @@ export const INTENT_ROUTE_CONFIG: IntentRouteDefinition[] = [
     breadcrumb: 'Bill Pay',
     navigationLabel: 'Bill Pay',
     hasParameters: false,
-    showInNavigation: true
+    showInNavigation: true,
+    component: 'BillPayHub'
   }
 ];

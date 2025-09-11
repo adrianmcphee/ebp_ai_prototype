@@ -145,6 +145,7 @@ export interface IntentRouteDefinition {
   hasParameters: boolean;
   parameterFallback?: string;
   showInNavigation: boolean;
+  component: string;
 }
 
 export interface ProcessedRoute {
