@@ -456,7 +456,7 @@ class BankingOperationsCatalog:
                     "recipient_type": "contact"
                 },
                 next_steps=[
-                    f"Payment sent to {recipient}",
+                    f"Payment sent to {recipient_name}",
                     "Receipt saved to transaction history",
                     "Recipient will be notified"
                 ]
@@ -465,7 +465,7 @@ class BankingOperationsCatalog:
             return OperationResult(
                 status=OperationStatus.FAILED,
                 data=result,
-                message=result.get("error", f"P2P payment to {recipient} failed"),
+                message=result.get("error", f"P2P payment to {recipient_name} failed"),
                 next_steps=[
                     "Check your account balance",
                     "Verify recipient information",
