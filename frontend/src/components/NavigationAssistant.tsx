@@ -163,6 +163,14 @@ export const NavigationAssistant: React.FC<NavigationAssistantProps> = ({
                 >
                   Saving top up
                 </Button>
+                <Button 
+                  size="xs" 
+                  variant="subtle" 
+                  onClick={() => setSuggestion('Send $1500 to Jack')}
+                  data-testid="suggestion-savings-account"
+                >
+                  International wire
+                </Button>
               </Group>
               
               <Button 
