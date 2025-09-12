@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Title,
@@ -123,6 +123,7 @@ export const WireTransferForm: React.FC = () => {
     memo: ''
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [hasValidatedAfterLoad, setHasValidatedAfterLoad] = useState(false);
 
   // Fetch accounts on component mount
   useEffect(() => {
@@ -224,7 +225,7 @@ export const WireTransferForm: React.FC = () => {
     setFormData(prev => ({ ...prev, ...updates }));
   }, [location.state, accounts, recipients]);
 
-  const validateForm = (): boolean => {
+  const validateForm = useCallback((): boolean => {
     const errors: Record<string, string> = {};
 
     if (!formData.fromAccount) {
@@ -288,7 +289,15 @@ export const WireTransferForm: React.FC = () => {
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  };
+  }, [formData, accounts]);
+
+  // Validate form after data loads to highlight required empty fields
+  useEffect(() => {
+    if (!accountsLoading && !recipientsLoading && !hasValidatedAfterLoad) {
+      validateForm();
+      setHasValidatedAfterLoad(true);
+    }
+  }, [accountsLoading, recipientsLoading, hasValidatedAfterLoad, validateForm]);
 
   const getFieldStyle = (fieldName: keyof FormData, isRequired: boolean) => ({
     borderColor: isRequired && formErrors[fieldName] ? '#fa5252' : undefined,
