@@ -123,6 +123,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           data-testid="quick-balance"
           size="xs" 
           variant="subtle" 
+          onClick={() => form.setFieldValue('message', 'Send $1800 to Hans')}
+        >
+          Pay Hans in Germany
+        </Button>
+        <Button 
+          data-testid="quick-balance"
+          size="xs" 
+          variant="subtle" 
           onClick={() => form.setFieldValue('message', 'What\'s my savings account balance?')}
         >
           Balance
