@@ -4,11 +4,7 @@ import {
   SimpleGrid,
   Paper,
   Text,
-  Button,
-  Stack,
-  TextInput,
-  Select,
-  NumberInput
+  Button
 } from '@mantine/core';
 import { useNavigate } from 'react-router-dom';
 import type { Account } from '../types';
@@ -16,6 +12,7 @@ import { AccountDetails } from './AccountDetails';
 import { InternalTransferForm } from './InternalTransferForm';
 import { ExternalTransferForm } from './ExternalTransferForm';
 import { P2PTransferForm } from './P2PTransferForm';
+import { WireTransferForm } from './WireTransferForm';
 
 // Pre-built Banking Screens
 export const BankingScreens = {
@@ -124,32 +121,7 @@ export const BankingScreens = {
     );
   },
 
-  WireTransferForm: () => (
-    <Card shadow="sm" padding="lg" radius="md" withBorder>
-      <Title order={2} mb="md">International Wire Transfer</Title>
-      <Text size="sm" c="dimmed" mb="lg">Complete form with all required fields</Text>
-      <Stack gap="md">
-        <TextInput label="Recipient Name" placeholder="Full name" required />
-        <TextInput label="Recipient Address Line 1" placeholder="Street address" required />
-        <TextInput label="Recipient Address Line 2" placeholder="Apt, suite, etc." />
-        <TextInput label="Bank Name" placeholder="Recipient bank" required />
-        <TextInput label="Bank Address" placeholder="Bank address" required />
-        <TextInput label="SWIFT/BIC Code" placeholder="SWIFT code" required />
-        <TextInput label="IBAN" placeholder="International account number" />
-        <TextInput label="Account Number" placeholder="Account number" required />
-        <TextInput label="Routing Number" placeholder="Routing number" />
-        <TextInput label="Correspondent Bank" placeholder="If required" />
-        <Select 
-          label="Purpose Code" 
-          placeholder="Select purpose"
-          data={Array.from({length: 20}, (_, i) => `Purpose ${i + 1}`)}
-          required 
-        />
-        <NumberInput label="Amount" placeholder="0.00" required />
-        <Button size="lg" mt="md">Submit Wire Transfer</Button>
-      </Stack>
-    </Card>
-  ),
+  WireTransferForm,
 
   BillPayHub: () => (
     <Card shadow="sm" padding="lg" radius="md" withBorder>

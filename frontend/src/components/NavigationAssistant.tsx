@@ -155,6 +155,22 @@ export const NavigationAssistant: React.FC<NavigationAssistantProps> = ({
                 >
                   Zelle $50 to mum
                 </Button>
+                <Button 
+                  size="xs" 
+                  variant="subtle" 
+                  onClick={() => setSuggestion('Move $500 from checking to savings account')}
+                  data-testid="suggestion-savings-account"
+                >
+                  Saving top up
+                </Button>
+                <Button 
+                  size="xs" 
+                  variant="subtle" 
+                  onClick={() => setSuggestion('Send $1500 to Jack')}
+                  data-testid="suggestion-savings-account"
+                >
+                  International wire
+                </Button>
               </Group>
               
               <Button 

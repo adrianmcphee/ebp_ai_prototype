@@ -31,7 +31,7 @@ export const INTENT_ROUTE_CONFIG: IntentRouteDefinition[] = [
 
   // Transfers
   {
-    intentId: 'payments.transfer.internal',
+    intentId: 'payments.transfer.hub',
     baseRoute: '/banking/transfers',
     breadcrumb: 'Transfer Hub',
     navigationLabel: 'Transfers',
