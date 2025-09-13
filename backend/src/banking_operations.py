@@ -299,6 +299,7 @@ class BankingOperationsCatalog:
             "payments.transfer.external": "external_transfer",
             "transfers.internal": "internal_transfer",
             "transfers.external": "external_transfer",
+            "international.wire.send": "external_transfer",
 
             # Payment operations
             "payments.bill.pay": "pay_bill",
@@ -406,20 +407,26 @@ class BankingOperationsCatalog:
     async def _execute_external_transfer(
         self, entities: Dict[str, Any], user_context: Optional[Dict[str, Any]] = None
     ) -> OperationResult:
-        """Execute external transfer/P2P payment"""
+        """Execute external transfer/international wire transfer"""
         recipient_name = entities.get("recipient")
         recipient_id = entities.get("recipient_id", recipient_name)  # Fallback to name if ID not available
         amount = entities.get("amount")
         from_account = entities.get("from_account", "CHK001")  # Default to primary checking account
 
+        # Determine transfer type based on recipient country
+        transfer_type = "external"  # Default
+        if user_context and user_context.get("intent") == "international.wire.send":
+            transfer_type = "international"
+        
         # Use recipient_id for the banking operation
-        result = await self.banking.send_payment(recipient_id, amount, from_account)
+        result = await self.banking.send_payment(recipient_id, amount, from_account, transfer_type)
         
         if result.get("success"):
+            transfer_label = "international wire transfer" if transfer_type == "international" else "transfer"
             return OperationResult(
                 status=OperationStatus.COMPLETED,
                 data=result,
-                message=f"Successfully sent ${amount:,.2f} to {recipient_name}",
+                message=f"Successfully sent ${amount:,.2f} {transfer_label} to {recipient_name}",
                 reference_id=result.get("payment_id"),
                 ui_hints={"display_mode": "confirmation", "show_receipt": True}
             )

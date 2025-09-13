@@ -659,11 +659,15 @@ class IntentPipeline:
             else:
                 simple_entities[key] = value
 
+        # Prepare user context with intent information
+        user_context = user_profile.copy() if user_profile else {}
+        user_context["intent"] = intent.get("intent_id")
+        
         # Execute operation through catalog
         operation_result = await self.operations_catalog.execute_operation(
             operation.operation_id,
             simple_entities,
-            user_profile
+            user_context
         )
 
         # Convert OperationResult to dict format expected by pipeline
