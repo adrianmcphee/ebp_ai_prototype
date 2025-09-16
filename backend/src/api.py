@@ -1,7 +1,15 @@
 import re
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Optional
+
+# Configure logging to show our custom logs
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%H:%M:%S'
+)
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -109,9 +117,25 @@ async def lifespan(app: FastAPI):
     # Initialize services
     banking_service = MockBankingService()
 
-    # Initialize LLM client
+    # Initialize LLM client with correct API key and model
+    api_key = settings.llm_api_key
+    if settings.llm_provider == "anthropic" and not api_key:
+        api_key = settings.anthropic_api_key
+    elif settings.llm_provider == "openai" and not api_key:
+        api_key = settings.openai_api_key
+
+    # Use default model if not specified
+    model = settings.llm_model
+    if not model:
+        if settings.llm_provider == "anthropic":
+            model = settings.anthropic_default_model
+        elif settings.llm_provider == "openai":
+            model = settings.openai_default_model
+
+    print(f"🔧 Creating LLM client: provider={settings.llm_provider}, api_key_set={bool(api_key)}, model={model}")
+
     llm_client = create_llm_client(
-        settings.llm_provider, settings.llm_api_key, settings.llm_model
+        settings.llm_provider, api_key, model
     )
 
     # Initialize pipeline components
