@@ -1,6 +1,25 @@
 import os
+from pathlib import Path
 
 from pydantic_settings import BaseSettings
+from dotenv import load_dotenv
+
+# Load .env file from project root
+# Try multiple possible locations
+possible_paths = [
+    Path(__file__).parent.parent.parent / '.env',  # From src/config.py
+    Path(__file__).parent.parent / '.env',  # From backend/
+    Path.cwd().parent / '.env',  # From current working dir
+    Path.cwd() / '.env',  # Current directory
+]
+
+for env_path in possible_paths:
+    if env_path.exists():
+        load_dotenv(env_path, override=True)
+        print(f"✅ Loaded environment from {env_path}")
+        break
+else:
+    print(f"⚠️  No .env file found in any expected location")
 
 
 class Settings(BaseSettings):
@@ -53,3 +72,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Debug: Verify API keys are loaded
+print(f"🔐 API Keys loaded: OpenAI={bool(settings.openai_api_key)}, Anthropic={bool(settings.anthropic_api_key)}")
+print(f"🤖 LLM Config: Provider={settings.llm_provider}, Model={settings.llm_model or 'auto-select'}")

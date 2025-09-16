@@ -1,11 +1,17 @@
 """Enhanced LLM client wrapper with provider switching and observability"""
 
 import os
+import logging
 from enum import Enum
 from typing import Any, Optional
+import json
 
 from .llm_client import AnthropicClient, LLMClient, MockLLMClient, OpenAIClient
 from .llm_observability import get_observability
+
+# Configure logger for LLM interactions
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class LLMProvider(str, Enum):
@@ -170,6 +176,11 @@ class EnhancedLLMClient:
                 obs_context = ctx
 
         try:
+            # Log LLM request details
+            logger.info(f"🤖 LLM Request to {self.provider.value} ({self.model})")
+            logger.debug(f"📝 Prompt: {prompt[:500]}..." if len(prompt) > 500 else f"📝 Prompt: {prompt}")
+            logger.debug(f"⚙️  Parameters: temp={temperature}, max_tokens={max_tokens}, format={response_format}")
+
             # Try primary client
             result = await self.client.complete(
                 prompt=prompt,
@@ -178,6 +189,10 @@ class EnhancedLLMClient:
                 timeout=timeout,
                 response_format=response_format,
             )
+
+            # Log LLM response
+            logger.info(f"✅ LLM Response received from {self.provider.value}")
+            logger.debug(f"📤 Response: {str(result)[:500]}..." if len(str(result)) > 500 else f"📤 Response: {result}")
 
             # Record success in observability
             if obs_context and self.observability:

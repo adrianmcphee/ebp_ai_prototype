@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Optional, Callable
 
@@ -8,6 +9,10 @@ from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 
 from .config import settings
+
+# Configure logger for detailed LLM logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class LLMClient(ABC):
@@ -134,8 +139,11 @@ class OpenAIClient(LLMClient):
             return {"content": content}
 
         except asyncio.TimeoutError:
+            logger.error(f"⏱️ LLM request timed out after {timeout} seconds")
             raise TimeoutError(f"LLM request timed out after {timeout} seconds")
         except Exception as e:
+            logger.error(f"❌ LLM request failed: {e!s}")
+            logger.error(f"📝 Failed prompt was: {prompt[:200]}...")
             raise Exception(f"LLM request failed: {e!s}")
 
 
@@ -179,6 +187,12 @@ class AnthropicClient(LLMClient):
                     "content"
                 ] += '\n\nReturn a JSON object with a "function_call" key containing the function name and arguments.'
 
+            # Log the Anthropic API request
+            logger.info(f"🎯 Anthropic API Request - Model: {self.model}")
+            logger.info(f"📋 System Prompt: {system_prompt}")
+            logger.info(f"💬 User Message: {prompt[:300]}..." if len(prompt) > 300 else f"💬 User Message: {prompt}")
+            logger.info(f"🔧 Parameters: temp={temperature}, max_tokens={max_tokens}")
+
             response = await asyncio.wait_for(
                 self.client.messages.create(
                     model=self.model,
@@ -191,6 +205,10 @@ class AnthropicClient(LLMClient):
             )
 
             content = response.content[0].text
+
+            # Log the response
+            logger.info(f"✅ Anthropic API Response received")
+            logger.info(f"📬 Response Content: {content[:500]}..." if len(content) > 500 else f"📬 Response Content: {content}")
 
             # Track usage
             if hasattr(response, "usage"):
@@ -212,6 +230,10 @@ class AnthropicClient(LLMClient):
                         + response.usage.output_tokens * 0.075
                     ) / 1000
                 self.total_cost += cost
+
+                # Log token usage and cost
+                logger.info(f"📊 Token Usage - Input: {response.usage.input_tokens}, Output: {response.usage.output_tokens}, Total: {self.total_tokens}")
+                logger.info(f"💰 Cost: ${cost:.4f} (Session Total: ${self.total_cost:.4f})")
 
             # Handle function calls first
             if functions and function_call and "function_call" in content.lower():
@@ -254,8 +276,11 @@ class AnthropicClient(LLMClient):
             return {"content": content}
 
         except asyncio.TimeoutError:
+            logger.error(f"⏱️ LLM request timed out after {timeout} seconds")
             raise TimeoutError(f"LLM request timed out after {timeout} seconds")
         except Exception as e:
+            logger.error(f"❌ LLM request failed: {e!s}")
+            logger.error(f"📝 Failed prompt was: {prompt[:200]}...")
             raise Exception(f"LLM request failed: {e!s}")
 
 
