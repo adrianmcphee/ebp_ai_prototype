@@ -349,7 +349,26 @@ class EntityExtractor:
                 )
 
                 if isinstance(response, dict) and "function_call" in response:
-                    function_result = json.loads(response["function_call"]["arguments"])
+                    # Handle different response formats
+                    if isinstance(response["function_call"], dict) and "arguments" in response["function_call"]:
+                        # Standard format with arguments key
+                        args = response["function_call"]["arguments"]
+                        if isinstance(args, str):
+                            function_result = json.loads(args)
+                        else:
+                            function_result = args
+                    elif isinstance(response["function_call"], str):
+                        # Parse function call string
+                        import re
+                        match = re.search(r'\{.*\}', response["function_call"], re.DOTALL)
+                        if match:
+                            function_result = json.loads(match.group())
+                        else:
+                            logger.warning(f"Could not parse function call: {response['function_call']}")
+                            return await self._extract_with_json_mode(query, intent_type, context)
+                    else:
+                        function_result = response["function_call"]
+
                     return self._convert_function_result_to_entities(function_result)
 
                 # Fallback to JSON mode if function calling not supported
@@ -483,9 +502,8 @@ Intent: {intent_type or 'unknown'}{context_info}
 Extract entities and return JSON format:
 {{
   "entities": {{
-    "amount": 500.00,
-    "recipient": "John Smith",
-    "account_type": "checking"
+    // Extract ONLY the entities mentioned in the query above
+    // Do NOT use example values - extract actual values from the query
   }}
 }}
 
@@ -499,14 +517,20 @@ Rules:
         """Get few-shot examples based on intent type"""
         base_examples = """Examples:
 
-Query: "Send $500 to John Smith from checking"
-{"entities": {"amount": 500.00, "recipient": "John Smith", "account_type": "checking"}}
+Query: "Send $250 to Alice Johnson from checking"
+{"entities": {"amount": 250.00, "recipient": "Alice Johnson", "account_type": "checking"}}
+
+Query: "Transfer $100 from savings to checking"
+{"entities": {"amount": 100.00, "from_account": "savings", "to_account": "checking"}}
 
 Query: "What's my savings account balance?"
 {"entities": {"account_type": "savings"}}
 
-Query: "Pay $150 to Electric Company for bill payment"
-{"entities": {"amount": 150.00, "recipient": "Electric Company", "memo": "bill payment"}}"""
+Query: "Pay $75.50 to Water Company for monthly bill"
+{"entities": {"amount": 75.50, "recipient": "Water Company", "memo": "monthly bill"}}
+
+Query: "Send $1000 to Bob for rent"
+{"entities": {"amount": 1000.00, "recipient": "Bob", "memo": "rent"}}"""
 
         if intent_type == "transfer":
             return (
