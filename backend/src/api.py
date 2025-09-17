@@ -123,6 +123,8 @@ async def lifespan(app: FastAPI):
         api_key = settings.anthropic_api_key
     elif settings.llm_provider == "openai" and not api_key:
         api_key = settings.openai_api_key
+    elif settings.llm_provider == "llama" and not api_key:
+        api_key = settings.llama_base_url
 
     # Use default model if not specified
     model = settings.llm_model
@@ -131,6 +133,8 @@ async def lifespan(app: FastAPI):
             model = settings.anthropic_default_model
         elif settings.llm_provider == "openai":
             model = settings.openai_default_model
+        elif settings.llm_provider == "llama":
+            model = settings.llama_default_model
 
     print(f"🔧 Creating LLM client: provider={settings.llm_provider}, api_key_set={bool(api_key)}, model={model}")
 

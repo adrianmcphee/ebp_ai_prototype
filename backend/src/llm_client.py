@@ -7,6 +7,7 @@ from typing import Any, Optional, Callable
 
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
+import httpx
 
 from .config import settings
 
@@ -284,6 +285,150 @@ class AnthropicClient(LLMClient):
             raise Exception(f"LLM request failed: {e!s}")
 
 
+class LlamaClient(LLMClient):
+    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3.2:latest"):
+        """Initialize Llama client for local models
+        
+        Compatible with OpenAI-style APIs including:
+        - Ollama (default: http://localhost:11434)
+        - llama.cpp server
+        - text-generation-webui (OpenAI mode)
+        - vLLM
+        - Any OpenAI-compatible local server
+        
+        Args:
+            base_url: Base URL of the local Llama server
+            model: Model name (e.g., "llama3.2:latest", "codellama:7b")
+        """
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.total_tokens = 0
+        self.total_cost = 0.0  # Always 0 for local models
+        
+        # Create httpx client with reasonable timeouts
+        self.client = httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=5.0),
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
+        )
+
+    async def complete(
+        self,
+        prompt: str,
+        temperature: float = 0.7,
+        max_tokens: int = 500,
+        timeout: float = 5.0,
+        response_format: Optional[dict[str, str]] = None,
+        functions: Optional[list[dict[str, Any]]] = None,
+        function_call: Optional[dict[str, str]] = None,
+    ) -> dict[str, Any]:
+        try:
+            # Build OpenAI-compatible request
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a banking assistant that classifies intents and extracts entities.",
+                },
+                {"role": "user", "content": prompt},
+            ]
+
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+
+            # Handle JSON mode - different servers may handle this differently
+            if response_format and response_format.get("type") == "json_object":
+                # Try OpenAI-style first (Ollama, vLLM support this)
+                payload["response_format"] = {"type": "json_object"}
+                # Also add instruction to system message as fallback
+                messages[0]["content"] += "\nRespond with valid JSON only."
+
+            # Handle function calling for local models
+            if functions and function_call:
+                func_name = function_call.get("name")
+                messages[0]["content"] += f"\nCall the {func_name} function with the extracted entities."
+                messages[1]["content"] += '\n\nReturn a JSON object with a "function_call" key containing the function name and arguments.'
+
+            # Make request to local server
+            response = await asyncio.wait_for(
+                self.client.post(
+                    f"{self.base_url}/v1/chat/completions",
+                    json=payload,
+                    headers={"Content-Type": "application/json"}
+                ),
+                timeout=timeout
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"Local Llama server returned {response.status_code}: {response.text}")
+
+            result = response.json()
+
+            # Extract content from OpenAI-compatible response
+            if "choices" not in result or not result["choices"]:
+                raise Exception("Invalid response format from local server")
+                
+            content = result["choices"][0]["message"]["content"]
+
+            # Track usage if available (some servers provide this)
+            if "usage" in result and result["usage"]:
+                usage = result["usage"]
+                if "total_tokens" in usage:
+                    self.total_tokens += usage["total_tokens"]
+
+            # Handle function calls first
+            if functions and function_call and "function_call" in content.lower():
+                try:
+                    # Try to parse as function call result
+                    func_result = json.loads(content)
+                    if "function_call" in func_result:
+                        return func_result
+                except json.JSONDecodeError:
+                    # Try to extract function call from text
+                    func_match = re.search(
+                        r'"function_call"\s*:\s*{[^}]+}', content, re.DOTALL
+                    )
+                    if func_match:
+                        try:
+                            return json.loads("{" + func_match.group() + "}")
+                        except:
+                            pass
+
+            # Parse JSON if needed
+            if response_format and response_format.get("type") == "json_object":
+                if functions:
+                    return {"error": "Function calling failed", "raw": content}
+                try:
+                    return json.loads(content)
+                except json.JSONDecodeError:
+                    # Try to extract JSON from the response
+                    json_match = re.search(r"\{.*\}", content, re.DOTALL)
+                    if json_match:
+                        try:
+                            return json.loads(json_match.group())
+                        except:
+                            pass
+                    return {"error": "Invalid JSON response", "raw": content}
+
+            return {"content": content}
+
+
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Local Llama server request timed out after {timeout} seconds")
+        except httpx.ConnectError:
+            raise Exception(f"Could not connect to local Llama server at {self.base_url}")
+        except Exception as e:
+            raise Exception(f"Local Llama request failed: {e!s}")
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.client.aclose()
+
+
 class MockLLMClient(LLMClient):
     """Mock LLM client that uses the actual intent catalog for accurate testing"""
 
@@ -558,6 +703,10 @@ def create_llm_client(provider: str, api_key: str, model: str) -> LLMClient:
         return OpenAIClient(api_key, model)
     elif provider == "anthropic":
         return AnthropicClient(api_key, model)
+    elif provider == "llama":
+        # For Llama, api_key is used as base_url (more flexible configuration)
+        base_url = api_key if api_key else "http://localhost:11434"
+        return LlamaClient(base_url, model)
     elif provider == "mock":
         return MockLLMClient()
     else:
