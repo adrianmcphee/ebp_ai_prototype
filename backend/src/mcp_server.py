@@ -14,6 +14,7 @@ from mcp import (
     ServerSession,
     stdio_server
 )
+from mcp.server import Server, NotificationOptions
 from mcp.types import TextContent, ImageContent, EmbeddedResource
 
 from .config import settings
@@ -374,16 +375,39 @@ class EBPMCPServer:
     async def initialize_pipeline(self):
         """Initialize the banking pipeline for tool execution"""
         try:
-            # Initialize LLM client
+            from .cache import MockCache
+            from .database import MockDatabase
+
+            # Initialize LLM client with correct API key and model
+            api_key = settings.llm_api_key
+            if settings.llm_provider == "anthropic" and not api_key:
+                api_key = settings.anthropic_api_key
+            elif settings.llm_provider == "openai" and not api_key:
+                api_key = settings.openai_api_key
+
+            # Use default model if not specified
+            model = settings.llm_model
+            if not model:
+                if settings.llm_provider == "anthropic":
+                    model = settings.anthropic_default_model
+                elif settings.llm_provider == "openai":
+                    model = settings.openai_default_model
+
             llm_client = create_llm_client(
-                settings.llm_provider, settings.llm_api_key, settings.llm_model
+                settings.llm_provider, api_key, model
             )
 
-            # Initialize components
-            classifier = IntentClassifier(llm_client)
+            # Initialize components with required dependencies
+            cache = MockCache()
+            db = MockDatabase()
+
+            from .validator import EntityValidator
+
+            classifier = IntentClassifier(llm_client, cache)
             extractor = EntityExtractor(llm_client)
-            response_generator = ContextAwareResponseGenerator(llm_client)
-            state_manager = ConversationStateManager()
+            validator = EntityValidator(MockBankingService())
+            response_generator = ContextAwareResponseGenerator()
+            state_manager = ConversationStateManager(cache, db)
             banking_service = MockBankingService()
 
             # Create enhanced pipeline
@@ -393,6 +417,7 @@ class EBPMCPServer:
                 response_generator=response_generator,
                 state_manager=state_manager,
                 banking_service=banking_service,
+                legacy_validator=validator
             )
 
             logger.info("EBP MCP Server pipeline initialized successfully")
@@ -410,8 +435,11 @@ class EBPMCPServer:
                 read_stream,
                 write_stream,
                 InitializeResult(
-                    serverName="ebp-banking",
-                    serverVersion="1.0.0",
+                    protocolVersion="2024-11-05",
+                    serverInfo={
+                        "name": "ebp-banking",
+                        "version": "1.0.0"
+                    },
                     capabilities=self.server.get_capabilities(
                         notification_options=NotificationOptions(),
                         experimental_capabilities={},
