@@ -310,6 +310,10 @@ class LlamaClient(LLMClient):
             timeout=httpx.Timeout(30.0, connect=5.0),
             limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
         )
+        
+        # Log initialization
+        logger.info(f"🦙 Llama client initialized: base_url={base_url}, model={model}")
+        logger.info(f"🔗 Local server endpoint: {self.base_url}/v1/chat/completions")
 
     async def complete(
         self,
@@ -351,6 +355,15 @@ class LlamaClient(LLMClient):
                 messages[0]["content"] += f"\nCall the {func_name} function with the extracted entities."
                 messages[1]["content"] += '\n\nReturn a JSON object with a "function_call" key containing the function name and arguments.'
 
+            # Log the Llama API request
+            logger.info(f"🎯 Llama API Request - Model: {self.model}")
+            logger.info(f"🔗 Endpoint: {self.base_url}/v1/chat/completions")
+            logger.info(f"📋 System Prompt: {messages[0]['content']}")
+            logger.info(f"💬 User Message: {prompt[:300]}..." if len(prompt) > 300 else f"💬 User Message: {prompt}")
+            logger.info(f"🔧 Parameters: temp={temperature}, max_tokens={max_tokens}")
+            if response_format:
+                logger.info(f"📄 Response Format: {response_format}")
+
             # Make request to local server
             response = await asyncio.wait_for(
                 self.client.post(
@@ -372,11 +385,23 @@ class LlamaClient(LLMClient):
                 
             content = result["choices"][0]["message"]["content"]
 
+            # Log the response
+            logger.info(f"✅ Llama API Response received")
+            logger.info(f"📬 Response Content: {content[:500]}..." if len(content) > 500 else f"📬 Response Content: {content}")
+
             # Track usage if available (some servers provide this)
             if "usage" in result and result["usage"]:
                 usage = result["usage"]
                 if "total_tokens" in usage:
                     self.total_tokens += usage["total_tokens"]
+                    
+                    # Log token usage (local models are free, so no cost)
+                    input_tokens = usage.get("prompt_tokens", 0)
+                    output_tokens = usage.get("completion_tokens", 0)
+                    logger.info(f"📊 Token Usage - Input: {input_tokens}, Output: {output_tokens}, Total: {self.total_tokens}")
+                    logger.info(f"💰 Cost: $0.00 (Local model - free)")
+            else:
+                logger.info(f"📊 Token usage not provided by local server")
 
             # Handle function calls first
             if functions and function_call and "function_call" in content.lower():
@@ -416,11 +441,18 @@ class LlamaClient(LLMClient):
 
 
         except asyncio.TimeoutError:
-            raise TimeoutError(f"Local Llama server request timed out after {timeout} seconds")
+            logger.error(f"⏱️ Llama request timed out after {timeout} seconds")
+            logger.error(f"📝 Failed prompt was: {prompt[:200]}...")
+            raise TimeoutError(f"Llama server request timed out after {timeout} seconds")
         except httpx.ConnectError:
-            raise Exception(f"Could not connect to local Llama server at {self.base_url}")
+            logger.error(f"🔌 Could not connect to Llama server at {self.base_url}")
+            logger.error(f"💡 Check if Llama server is running and accessible")
+            logger.error(f"📝 Failed prompt was: {prompt[:200]}...")
+            raise Exception(f"Could not connect to Llama server at {self.base_url}")
         except Exception as e:
-            raise Exception(f"Local Llama request failed: {e!s}")
+            logger.error(f"❌ Llama request failed: {e!s}")
+            logger.error(f"📝 Failed prompt was: {prompt[:200]}...")
+            raise Exception(f"Llama request failed: {e!s}")
 
     async def __aenter__(self):
         return self
