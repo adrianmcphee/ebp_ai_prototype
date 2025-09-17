@@ -3,14 +3,16 @@
 
 import asyncio
 import json
+import os
 import sys
 from typing import Any, Dict
 
 async def call_mcp_tool(tool_name: str, arguments: Dict[str, Any]) -> str:
     """Call an MCP tool and return the result"""
 
-    # Import the MCP server components
-    sys.path.insert(0, '/Users/adrianmcphee/mydev/backbase/ebpnlp/backend')
+    # Import the MCP server components - use relative path
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, current_dir)
     from src.mcp_server import EBPMCPServer
 
     # Initialize the server
