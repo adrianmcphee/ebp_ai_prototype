@@ -20,6 +20,7 @@ class LLMProvider(str, Enum):
     MOCK = "mock"
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    LLAMA = "llama"
     AZURE_OPENAI = "azure_openai"  # Future support
     BEDROCK = "bedrock"  # Future support
 
@@ -41,6 +42,17 @@ class LLMModel(str, Enum):
     CLAUDE_3_SONNET = "claude-3-sonnet-20240229"
     CLAUDE_3_OPUS = "claude-3-opus-20240229"
     CLAUDE_35_SONNET = "claude-3-5-sonnet-20241022"
+
+    # Llama models (common Ollama models)
+    LLAMA_3_2_3B = "llama3.2:3b"
+    LLAMA_3_2_1B = "llama3.2:1b"
+    LLAMA_3_2_LATEST = "llama3.2:latest"
+    LLAMA_3_1_8B = "llama3.1:8b"
+    LLAMA_3_1_70B = "llama3.1:70b"
+    CODELLAMA_7B = "codellama:7b"
+    CODELLAMA_13B = "codellama:13b"
+    MISTRAL_7B = "mistral:7b"
+    MIXTRAL_8X7B = "mixtral:8x7b"
 
 
 class EnhancedLLMClient:
@@ -102,17 +114,19 @@ class EnhancedLLMClient:
             LLMProvider.MOCK: "mock",
             LLMProvider.OPENAI: LLMModel.GPT_4O_MINI,
             LLMProvider.ANTHROPIC: LLMModel.CLAUDE_3_HAIKU,
+            LLMProvider.LLAMA: LLMModel.LLAMA_3_2_LATEST,
         }
         return defaults.get(provider, "default")
 
     def _get_api_key(self, provider: LLMProvider) -> Optional[str]:
-        """Get API key from environment"""
+        """Get API key from environment (or base URL for Llama)"""
         if provider == LLMProvider.MOCK:
             return None
 
         env_keys = {
             LLMProvider.OPENAI: "OPENAI_API_KEY",
             LLMProvider.ANTHROPIC: "ANTHROPIC_API_KEY",
+            LLMProvider.LLAMA: "LLAMA_BASE_URL",  # For Llama, this is the base URL
         }
 
         env_key = env_keys.get(provider)
@@ -132,6 +146,10 @@ class EnhancedLLMClient:
             if not api_key:
                 raise ValueError("Anthropic API key required")
             return AnthropicClient(api_key, model)
+        elif provider == LLMProvider.LLAMA:
+            # For Llama, api_key is the base_url
+            base_url = api_key if api_key else "http://localhost:11434"
+            return LlamaClient(base_url, model)
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 
@@ -311,10 +329,11 @@ def create_enhanced_llm_client(
     """Create an enhanced LLM client with environment-based configuration
 
     Environment variables:
-        LLM_PROVIDER: Provider to use (mock, openai, anthropic)
+        LLM_PROVIDER: Provider to use (mock, openai, anthropic, llama)
         LLM_MODEL: Model to use
         OPENAI_API_KEY: OpenAI API key
         ANTHROPIC_API_KEY: Anthropic API key
+        LLAMA_BASE_URL: Base URL for local Llama server (default: http://localhost:11434)
         LLM_FALLBACK_PROVIDER: Fallback provider
         LLM_FALLBACK_MODEL: Fallback model
         LANGFUSE_PUBLIC_KEY: LangFuse public key

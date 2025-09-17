@@ -41,10 +41,14 @@ class Settings(BaseSettings):
     # Provider-specific API Keys
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
+    
+    # Llama Configuration
+    llama_base_url: str = os.getenv("LLAMA_BASE_URL", "http://localhost:11434")
 
     # Default models per provider
     openai_default_model: str = "gpt-4o-mini"
     anthropic_default_model: str = "claude-3-haiku-20240307"
+    llama_default_model: str = "llama3.2:latest"
 
     # Observability Configuration (LangFuse)
     langfuse_enabled: bool = os.getenv("LANGFUSE_ENABLED", "false").lower() == "true"
